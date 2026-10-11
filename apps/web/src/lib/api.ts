@@ -1,5 +1,5 @@
 // Typed API client. Identity is DEV-ONLY (x-student-id); replace with real auth before launch.
-const BASE = import.meta.env.VITE_API_URL || 'http://localhost:8787';
+const BASE = import.meta.env.VITE_API_URL || '';
 const KEY = 'pathway.studentId';
 export const session = { get: () => localStorage.getItem(KEY), set: (id: string) => localStorage.setItem(KEY, id), clear: () => localStorage.removeItem(KEY) };
 

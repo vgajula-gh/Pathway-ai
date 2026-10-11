@@ -3,15 +3,25 @@
   "private": true,
   "version": "0.1.0",
   "description": "Pathway AI — an AI companion that helps high school students get more out of their high school years.",
-  "workspaces": ["apps/api", "apps/web"],
+  "workspaces": [
+    "apps/api",
+    "apps/web"
+  ],
   "scripts": {
-    "dev": "npm run dev --workspace apps/api & npm run dev --workspace apps/web",
+    "dev": "concurrently --kill-others --names api,web \"npm run dev:api\" \"npm run dev:web\"",
     "dev:api": "npm run dev --workspace apps/api",
     "dev:web": "npm run dev --workspace apps/web",
     "db:setup": "npm run db:push --workspace apps/api && npm run db:seed --workspace apps/api",
     "test": "npm run test --workspace apps/api",
     "typecheck": "npm run typecheck --workspace apps/api && npm run typecheck --workspace apps/web",
-    "build": "npm run build --workspace apps/api && npm run build --workspace apps/web"
+    "build": "npm run build --workspace apps/api && npm run build --workspace apps/web",
+    "setup": "node scripts/setup.mjs",
+    "db:demo": "npm run db:demo --workspace apps/api"
   },
-  "engines": { "node": ">=20" }
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
 }
