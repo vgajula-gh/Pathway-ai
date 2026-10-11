@@ -11,7 +11,7 @@ student accounts.
    on main** (or select the branch you want to demonstrate).
 2. Wait for the container setup to finish. It runs `npm run setup` automatically:
    creates `.env` if missing, installs dependencies, initializes SQLite, and
-   seeds opportunities, news, and a demo student. By default it also installs Ollama, starts it privately in the background, and downloads `llama3.2:3b` (about 2 GB, tool calling supported). The initial download can take several minutes.
+   seeds opportunities, news, and a demo student. By default it also installs the required `zstd` extraction tool and Ollama, starts it privately in the background, and downloads `llama3.2:3b` (about 2 GB, tool calling supported). The initial download can take several minutes.
 3. In the terminal, run `npm run dev`. Keep that terminal running.
 4. In the **Ports** tab, open port **5173** in your browser. Keep its visibility
    private. Only the web port needs forwarding; it proxies `/api` to the API
@@ -139,6 +139,9 @@ npm run typecheck
 npm run build
 ```
 
+- If Ollama reports that `zstd` is missing in an older checkout, run
+  `sudo apt-get update` and `sudo apt-get install -y zstd`, then retry
+  `npm run ollama:setup`. Updated setup installs this dependency automatically.
 - If setup fails to download packages or Prisma engines, allow HTTPS access to
   `registry.npmjs.org` and `binaries.prisma.sh`. Keep TLS and checksum checks on.
 - If port 5173 is busy, stop the other development server, then restart.
