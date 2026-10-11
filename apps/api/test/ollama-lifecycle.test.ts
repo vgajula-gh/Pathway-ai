@@ -26,6 +26,19 @@ describe('Ollama lifecycle', () => {
     expect(commands.sync).toHaveBeenCalledWith('sh', expect.arrayContaining(['-c', expect.stringContaining('https://ollama.com/install.sh')]), expect.anything());
     expect(commands.spawn).toHaveBeenCalledWith('ollama', ['serve'], expect.objectContaining({ detached: true, env: expect.objectContaining({ OLLAMA_HOST: '127.0.0.1:11434' }) }));
   });
+  it('installs missing zstd before the official Ollama installer', async () => {
+    commands.sync.mockImplementation((command, args) => ({ status: command === 'zstd' || (command === 'ollama' && args[0] === '--version') ? 1 : 0 }));
+    await setupOllama();
+    const calls = commands.sync.mock.calls;
+    const dependency = calls.findIndex(([command, args]) => ['sudo', 'apt-get'].includes(command) && args.includes('zstd'));
+    const installer = calls.findIndex(([command]) => command === 'sh');
+    expect(dependency).toBeGreaterThan(-1); expect(dependency).toBeLessThan(installer);
+  });
+  it('explains how to install zstd if package installation fails', async () => {
+    commands.sync.mockImplementation((command) => ({ status: ['ollama', 'zstd', 'sudo', 'apt-get'].includes(command) ? 1 : 0 }));
+    await expect(setupOllama()).rejects.toThrow('sudo apt-get install -y zstd');
+    expect(commands.sync.mock.calls.some(([command]) => command === 'sh')).toBe(false);
+  });
   it('reports failed model downloads with an actionable retry', async () => {
     commands.sync.mockImplementation((command, args) => ({ status: args[0] === 'pull' ? 1 : 0 }));
     await expect(setupOllama()).rejects.toThrow('Retry npm run ollama:setup');

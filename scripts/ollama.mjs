@@ -35,6 +35,17 @@ export async function startOllama() {
 export async function setupOllama() {
   if (!useOllama(process.env.USE_OLLAMA)) { console.log('Local AI skipped (USE_OLLAMA=false).'); return; }
   if (spawnSync('ollama', ['--version'], { stdio: 'ignore' }).status !== 0) {
+    if (spawnSync('zstd', ['--version'], { stdio: 'ignore' }).status !== 0) {
+      // The official installer extracts a .tar.zst archive on Debian Codespaces.
+      const asRoot = process.getuid?.() === 0;
+      const install = args => run(asRoot ? 'apt-get' : 'sudo', asRoot ? args : ['-n', 'apt-get', ...args]);
+      try {
+        install(['update']);
+        install(['install', '-y', 'zstd']);
+      } catch (error) {
+        throw new Error('Ollama needs zstd. Run sudo apt-get update && sudo apt-get install -y zstd, then retry npm run ollama:setup.', { cause: error });
+      }
+    }
     // Official Linux installer, downloaded over HTTPS with normal TLS verification.
     run('sh', ['-c', 'installer=$(mktemp); trap \'rm -f "$installer"\' EXIT; curl --fail --show-error --silent --location https://ollama.com/install.sh -o "$installer" && sh "$installer"']);
   }
