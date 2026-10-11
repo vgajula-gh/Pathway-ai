@@ -5,7 +5,7 @@ Base URL `http://localhost:8787`. JSON in/out. Auth (dev): header `x-student-id`
 | Method | Path | Purpose |
 |---|---|---|
 | POST | /api/students | Onboard (Student DNA + availability + optional goal + optional sample week) |
-| GET / PATCH / DELETE | /api/me (settings: showWord, showNews, theme, newsTopics) | Read / edit profile (updates provenance) / delete everything |
+| GET / PATCH / DELETE | /api/me (settings: showWord, showNews, theme, newsTopics, voice) | Read / edit profile (updates provenance) / delete everything |
 | GET | /api/me/export | Full data export (JSON) |
 | GET | /api/today | Headline, rings, next action, timeline, coming up, pending proposals, word |
 | POST | /api/today/insight | AI brief for today (cached) |
@@ -30,5 +30,7 @@ Base URL `http://localhost:8787`. JSON in/out. Auth (dev): header `x-student-id`
 | POST | /api/extract | Multipart `file` or `text` → candidate events (not saved) |
 | POST | /api/coach | `{question}` → explanation |
 | GET | /api/audit · /api/resources · /api/health | Activity log · curated resources · health + aiEnabled |
+
+`settings.voice` is a boolean, defaulting to `false` for new and existing students. PATCH merges it with other settings and records the change in the activity log. It is included in data exports. Voice input and reply playback use browser speech APIs; there is no audio endpoint.
 
 Full schema: `docs/openapi.yaml`.

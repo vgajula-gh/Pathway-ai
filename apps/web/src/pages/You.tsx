@@ -27,6 +27,8 @@ export default function You({ me, setMe }: { me: Student; setMe: (s: Student | n
       <div className="sec"><div className="sec-h"><h2>Appearance</h2></div><div className="seg" role="radiogroup" aria-label="Appearance">{THEMES.map(([k, l, i]) => <button key={k} role="radio" aria-checked={me.settings.theme === k} aria-pressed={me.settings.theme === k} onClick={() => { applyTheme(k); patch({ settings: { theme: k } }); }}>{i} {l}</button>)}</div></div>
       <div className="sec"><div className="sec-h"><h2>Privacy</h2></div><div className="rows">
         <label className="frow"><span>Use AI to help me</span><input type="checkbox" className="switch" checked={me.aiConsent} onChange={e => patch({ aiConsent: e.target.checked })} /></label>
+        <label className="frow"><span>Voice</span><input type="checkbox" className="switch" checked={me.settings.voice} aria-describedby="voice-privacy" onChange={e => patch({ settings: { voice: e.target.checked } })} /></label>
+        <p className="note" id="voice-privacy">No audio is recorded or stored by Pathway; your browser may process speech with its provider.</p>
         <div className="frow"><span>Family sharing</span><span className="muted small">Only items you mark shared</span></div>
         <button className="r" onClick={() => setLog(true)}><span className="b"><span className="t">Activity log</span></span></button></div></div>
       <div className="sec"><div className="sec-h"><h2>Your data</h2></div><div className="rows">

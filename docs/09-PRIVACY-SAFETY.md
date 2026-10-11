@@ -11,6 +11,10 @@
 - No external side effects from the server; downloads are student-initiated.
 - Logger redacts identity headers.
 
+## Buddy voice
+
+Voice is off by default and enabled explicitly in You › Privacy. Browser SpeechRecognition (or webkitSpeechRecognition) writes only text into an editable draft, never sends automatically, and is hidden when unsupported. Students stop listening before editing or sending. “Read replies aloud” is a separate, session-only choice for new replies using speechSynthesis, with a stop control. Listening and playback stop when leaving Buddy or disabling Voice. Pathway does not record, upload, or store audio; browser speech recognition may process audio through the browser provider, whose handling requires review before launch. Only the Voice preference is saved; transcripts become chat messages only after the student sends them.
+
 ## Required before real students *(launch blockers)*
 - Real authentication; age gate; verifiable parental consent where required; teen-appropriate terms and privacy notice.
 - Encryption at rest (managed DB), TLS everywhere, secrets in a vault, least-privilege service accounts.
