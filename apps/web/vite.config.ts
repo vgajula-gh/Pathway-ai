@@ -14,7 +14,9 @@ export default defineConfig(({ mode }) => {
       strictPort: true,
       allowedHosts: codespaceHost ? [codespaceHost] : [],
       proxy: {
-        '/api': { target: `http://127.0.0.1:${process.env.PORT || env.PORT || '8787'}`, changeOrigin: true }
+        '/api': { target: `http://127.0.0.1:${process.env.PORT || env.PORT || '8787'}`, changeOrigin: true,
+          proxyTimeout: (process.env.LLM_PROVIDER || env.LLM_PROVIDER) === 'ollama' ? 1_200_000 : 120_000,
+          timeout: (process.env.LLM_PROVIDER || env.LLM_PROVIDER) === 'ollama' ? 1_200_000 : 120_000 }
       }
     }
   };

@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { api, download, session } from '../lib/api';
-import { Student } from '../lib/types';
+import { AIHealth, Student } from '../lib/types';
 import { Sheet, toast, useLoad } from '../components/ui';
 import NewsSheet from '../components/NewsSheet';
 import { THEMES, applyTheme } from '../lib/theme';
 
 export default function You({ me, setMe }: { me: Student; setMe: (s: Student | null) => void }) {
+  const health = useLoad(() => api<AIHealth>('/api/health'), []);
   const [edit, setEdit] = useState(false), [log, setLog] = useState(false), [news, setNews] = useState(false);
   const patch = async (body: Record<string, unknown>) => { try { setMe(await api<Student>('/api/me', { method: 'PATCH', body })); toast('Saved'); } catch (e) { toast((e as Error).message); } };
   const prov = (k: string) => me.provenance[k] ? `${me.provenance[k].src} · ${new Date(me.provenance[k].at).toLocaleDateString()}` : '';
@@ -26,7 +27,8 @@ export default function You({ me, setMe }: { me: Student; setMe: (s: Student | n
         <p className="note">Headlines always come from a named source with a link. Pathway never writes news itself.</p></div>
       <div className="sec"><div className="sec-h"><h2>Appearance</h2></div><div className="seg" role="radiogroup" aria-label="Appearance">{THEMES.map(([k, l, i]) => <button key={k} role="radio" aria-checked={me.settings.theme === k} aria-pressed={me.settings.theme === k} onClick={() => { applyTheme(k); patch({ settings: { theme: k } }); }}>{i} {l}</button>)}</div></div>
       <div className="sec"><div className="sec-h"><h2>Privacy</h2></div><div className="rows">
-        <label className="frow"><span>Use AI to help me</span><input type="checkbox" className="switch" checked={me.aiConsent} onChange={e => patch({ aiConsent: e.target.checked })} /></label>
+        <label className="frow"><span>Use AI to help me</span><input type="checkbox" className="switch" aria-describedby="ai-status" checked={me.aiConsent} onChange={e => patch({ aiConsent: e.target.checked })} /></label>
+        <p className="note" id="ai-status">{health.data ? health.data.aiEnabled ? `${me.aiConsent ? 'AI help is on' : 'AI help is off'}. ${health.data.provider === 'ollama' ? 'Local AI is configured for testing.' : 'Your AI provider is configured.'}` : 'AI is not configured on this server yet. Set up a provider and restart the server before testing.' : health.error ? 'Could not check AI configuration. Reopen this page to try again.' : 'Checking AI configuration…'}</p>
         <label className="frow"><span>Voice</span><input type="checkbox" className="switch" checked={me.settings.voice} aria-describedby="voice-privacy" onChange={e => patch({ settings: { voice: e.target.checked } })} /></label>
         <p className="note" id="voice-privacy">No audio is recorded or stored by Pathway; your browser may process speech with its provider.</p>
         <div className="frow"><span>Family sharing</span><span className="muted small">Only items you mark shared</span></div>

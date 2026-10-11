@@ -11,7 +11,7 @@ student accounts.
    on main** (or select the branch you want to demonstrate).
 2. Wait for the container setup to finish. It runs `npm run setup` automatically:
    creates `.env` if missing, installs dependencies, initializes SQLite, and
-   seeds opportunities, news, and a demo student.
+   seeds opportunities, news, and a demo student. By default it also installs Ollama, starts it privately in the background, and downloads `llama3.2:3b` (about 2 GB, tool calling supported). The initial download can take several minutes.
 3. In the terminal, run `npm run dev`. Keep that terminal running.
 4. In the **Ports** tab, open port **5173** in your browser. Keep its visibility
    private. Only the web port needs forwarding; it proxies `/api` to the API
@@ -64,13 +64,72 @@ and reload. Each browser stores its own selected profile. Re-running setup
 does not reset changes to Demo Student or duplicate its events. If you delete
 Demo Student through **You**, re-run setup to recreate it.
 
-## Optional AI help
+## Local AI in Codespaces
 
-Without a provider key, the app automatically disables AI calls. To explicitly
-keep AI off, set `AI_DISABLED=true` in `.env`. To enable AI, configure
-`LLM_PROVIDER` and the matching provider key and model in `.env`, set
-`AI_DISABLED=false`, restart the servers, and enable AI consent in your
-synthetic profile. Never commit `.env` or paste keys into training materials.
+New Codespaces default to `USE_OLLAMA=true` in `.devcontainer/devcontainer.json`.
+Setup generates a new `.env` with:
+
+```env
+LLM_PROVIDER=ollama
+OLLAMA_BASE_URL=http://localhost:11434/v1
+OLLAMA_MODEL=llama3.2:3b
+AI_DISABLED=false
+```
+
+No AI API key is needed. Choose a Codespace with at least 8 GB RAM. This small
+model runs on CPU: a reply can take up to a minute, especially when first loaded;
+a conversation with several tool calls can take longer. Buddy shows a waiting
+message, and local model requests get a fifteen-minute timeout per call. Smaller
+models may misunderstand requests; inspect proposals before approving them.
+The default model handles text, not schedule screenshots. Paste schedule text,
+or switch to a provider/model that supports images for screenshot extraction.
+
+In the app, turn **You › Privacy › Use AI to help me** on to test Buddy, insights,
+and coaching. Turn it off to stop new AI requests for that student immediately,
+without restarting the app. It does not cancel a request already in progress.
+Server configuration and student consent are separate: `AI_DISABLED=true`
+disables AI globally; the student toggle cannot override it. Demo Student starts
+with consent off. The Privacy section shows whether AI is configured, not a
+live probe of model readiness.
+
+Only forward web port **5173**, privately. Ollama binds to loopback; do not
+forward or expose port **11434**. It runs inside your Codespace, not on your
+laptop. Codespaces compute still counts toward your GitHub allowance.
+
+Ollama restarts automatically when the Codespace starts. To retry installation
+or the model download, run `npm run ollama:setup`. To restart just the service,
+run `npm run ollama:start`; logs are in `~/.ollama/pathway-server.log`.
+
+To skip local AI installation, set the `USE_OLLAMA` value in the devcontainer's
+`remoteEnv` to `false` before creating/rebuilding the Codespace. Set
+`AI_DISABLED=true` in an existing `.env` if you also want server AI off. Laptop
+`npm run setup` does not install Ollama. Setup preserves an existing `.env`,
+including provider choices and credentials. In an existing Codespace, run
+`npm run ollama:setup`, add the four lines above to `.env`, and restart
+`npm run dev`. A rebuild is needed to pick up changed devcontainer hooks.
+
+## Switching to Claude or OpenAI
+
+Edit `.env` with one of these configurations, then restart `npm run dev`:
+
+```env
+LLM_PROVIDER=anthropic
+ANTHROPIC_API_KEY=your-provider-key
+ANTHROPIC_MODEL=your-current-Claude-model-id
+AI_DISABLED=false
+```
+
+```env
+LLM_PROVIDER=openai
+OPENAI_API_KEY=your-provider-key
+OPENAI_MODEL=your-current-OpenAI-model-id
+AI_DISABLED=false
+```
+
+Enable the student's AI toggle too. Hosted providers may charge for API use.
+Without the selected hosted provider's key, AI is disabled automatically.
+Never commit `.env` or paste keys into training materials. Changing
+`USE_OLLAMA` controls provisioning; `LLM_PROVIDER` selects the app's provider.
 
 ## Checks and troubleshooting
 

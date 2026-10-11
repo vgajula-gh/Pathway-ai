@@ -124,4 +124,18 @@ paths:
   /api/extract: { post: { summary: Extract candidate events (not saved), responses: { '200': { description: Candidates } } } }
   /api/coach: { post: { summary: Learning explanation, responses: { '200': { description: OK } } } }
   /api/audit: { get: { summary: Activity log, responses: { '200': { description: OK } } } }
-  /api/health: { get: { security: [], summary: Health, responses: { '200': { description: OK } } } }
+  /api/health:
+    get:
+      security: []
+      summary: Server AI configuration (not a live model readiness probe)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  aiEnabled: { type: boolean }
+                  provider: { enum: [anthropic, openai, ollama, null] }

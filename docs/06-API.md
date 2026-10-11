@@ -34,3 +34,5 @@ Base URL `http://localhost:8787`. JSON in/out. Auth (dev): header `x-student-id`
 `settings.voice` is a boolean, defaulting to `false` for new and existing students. PATCH merges it with other settings and records the change in the activity log. It is included in data exports. Voice input and reply playback use browser speech APIs; there is no audio endpoint.
 
 Full schema: `docs/openapi.yaml`.
+
+`GET /api/health` returns `{ok, aiEnabled, provider}`. `provider` is `anthropic`, `openai`, `ollama`, or `null` when disabled. `aiEnabled` means configured, not a live provider readiness check; student AI consent is still required for AI requests.
