@@ -10,9 +10,12 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "db:push": "prisma db push",
-    "db:seed": "tsx --env-file=../../.env prisma/seed.ts"
+    "db:seed": "tsx --env-file=../../.env prisma/seed.ts",
+    "db:demo": "tsx --env-file=../../.env prisma/demo.ts"
   },
-  "prisma": { "schema": "prisma/schema.prisma" },
+  "prisma": {
+    "schema": "prisma/schema.prisma"
+  },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.60.0",
     "@fastify/cors": "^10.0.0",

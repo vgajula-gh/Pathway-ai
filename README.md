@@ -9,16 +9,29 @@ This repository is a working starter kit: a TypeScript API (Fastify + Prisma + a
 ## Quick start
 
 ```bash
-# Requires Node 20+
-cp .env.example .env          # set LLM_PROVIDER and its API key (Claude or OpenAI), or AI_DISABLED=true
-npm install
-npm run db:setup              # creates SQLite dev DB and seeds sample opportunities
+# Requires Node 20+ (Node 22 LTS recommended); works on Mac, Windows and Linux
+npm run setup                # creates .env if missing, installs, sets up SQLite, seeds demo data
 npm run dev                   # API on :8787, web on :5173
 npm test                      # deterministic engine tests
+npm run typecheck
 ```
 
 Open http://localhost:5173, complete onboarding (turn on "sample week" to explore), then try the core journey:
 **Explore → open an opportunity → Set a prep reminder → Approve → see it on Today → check off a step in Grow.**
+
+For **GitHub Codespaces**, choose **Code → Codespaces → Create codespace**.
+The dev container runs setup automatically. Run `npm run dev`, then open
+forwarded port **5173** from the Ports tab. Keep the port private.
+
+The web app uses its own address for `/api`; Vite proxies development requests
+to the API, so only port 5173 needs forwarding. Leave `VITE_API_URL=` empty in
+`.env` (clear the old localhost value if upgrading). Production hosting needs
+equivalent `/api` routing or an explicit `VITE_API_URL` at build time.
+
+Setup preserves existing `.env` and demo profile changes. Without an AI key,
+deterministic features work automatically; configure a provider in `.env` only
+if you want AI help. See [TRAINER-GUIDE.md](TRAINER-GUIDE.md) for laptop steps,
+the seeded demo profile, and a training walkthrough.
 
 ## What's here
 
