@@ -8,6 +8,14 @@ components:
   securitySchemes:
     devStudent: { type: apiKey, in: header, name: x-student-id }
   schemas:
+    StudentSettings:
+      type: object
+      properties:
+        voice: { type: boolean, default: false, description: Enable browser voice controls; no audio stored by Pathway }
+        showWord: { type: boolean }
+        showNews: { type: boolean }
+        theme: { enum: [dusk, dark, light, auto] }
+        newsTopics: { type: [array, 'null'], maxItems: 7, items: { type: string } }
     Error: { type: object, properties: { error: { type: string }, details: { type: array, items: { type: string } } } }
     Action:
       type: object
@@ -65,7 +73,16 @@ paths:
       responses: { '201': { description: Created } }
   /api/me:
     get: { summary: Current student, responses: { '200': { description: OK } } }
-    patch: { summary: Update profile (records provenance), responses: { '200': { description: OK } } }
+    patch:
+      summary: Update profile (records provenance and audits changes)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                settings: { $ref: '#/components/schemas/StudentSettings' }
+      responses: { '200': { description: OK } }
     delete: { summary: Delete all student data, responses: { '204': { description: Deleted } } }
   /api/me/export: { get: { summary: Export all data, responses: { '200': { description: JSON export } } } }
   /api/today: { get: { summary: Today snapshot, responses: { '200': { description: OK } } } }

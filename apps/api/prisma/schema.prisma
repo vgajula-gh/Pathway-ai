@@ -22,7 +22,7 @@ model Student {
   aiConsent   Boolean  @default(true)
   budget      String   @default("any") // "free" | "any"
   format      String   @default("any") // "virtual" | "any"
-  settings    String   @default("{}")  // JSON: { showWord, showNews, theme: dusk|dark|light|auto, newsTopics: string[]|null }
+  settings    String   @default("{}")  // JSON: { voice (default false), showWord, showNews, theme: dusk|dark|light|auto, newsTopics: string[]|null }
   provenance  String   @default("{}")  // JSON: { field: { src, at } }
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

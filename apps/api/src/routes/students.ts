@@ -9,10 +9,10 @@ const hhmm = z.string().regex(/^\d{2}:\d{2}$/);
 const Onboard = z.object({ name: z.string().min(1).max(60), grade: z.number().int().min(9).max(12), interests: z.array(z.string()).max(20).default([]), goal: z.string().max(140).optional(),
   aiConsent: z.boolean().default(true), timezone: z.string().default('America/New_York'), studyStart: hhmm.default('16:00'), studyEnd: hhmm.default('21:00'), downtimeStart: hhmm.default('21:00'), downtimeEnd: hhmm.default('23:00'), sampleWeek: z.boolean().default(false) });
 const Patch = z.object({ name: z.string().min(1).max(60), grade: z.number().int().min(9).max(12), interests: z.array(z.string()), skills: z.array(z.string()), location: z.string().max(80), aiConsent: z.boolean(), budget: z.enum(['free', 'any']), format: z.enum(['virtual', 'any']),
-  settings: z.object({ showWord: z.boolean(), showNews: z.boolean(), theme: z.enum(['dusk', 'dark', 'light', 'auto']), newsTopics: z.array(z.string()).max(7).nullable() }).partial(), availability: z.object({ studyStart: hhmm, studyEnd: hhmm, maxStudyMin: z.number().int().min(30).max(360), downtimeStart: hhmm, downtimeEnd: hhmm }).partial() }).partial();
+  settings: z.object({ voice: z.boolean(), showWord: z.boolean(), showNews: z.boolean(), theme: z.enum(['dusk', 'dark', 'light', 'auto']), newsTopics: z.array(z.string()).max(7).nullable() }).partial(), availability: z.object({ studyStart: hhmm, studyEnd: hhmm, maxStudyMin: z.number().int().min(30).max(360), downtimeStart: hhmm, downtimeEnd: hhmm }).partial() }).partial();
 
 export function serializeStudent(s: any) {
-  return { id: s.id, name: s.name, grade: s.grade, timezone: s.timezone, location: s.location, interests: j(s.interests, []), skills: j(s.skills, []), aiConsent: s.aiConsent, budget: s.budget, format: s.format, settings: { showWord: true, showNews: true, theme: 'dusk', newsTopics: null, ...j(s.settings, {}) }, provenance: j(s.provenance, {}), availability: s.availability, createdAt: s.createdAt };
+  return { id: s.id, name: s.name, grade: s.grade, timezone: s.timezone, location: s.location, interests: j(s.interests, []), skills: j(s.skills, []), aiConsent: s.aiConsent, budget: s.budget, format: s.format, settings: { voice: false, showWord: true, showNews: true, theme: 'dusk', newsTopics: null, ...j(s.settings, {}) }, provenance: j(s.provenance, {}), availability: s.availability, createdAt: s.createdAt };
 }
 
 export default async function routes(app: FastifyInstance) {
@@ -36,6 +36,7 @@ export default async function routes(app: FastifyInstance) {
       interests: b.interests && JSON.stringify(b.interests), skills: b.skills && JSON.stringify(b.skills), settings: b.settings && JSON.stringify({ ...j(s.settings, {}), ...b.settings }), provenance: JSON.stringify(prov) } });
     if (b.availability) await prisma.availability.upsert({ where: { studentId: s.id }, update: { ...b.availability, source: 'edited', lastVerified: new Date() }, create: { studentId: s.id, ...b.availability } });
     if (b.aiConsent !== undefined) await audit(s.id, 'student', b.aiConsent ? 'Turned on AI help' : 'Turned off AI help');
+    else if (b.settings?.voice !== undefined) await audit(s.id, 'student', b.settings.voice ? 'Turned on Voice' : 'Turned off Voice');
     else if (b.settings?.newsTopics !== undefined) await audit(s.id, 'student', 'Changed news topics', (b.settings.newsTopics || ['match interests']).join(', '));
     else await audit(s.id, 'student', 'Edited profile');
     return serializeStudent(await requireStudent(req));

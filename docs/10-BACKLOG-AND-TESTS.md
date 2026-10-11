@@ -45,3 +45,12 @@ Opportunity Gap Finder · Opportunity Creator (design your own project/club) · 
 
 ## Test commands
 `npm test` (domain unit tests) · add API integration tests with `app.inject()` (Fastify) against a temp SQLite DB · add Playwright E2E for Journey A.
+
+## Buddy voice acceptance checks
+
+- Voice is off for new and existing students; You › Privacy saves and audits the preference.
+- Supported recognition shows a mic only with Voice enabled; listening has a visible status and stop button. Unsupported browsers retain typed chat.
+- Dictation preserves existing draft text, updates interim results without duplication, and never sends. Stop, edit the draft, then explicitly send.
+- Read replies aloud is separately selected, reads new replies only, and has a stop control. Unchecking it, disabling Voice, and leaving Buddy cancel playback.
+- Permission denial and speech errors show helpful messages; no audio capture, uploads, or storage.
+- Automated browser API mocks cover recognition, draft updates, opt-in, errors, cleanup, and settings persistence. Manual supported-browser microphone and speaker checks are needed for actual audio hardware.
