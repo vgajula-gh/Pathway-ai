@@ -19,7 +19,7 @@ You are building **Pathway AI**, an AI companion for high school students. Read 
 7. **Academic integrity.** The coach teaches; it does not produce graded work.
 
 ## LLM providers
-- The app runs on **Claude or OpenAI**, chosen by `LLM_PROVIDER`. Only `apps/api/src/agent/llm/*` may import a vendor SDK; everything else uses the `LLM` interface (`runTools`, `json`, `text`).
+- The app runs on **Claude, OpenAI or Ollama**, chosen by `LLM_PROVIDER`. Only `apps/api/src/agent/llm/*` may import a vendor SDK; everything else uses the `LLM` interface (`runTools`, `json`, `text`).
 - Prompts, tools, guardrails and the approval flow are provider-neutral. A new provider = one adapter file + a line in `llm/index.ts` + a test.
 - Any feature must keep working with AI disabled (deterministic features stay available).
 

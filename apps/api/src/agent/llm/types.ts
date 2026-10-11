@@ -9,7 +9,7 @@ export interface RunToolsOptions {
   exec: (name: string, input: unknown) => Promise<ToolResult>;
 }
 export interface LLM {
-  readonly provider: 'anthropic' | 'openai';
+  readonly provider: 'anthropic' | 'openai' | 'ollama';
   /** Tool-use loop: the model may call tools up to maxRounds times; returns the final text. */
   runTools(opts: RunToolsOptions): Promise<string>;
   /** JSON-only answer, parsed defensively (optionally with images). */

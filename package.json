@@ -2,7 +2,7 @@
   "name": "pathway-ai",
   "private": true,
   "version": "0.1.0",
-  "description": "Pathway AI — an AI companion that helps high school students get more out of their high school years.",
+  "description": "Pathway AI \u2014 an AI companion that helps high school students get more out of their high school years.",
   "workspaces": [
     "apps/api",
     "apps/web"
@@ -16,7 +16,9 @@
     "typecheck": "npm run typecheck --workspace apps/api && npm run typecheck --workspace apps/web",
     "build": "npm run build --workspace apps/api && npm run build --workspace apps/web",
     "setup": "node scripts/setup.mjs",
-    "db:demo": "npm run db:demo --workspace apps/api"
+    "db:demo": "npm run db:demo --workspace apps/api",
+    "ollama:setup": "node scripts/setup-ollama.mjs",
+    "ollama:start": "node scripts/start-ollama.mjs"
   },
   "engines": {
     "node": ">=20"

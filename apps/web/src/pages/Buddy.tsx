@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../lib/api';
-import { ChatMessage, Conversation, Proposal, Student } from '../lib/types';
+import { AIHealth, ChatMessage, Conversation, Proposal, Student } from '../lib/types';
 import { fmtDay } from '../lib/format';
 import { Typing, toast, useLoad } from '../components/ui';
 import ProposalReview, { actionLine } from '../components/ProposalReview';
@@ -11,6 +11,7 @@ const SUGG = [['📚', 'I have a biology exam Friday and soccer Wednesday'], ['�
 
 /** Buddy: a companion home (orb, starters, earlier chats) and conversation threads. New topics start new threads. */
 export default function Buddy({ me, seed, clearSeed }: { me: Student; seed: string | null; clearSeed: () => void }) {
+  const health = useLoad(() => api<AIHealth>('/api/health'), []);
   const convos = useLoad(() => api<Conversation[]>('/api/buddy/conversations'), []);
   const [active, setActive] = useState<string | null>(null), [msgs, setMsgs] = useState<ChatMessage[]>([]);
   const [text, setText] = useState(''), [busy, setBusy] = useState(false), [props, setProps] = useState<Record<string, Proposal>>({}), [review, setReview] = useState<Proposal | null>(null), [scan, setScan] = useState(false);
@@ -44,7 +45,7 @@ export default function Buddy({ me, seed, clearSeed }: { me: Student; seed: stri
           <div className={`bub ${m.role === 'user' ? 'me' : 'ai'}`}>{m.content}</div>
           {(m.proposalIds || []).map(id => props[id] && <div className="prop" key={id}><b>{props[id].summary}</b>{props[id].actions.slice(0, 4).map((a, i) => { const [e, t, s] = actionLine(a); return <div className="pi" key={i}><span>{e}</span><div><div>{t}</div>{s && <div className="muted small">{s}</div>}</div></div>; })}
             {props[id].status === 'AWAITING_APPROVAL' ? <div className="acts"><button className="btn fill" onClick={() => setReview(props[id])}>Review & approve</button></div> : <p className="tiny">{props[id].status === 'VERIFIED' ? 'Saved and verified' : props[id].status.toLowerCase()}</p>}</div>)}
-        </div>)}{busy && <div className="status"><Typing /><span>Thinking…</span></div>}</div></>}
+        </div>)}{busy && <div className="status" role="status"><Typing /><span>{health.data?.provider === 'ollama' ? 'Buddy is thinking… local models can take up to a minute' : 'Buddy is thinking…'}</span></div>}</div></>}
       <form className="composer" onSubmit={e => { e.preventDefault(); send(text, !inChat); }}>
         {me.settings.voice && <div className="voice-controls">
           {voice.canSpeak && <label><input type="checkbox" checked={voice.readAloud} disabled={!me.aiConsent} onChange={e => voice.toggleReadAloud(e.target.checked)} /> Read replies aloud</label>}

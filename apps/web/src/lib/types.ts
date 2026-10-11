@@ -13,3 +13,5 @@ export interface ChatMessage { id: string; role: 'user' | 'assistant'; content: 
 export interface Story { id: string; topic: string; headline: string; summary: string; source: string; url: string; publishedAt: string }
 export interface NewsResponse { allTopics: string[]; topics: string[]; custom: boolean; stories: Story[]; top: Story | null; personal: boolean; emptyTopics: string[]; updatedAt: string | null }
 export interface Conversation { id: string; title: string; updatedAt: string; messageCount: number }
+
+export interface AIHealth { ok: boolean; aiEnabled: boolean; provider: 'anthropic' | 'openai' | 'ollama' | null }

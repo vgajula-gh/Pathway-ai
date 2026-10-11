@@ -34,7 +34,7 @@ Student context → understand request → retrieve reliable context → evaluat
 Buddy agent · insights · schedule scan · coach
                 │  LLM interface: runTools() · json() · text()
         ┌───────┴────────┐
-  Anthropic adapter   OpenAI adapter        ← selected by LLM_PROVIDER
+  Anthropic adapter   OpenAI adapter + Ollama wrapper        ← selected by LLM_PROVIDER
   (Messages + tools)  (Chat Completions + function calling)
 ```
 Tool definitions are written once (JSON Schema) and translated by each adapter. Guardrails do not depend on the model: tools validate input, the engine decides facts, and only the approval service writes data.
@@ -54,7 +54,7 @@ Tool definitions are written once (JSON Schema) and translated by each adapter. 
 ## Key decisions
 | Decision | Choice | Why | Trade-off |
 |---|---|---|---|
-| LLM vendor | **Claude or OpenAI** via adapters | No lock-in; pick per cost, quality and school requirements | Small differences in tool-calling behaviour; covered by evals |
+| LLM vendor | **Claude, OpenAI or local Ollama** via adapters | No lock-in; pick per cost, quality and school requirements | Small differences in tool-calling behaviour; covered by evals |
 | Agent topology | **One orchestrating agent** with typed tools | Coherent companion, simpler safety review | Less parallelism than multi-agent |
 | Truth source | **Deterministic domain code** for dates, conflicts, eligibility, approvals | Correctness; testable | More code than "let the model do it" |
 | Writes | **Proposals only**; execution after approval in a DB transaction with verification | Consent, auditability, idempotency | Extra tap for students |
@@ -77,3 +77,7 @@ Tool definitions are written once (JSON Schema) and translated by each adapter. 
 - **Jobs:** a queue (BullMQ / Cloud Tasks) for opportunity sourcing, source re-checks and proposal expiry.
 - **Observability:** structured logs with PII redaction, error tracking, an eval suite for agent behavior (see backlog).
 - **Mobile:** wrap with Capacitor or rebuild in React Native/Expo reusing the API.
+
+## Local AI testing
+
+`LLM_PROVIDER=ollama` reuses the OpenAI-compatible adapter at `OLLAMA_BASE_URL` (default `http://localhost:11434/v1`) with `OLLAMA_MODEL` (default `llama3.2:3b`). No auth header or API key is sent. Local calls allow fifteen minutes with automatic retries disabled; the development proxy and API connection allow twenty minutes in total for a multi-round tool conversation. Invalid tool arguments produce a tool error without execution. JSON-mode rejection or unreadable output gets one plain-text retry with defensive JSON parsing. Student consent and the approval/verification flow apply to every provider. Codespaces provisioning is optional through `USE_OLLAMA` (default on); the service binds to loopback.

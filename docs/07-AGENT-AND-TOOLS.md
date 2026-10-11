@@ -26,3 +26,7 @@ Run the same golden conversations on both providers. Differences to watch: paral
 
 ## Evals to add *(backlog)*
 Golden conversations for: exam + practice overlap (must not schedule over practice), ineligible grade (must not recommend), unknown deadline (must say confirm), homework request (must coach), "add it" without approval (must propose, not claim).
+
+## Ollama testing
+
+The local Ollama provider uses the same prompts, tool validation, proposal approval, and verification flow. Invalid tool-call JSON is returned to the model as an explicit error and never executes a tool. Local JSON-mode failures retry once without JSON mode and parse the response defensively. The default text model cannot read images.
