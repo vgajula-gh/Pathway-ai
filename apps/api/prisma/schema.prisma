@@ -1,0 +1,219 @@
+// Pathway AI data model. See docs/05-DATA-MODEL.md.
+// Local dev uses SQLite. For production change provider to "postgresql".
+// JSON-shaped fields are stored as String (serialized) so the schema works on both.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Student {
+  id          String   @id @default(cuid())
+  name        String
+  grade       Int
+  timezone    String   @default("America/New_York")
+  location    String   @default("")   // broad area only, e.g. "Raleigh area"
+  interests   String   @default("[]") // JSON string[]
+  skills      String   @default("[]") // JSON string[]
+  aiConsent   Boolean  @default(true)
+  budget      String   @default("any") // "free" | "any"
+  format      String   @default("any") // "virtual" | "any"
+  settings    String   @default("{}")  // JSON: { showWord, showNews, theme: dusk|dark|light|auto, newsTopics: string[]|null }
+  provenance  String   @default("{}")  // JSON: { field: { src, at } }
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  availability Availability?
+  events       Event[]
+  goals        Goal[]
+  portfolio    PortfolioEntry[]
+  saved        SavedOpportunity[]
+  proposals    AgentAction[]
+  audits       AuditEvent[]
+  messages     ChatMessage[]
+  conversations Conversation[]
+  briefs       DailyBrief[]
+}
+
+model Availability {
+  studentId     String  @id
+  student       Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  studyStart    String  @default("16:00")
+  studyEnd      String  @default("21:00")
+  maxStudyMin   Int     @default(120)
+  downtimeStart String  @default("21:00")
+  downtimeEnd   String  @default("23:00")
+  source        String  @default("onboarding")
+  lastVerified  DateTime @default(now())
+}
+
+model Event {
+  id          String   @id @default(cuid())
+  studentId   String
+  student     Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  title       String
+  type        String   // class|exam|deadline|club|sports|competition|volunteering|study|personal|reminder|other
+  start       String   // local "YYYY-MM-DDTHH:MM"
+  end         String
+  location    String   @default("")
+  recurDays   String   @default("")  // JSON number[] (0=Sun) when weekly
+  recurUntil  String   @default("")
+  source      String   @default("manual") // manual|upload|pathway|sample
+  confidence  String   @default("")       // extraction confidence when source=upload
+  done        Boolean  @default(false)
+  proposalId  String?
+  createdAt   DateTime @default(now())
+  @@index([studentId])
+}
+
+model Opportunity {
+  id              String   @id
+  name            String
+  organizer       String
+  category        String
+  url             String
+  gradeMin        Int
+  gradeMax        Int
+  minAge          Int?
+  format          String
+  cost            String
+  commitment      String
+  skills          String   // JSON string[]
+  tags            String   // JSON string[]
+  checks          String   @default("[]") // JSON string[] — things to verify
+  deadline        String?  // ISO date if verified, else null
+  sourceCheckedAt DateTime? // null => not verified
+  isSample        Boolean  @default(true)
+}
+
+model SavedOpportunity {
+  studentId     String
+  opportunityId String
+  status        String   @default("saved") // saved|dismissed|preparing|applied|done
+  createdAt     DateTime @default(now())
+  student       Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  @@id([studentId, opportunityId])
+}
+
+model Goal {
+  id            String      @id @default(cuid())
+  studentId     String
+  student       Student     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  title         String
+  category      String      @default("aspiration")
+  priority      String      @default("medium")
+  targetDate    String      @default("")
+  opportunityId String?
+  status        String      @default("active") // active|done
+  createdAt     DateTime    @default(now())
+  doneAt        DateTime?
+  milestones    Milestone[]
+}
+
+model Milestone {
+  id         String    @id @default(cuid())
+  goalId     String
+  goal       Goal      @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  title      String
+  purpose    String    @default("")
+  effortMin  Int       @default(30)
+  targetDate String    @default("")
+  status     String    @default("todo") // todo|done
+  doneAt     DateTime?
+}
+
+model PortfolioEntry {
+  id          String   @id @default(cuid())
+  studentId   String
+  student     Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  type        String
+  title       String
+  date        String
+  reflection  String   @default("")
+  skills      String   @default("[]")
+  evidence    String   @default("")      // link or note, unverified
+  visibility  String   @default("private") // private|shared
+  verification String  @default("self-reported")
+  createdAt   DateTime @default(now())
+}
+
+model AgentAction {
+  id          String   @id @default(cuid())
+  studentId   String
+  student     Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  origin      String   // agent|student
+  summary     String
+  rationale   String   @default("")
+  actions     String   // JSON NormalizedAction[]
+  dataUsed    String   @default("[]")
+  effect      String   @default("")
+  status      String   // AWAITING_APPROVAL|APPROVED|EXECUTING|VERIFIED|FAILED|REJECTED|EXPIRED
+  idemKey     String
+  result      String   @default("")
+  createdIds  String   @default("[]")
+  log         String   @default("[]") // JSON [{s, t}]
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+  @@index([studentId, status])
+}
+
+model AuditEvent {
+  id        String   @id @default(cuid())
+  studentId String
+  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  actor     String   // student|pathway|system
+  event     String
+  record    String   @default("")
+  at        DateTime @default(now())
+  @@index([studentId, at])
+}
+
+model Conversation {
+  id        String        @id @default(cuid())
+  studentId String
+  student   Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  title     String        @default("Conversation")
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  messages  ChatMessage[]
+  @@index([studentId, updatedAt])
+}
+
+model ChatMessage {
+  id        String   @id @default(cuid())
+  studentId String
+  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  conversationId String?
+  conversation   Conversation? @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role      String   // user|assistant
+  content   String
+  meta      String   @default("{}") // JSON { toolEvents, proposalIds, error }
+  createdAt DateTime @default(now())
+}
+
+model DailyBrief {
+  studentId String
+  date      String
+  data      String  // JSON
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  @@id([studentId, date])
+}
+
+// Curated news stories for "News for you". Every story must have a real source + URL.
+// Pathway never generates news text; summaries are short, neutral paraphrases.
+model NewsStory {
+  id          String   @id
+  topic       String   // Space | Science | AI & Tech | Health & Medicine | Climate & Nature | Arts & Culture | Sports
+  headline    String
+  summary     String   @default("")
+  source      String
+  url         String
+  publishedAt String   // YYYY-MM-DD
+  checkedAt   DateTime @default(now())
+  isSample    Boolean  @default(true)
+  @@index([topic, publishedAt])
+}

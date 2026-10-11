@@ -1,0 +1,110 @@
+openapi: 3.1.0
+info:
+  title: Pathway AI API
+  version: 0.1.0
+  description: Student-success companion API. Dev auth uses the x-student-id header; replace before launch.
+servers: [{ url: http://localhost:8787 }]
+components:
+  securitySchemes:
+    devStudent: { type: apiKey, in: header, name: x-student-id }
+  schemas:
+    Error: { type: object, properties: { error: { type: string }, details: { type: array, items: { type: string } } } }
+    Action:
+      type: object
+      required: [type]
+      properties:
+        type: { enum: [add_event, move_event, remove_event, add_goal, add_milestone, save_opportunity, add_portfolio_entry] }
+        title: { type: string }
+        eventType: { enum: [class, exam, deadline, club, sports, competition, volunteering, study, personal, reminder, other] }
+        start: { type: string, pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$' }
+        end: { type: string }
+        eventId: { type: string }
+        ref: { type: string }
+        goalRef: { type: string }
+        effortMin: { type: integer }
+        targetDate: { type: string }
+        opportunityId: { type: string }
+    Proposal:
+      type: object
+      properties:
+        id: { type: string }
+        summary: { type: string }
+        rationale: { type: string }
+        actions: { type: array, items: { $ref: '#/components/schemas/Action' } }
+        dataUsed: { type: array, items: { type: string } }
+        effect: { type: string }
+        status: { enum: [AWAITING_APPROVAL, APPROVED, EXECUTING, VERIFIED, FAILED, REJECTED, EXPIRED] }
+        result: { type: string }
+        log: { type: array, items: { type: object, properties: { s: { type: string }, t: { type: number } } } }
+        expiresAt: { type: string, format: date-time }
+    Factor: { type: object, properties: { key: { type: string }, state: { enum: [ok, mid, no, na] }, text: { type: string } } }
+    Opportunity:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        organizer: { type: string }
+        url: { type: string }
+        category: { type: string }
+        verified: { type: boolean }
+        deadline: { type: [string, 'null'] }
+        fit:
+          type: object
+          properties:
+            excluded: { type: boolean }
+            fit: { enum: [strong, good, look] }
+            why: { type: string }
+            factors: { type: array, items: { $ref: '#/components/schemas/Factor' } }
+security: [{ devStudent: [] }]
+paths:
+  /api/students:
+    post:
+      security: []
+      summary: Onboard a student
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [name, grade], properties: { name: { type: string }, grade: { type: integer, minimum: 9, maximum: 12 }, interests: { type: array, items: { type: string } }, goal: { type: string }, aiConsent: { type: boolean }, timezone: { type: string }, studyStart: { type: string }, studyEnd: { type: string }, downtimeStart: { type: string }, downtimeEnd: { type: string }, sampleWeek: { type: boolean } } } } } }
+      responses: { '201': { description: Created } }
+  /api/me:
+    get: { summary: Current student, responses: { '200': { description: OK } } }
+    patch: { summary: Update profile (records provenance), responses: { '200': { description: OK } } }
+    delete: { summary: Delete all student data, responses: { '204': { description: Deleted } } }
+  /api/me/export: { get: { summary: Export all data, responses: { '200': { description: JSON export } } } }
+  /api/today: { get: { summary: Today snapshot, responses: { '200': { description: OK } } } }
+  /api/today/insight: { post: { summary: AI brief (cached daily), responses: { '200': { description: OK }, '403': { description: AI consent off }, '503': { description: AI unavailable } } } }
+  /api/events:
+    get: { summary: Occurrences in range, parameters: [{ name: from, in: query, schema: { type: string } }, { name: to, in: query, schema: { type: string } }], responses: { '200': { description: OK } } }
+    post: { summary: Add event, responses: { '201': { description: Created }, '409': { description: Conflict warning (resend with force) } } }
+  /api/events/bulk: { post: { summary: Save confirmed extracted events, responses: { '201': { description: Created } } } }
+  /api/events/{id}:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    patch: { summary: Mark done, responses: { '200': { description: OK } } }
+    delete: { summary: Delete, responses: { '204': { description: Deleted } } }
+  /api/events/{id}/ics:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    get: { summary: Calendar file, responses: { '200': { description: text/calendar } } }
+  /api/opportunities: { get: { summary: Ranked opportunities with factors, responses: { '200': { description: OK } } } }
+  /api/opportunities/{id}:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    get: { summary: One opportunity, responses: { '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Opportunity' } } } } } }
+  /api/opportunities/{id}/status:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    post: { summary: Save / dismiss / clear, responses: { '200': { description: OK } } }
+  /api/opportunities/{id}/prep:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    post: { summary: Create prep proposal, responses: { '200': { description: Proposal, content: { application/json: { schema: { $ref: '#/components/schemas/Proposal' } } } } } }
+  /api/proposals: { get: { summary: List proposals, responses: { '200': { description: OK } } } }
+  /api/proposals/{id}/approve:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    post: { summary: Approve, revalidate, execute, verify, responses: { '200': { description: Final status VERIFIED or FAILED } } }
+  /api/proposals/{id}/reject:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    post: { summary: Decline, responses: { '200': { description: REJECTED } } }
+  /api/goals: { get: { summary: Goals with milestones, responses: { '200': { description: OK } } }, post: { summary: Add goal, responses: { '201': { description: Created } } } }
+  /api/milestones/{id}:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    patch: { summary: Toggle step, responses: { '200': { description: OK } } }
+  /api/portfolio: { get: { summary: Portfolio, responses: { '200': { description: OK } } }, post: { summary: Capture experience, responses: { '201': { description: Created } } } }
+  /api/buddy/messages: { get: { summary: History, responses: { '200': { description: OK } } }, post: { summary: Send message (runs agent), responses: { '200': { description: Reply with toolEvents and proposalIds } } } }
+  /api/extract: { post: { summary: Extract candidate events (not saved), responses: { '200': { description: Candidates } } } }
+  /api/coach: { post: { summary: Learning explanation, responses: { '200': { description: OK } } } }
+  /api/audit: { get: { summary: Activity log, responses: { '200': { description: OK } } } }
+  /api/health: { get: { security: [], summary: Health, responses: { '200': { description: OK } } } }

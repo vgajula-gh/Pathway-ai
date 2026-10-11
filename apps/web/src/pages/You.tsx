@@ -1,0 +1,60 @@
+import { useState } from 'react';
+import { api, download, session } from '../lib/api';
+import { Student } from '../lib/types';
+import { Sheet, toast, useLoad } from '../components/ui';
+import NewsSheet from '../components/NewsSheet';
+import { THEMES, applyTheme } from '../lib/theme';
+
+export default function You({ me, setMe }: { me: Student; setMe: (s: Student | null) => void }) {
+  const [edit, setEdit] = useState(false), [log, setLog] = useState(false), [news, setNews] = useState(false);
+  const patch = async (body: Record<string, unknown>) => { try { setMe(await api<Student>('/api/me', { method: 'PATCH', body })); toast('Saved'); } catch (e) { toast((e as Error).message); } };
+  const prov = (k: string) => me.provenance[k] ? `${me.provenance[k].src} · ${new Date(me.provenance[k].at).toLocaleDateString()}` : '';
+  const a = me.availability;
+  return (
+    <>
+      <div className="top"><p className="date">Your Student DNA</p><button className="link" onClick={() => setEdit(true)}>Edit</button></div>
+      <div style={{ display: 'flex', gap: 16, alignItems: 'center', marginTop: 10 }}><div className="avatar" style={{ width: 64, height: 64, fontSize: 26 }}>{me.name[0]?.toUpperCase()}</div><div><h1 className="display" style={{ margin: 0 }}>{me.name}</h1><p className="muted">{me.grade}th grade</p></div></div>
+      <div className="sec"><div className="rows">
+        <Row t="Interests" s={me.interests.join(', ') || 'Not set'} p={prov('interests')} />
+        <Row t="Skills" s={me.skills.join(', ') || 'Not set yet'} p={prov('skills')} />
+        <Row t="Availability" s={a ? `Study ${a.studyStart}–${a.studyEnd}, up to ${a.maxStudyMin} min a day. Downtime ${a.downtimeStart}–${a.downtimeEnd}.` : 'Not set'} p={prov('availability')} />
+      </div><p className="note">Pathway only uses what you tell it. It doesn’t guess sensitive things about you.</p></div>
+      <div className="sec"><div className="sec-h"><h2>My Day</h2></div><div className="rows">
+        <label className="frow"><span>Word of the day</span><input type="checkbox" className="switch" checked={me.settings.showWord} onChange={e => patch({ settings: { showWord: e.target.checked } })} /></label>
+        <label className="frow"><span>News for you</span><input type="checkbox" className="switch" checked={me.settings.showNews} onChange={e => patch({ settings: { showNews: e.target.checked } })} /></label>
+        <button className="r" onClick={() => setNews(true)}><span className="b"><span className="t">News topics</span><span className="s" style={{ display: 'block' }}>{me.settings.newsTopics?.join(', ') || 'Matches your interests'}</span></span></button></div>
+        <p className="note">Headlines always come from a named source with a link. Pathway never writes news itself.</p></div>
+      <div className="sec"><div className="sec-h"><h2>Appearance</h2></div><div className="seg" role="radiogroup" aria-label="Appearance">{THEMES.map(([k, l, i]) => <button key={k} role="radio" aria-checked={me.settings.theme === k} aria-pressed={me.settings.theme === k} onClick={() => { applyTheme(k); patch({ settings: { theme: k } }); }}>{i} {l}</button>)}</div></div>
+      <div className="sec"><div className="sec-h"><h2>Privacy</h2></div><div className="rows">
+        <label className="frow"><span>Use AI to help me</span><input type="checkbox" className="switch" checked={me.aiConsent} onChange={e => patch({ aiConsent: e.target.checked })} /></label>
+        <div className="frow"><span>Family sharing</span><span className="muted small">Only items you mark shared</span></div>
+        <button className="r" onClick={() => setLog(true)}><span className="b"><span className="t">Activity log</span></span></button></div></div>
+      <div className="sec"><div className="sec-h"><h2>Your data</h2></div><div className="rows">
+        <button className="r" onClick={() => download('/api/me/export', 'pathway-my-data.json')}><span className="b"><span className="t" style={{ color: 'var(--peri)' }}>Export my data</span></span></button>
+        <button className="r" onClick={async () => { if (!confirm('Delete everything in Pathway? This can’t be undone.')) return; await api('/api/me', { method: 'DELETE' }); session.clear(); setMe(null); }}><span className="b"><span className="t c-rose">Delete everything</span></span></button></div></div>
+      {edit && <EditSheet me={me} onClose={() => setEdit(false)} onSave={async b => { await patch(b); setEdit(false); }} />}
+      {log && <AuditSheet onClose={() => setLog(false)} />}
+      {news && <NewsSheet me={me} setMe={s2 => setMe(s2)} onClose={() => setNews(false)} ask={() => setNews(false)} />}
+    </>
+  );
+}
+const Row = ({ t, s, p }: { t: string; s: string; p?: string }) => <div className="r"><span className="b"><span className="t">{t}</span><span className="s" style={{ display: 'block' }}>{s}</span>{p && <span className="tiny" style={{ display: 'block', marginTop: 4 }}>{p}</span>}</span></div>;
+
+function EditSheet({ me, onClose, onSave }: { me: Student; onClose: () => void; onSave: (b: Record<string, unknown>) => void }) {
+  const a = me.availability || { studyStart: '16:00', studyEnd: '21:00', maxStudyMin: 120, downtimeStart: '21:00', downtimeEnd: '23:00' };
+  const [f, setF] = useState({ name: me.name, grade: me.grade, interests: me.interests.join(', '), skills: me.skills.join(', '), location: me.location, budget: me.budget, format: me.format, ...a });
+  const list = (s: string) => s.split(',').map(x => x.trim()).filter(Boolean);
+  const save = () => onSave({ name: f.name, grade: Number(f.grade), interests: list(f.interests), skills: list(f.skills), location: f.location, budget: f.budget, format: f.format, availability: { studyStart: f.studyStart, studyEnd: f.studyEnd, maxStudyMin: Number(f.maxStudyMin), downtimeStart: f.downtimeStart, downtimeEnd: f.downtimeEnd } });
+  const inp = (k: keyof typeof f, l: string, type = 'text') => <div className="frow"><label htmlFor={k}>{l}</label><input id={k} type={type} value={String(f[k])} onChange={e => setF({ ...f, [k]: e.target.value })} /></div>;
+  return <Sheet title="Edit your DNA" onClose={onClose} left={<button className="navbtn" onClick={onClose}>Cancel</button>} right={<button className="navbtn strong" onClick={save}>Save</button>}>
+    <div className="rows">{inp('name', 'Name')}{inp('grade', 'Grade', 'number')}{inp('interests', 'Interests')}{inp('skills', 'Skills')}{inp('location', 'Area (broad)')}</div>
+    <p className="label" style={{ margin: '20px 2px 8px' }}>AVAILABILITY</p><div className="rows">{inp('studyStart', 'Study from', 'time')}{inp('studyEnd', 'Until', 'time')}{inp('maxStudyMin', 'Most per day (min)', 'number')}{inp('downtimeStart', 'Downtime from', 'time')}{inp('downtimeEnd', 'Until', 'time')}</div>
+    <p className="label" style={{ margin: '20px 2px 8px' }}>OPPORTUNITIES</p><div className="rows">
+      <div className="frow"><label htmlFor="b">Budget</label><select id="b" value={f.budget} onChange={e => setF({ ...f, budget: e.target.value })}><option value="free">Free only</option><option value="any">Any</option></select></div>
+      <div className="frow"><label htmlFor="fm">Format</label><select id="fm" value={f.format} onChange={e => setF({ ...f, format: e.target.value })}><option value="any">Any</option><option value="virtual">Online only</option></select></div></div></Sheet>;
+}
+
+function AuditSheet({ onClose }: { onClose: () => void }) {
+  const { data } = useLoad(() => api<{ id: string; actor: string; event: string; record: string; at: string }[]>('/api/audit'), []);
+  return <Sheet title="Activity log" onClose={onClose}><div className="rows">{(data || []).map(e => <div className="r" key={e.id}><span className="b"><span className="t small">{e.event}{e.record ? `: ${e.record}` : ''}</span><span className="s" style={{ display: 'block' }}>{e.actor === 'student' ? 'You' : 'Pathway'} · {new Date(e.at).toLocaleString()}</span></span></div>)}</div></Sheet>;
+}

@@ -1,0 +1,14 @@
+# Optional: Postgres for production-like local runs.
+# 1) docker compose up -d   2) set DATABASE_URL=postgresql://pathway:pathway@localhost:5432/pathway
+# 3) change provider to "postgresql" in apps/api/prisma/schema.prisma   4) npm run db:setup
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: pathway
+      POSTGRES_PASSWORD: pathway
+      POSTGRES_DB: pathway
+    ports: ["5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+volumes:
+  pgdata: {}
