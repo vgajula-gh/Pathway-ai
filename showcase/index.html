@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pathway AI · Make the most of today. Build a better tomorrow.</title>
+<meta name="description" content="Pathway AI is an AI companion that helps high school students cut through the overwhelm, find what fits them, and build a path they're proud of.">
+<style>
+:root{--bg:#0B0E19;--bg2:#121733;--card:rgba(255,255,255,.06);--line:rgba(255,255,255,.1);--text:#ECEEF7;--muted:#A3A9C0;--peri:#9DAFFF;--teal:#6FD8C4;--peach:#F5BE8C;--rose:#FF8FA3;
+--serif:Georgia,'Iowan Old Style','Palatino Linotype',serif;--sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,system-ui,sans-serif}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:400 17px/1.6 var(--sans)}
+body::before{content:"";position:fixed;inset:0;pointer-events:none;background:radial-gradient(80% 50% at 50% -10%,rgba(110,125,255,.28),transparent 60%),radial-gradient(50% 40% at 100% 40%,rgba(90,215,190,.12),transparent 70%)}
+main{position:relative;max-width:1000px;margin:0 auto;padding:56px 24px 80px}
+a{color:var(--peri)}
+h1,h2{font-family:var(--serif);font-weight:400;letter-spacing:-.3px;line-height:1.15;margin:0}
+h1{font-size:clamp(38px,6vw,64px)}
+h2{font-size:clamp(28px,3.6vw,38px);margin-bottom:16px}
+.eyebrow{font-size:13px;letter-spacing:2px;color:var(--muted);font-weight:600;text-transform:uppercase;margin-bottom:10px}
+.lead{font-size:19px;color:var(--muted);max-width:62ch;margin-top:16px}
+.orb{width:56px;height:56px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff 0%,var(--peri) 40%,var(--teal) 100%);box-shadow:0 0 40px var(--peri);margin-bottom:22px}
+.links{display:flex;flex-wrap:wrap;gap:10px;margin-top:28px}
+.btn{display:inline-flex;gap:8px;align-items:center;padding:12px 18px;border-radius:999px;border:1px solid var(--line);background:var(--card);color:var(--text);text-decoration:none;font-weight:600}
+.btn.primary{background:var(--text);color:var(--bg);border-color:transparent}
+section{margin-top:64px}
+.grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(210px,1fr))}
+.card{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:20px}
+.card b{display:block;font-size:18px;margin-bottom:4px}
+.card p{margin:0;color:var(--muted);font-size:15.5px}
+.tag{font-size:13px;font-weight:700;letter-spacing:1px;text-transform:uppercase}
+video,.arch{width:100%;border-radius:18px;border:1px solid var(--line);background:#000;display:block}
+.arch{background:#fff}
+ol{padding-left:20px;color:var(--muted)} ol b{color:var(--text)}
+table{width:100%;border-collapse:collapse;font-size:15.5px}
+td,th{text-align:left;padding:12px 10px;border-top:1px solid var(--line);vertical-align:top}
+th{color:var(--muted);font-weight:600}
+footer{margin-top:64px;color:var(--muted);font-size:14px;border-top:1px solid var(--line);padding-top:20px}
+code{background:rgba(255,255,255,.08);padding:2px 6px;border-radius:6px}
+</style>
+</head>
+<body>
+<main>
+  <div class="orb" aria-hidden="true"></div>
+  <p class="eyebrow">Pathway AI</p>
+  <h1>Make the most of today.<br>Build a better tomorrow.</h1>
+  <p class="lead">An AI companion that helps high school students cut through the overwhelm, find what fits them, and build a path they're proud of, with counselor-style guidance alongside school counselors.</p>
+  <div class="links">
+    <a class="btn primary" href="#demo">▶ Watch the demo</a>
+    <a class="btn" href="https://claude.ai/artifact/SEnFpbWcfZDJ4xSZgDJufs">Open the live prototype</a>
+    <a class="btn" href="https://claude.ai/artifact/Wrqd2qC8iDFH3MCjrqFixu">Read the pitch</a>
+    <a class="btn" href="#architecture">Architecture</a>
+  </div>
+
+  <section>
+    <p class="eyebrow">The problem</p>
+    <h2>Every student carries four questions, mostly alone.</h2>
+    <div class="grid">
+      <div class="card"><b>🧭 What should I do?</b><p>Uncertainty: what matters, and where to start.</p></div>
+      <div class="card"><b>🎯 What fits me?</b><p>Discovery: opportunities and trends that suit them.</p></div>
+      <div class="card"><b>🧩 How do I fit it all in?</b><p>Overwhelm: everything scattered, no time to think.</p></div>
+      <div class="card"><b>🌱 Am I on the right path?</b><p>The future: real readiness for college and beyond.</p></div>
+    </div>
+    <p class="lead">The information is everywhere. What's missing is personal guidance, and too often that depends on access to a private counselor.</p>
+  </section>
+
+  <section>
+    <p class="eyebrow">What Pathway does</p>
+    <h2>One companion. Three roles.</h2>
+    <div class="grid">
+      <div class="card"><span class="tag" style="color:var(--peach)">Buddy</span><b>Eases the overwhelm</b><p>Someone to talk to, encouragement, and help clearing your head.</p></div>
+      <div class="card"><span class="tag" style="color:var(--peri)">Organizer</span><b>Brings it all together</b><p>The scattered week in one calm view, with plans that fit real free time.</p></div>
+      <div class="card"><span class="tag" style="color:var(--teal)">Guide</span><b>Answers the unknowns</b><p>Opportunities that fit, what to do next, and a clear path to college.</p></div>
+    </div>
+    <p class="lead"><b style="color:var(--text)">The core promise:</b> Pathway suggests; the student decides. Nothing changes without a clear yes.</p>
+  </section>
+
+  <section id="demo">
+    <p class="eyebrow">See it in action</p>
+    <h2>A day with Maya, a 10th grader</h2>
+    <video controls preload="metadata" src="pathway-demo.mp4">Your browser can't play this video. <a href="pathway-demo.mp4">Download it</a>.</video>
+  </section>
+
+  <section id="architecture">
+    <p class="eyebrow">Architecture</p>
+    <h2>Friendly on top. Reliable underneath.</h2>
+    <img class="arch" src="architecture.png" alt="Pathway AI agentic architecture: Buddy orchestrator, sequential and parallel workflows, guardrails, memory, deterministic engine and observability">
+    <ol style="margin-top:20px">
+      <li><b>Ask:</b> the student asks Buddy, the orchestrating agent.</li>
+      <li><b>Think and use tools:</b> Buddy calls the AI model and up to six tools.</li>
+      <li><b>Facts from code:</b> schedules, free time, eligibility and fit come from a tested rules engine.</li>
+      <li><b>Propose:</b> changes become a proposal. Nothing is saved yet.</li>
+      <li><b>Approve:</b> the student sees what will change and says yes or not now.</li>
+      <li><b>Execute and verify:</b> one transaction, every change checked, every step logged.</li>
+    </ol>
+    <table style="margin-top:20px">
+      <tr><th>Front end</th><td>React + TypeScript (Vite), mobile-first, Dusk/Dark/Light themes</td></tr>
+      <tr><th>Back end</th><td>Node.js + TypeScript (Fastify), validated APIs</td></tr>
+      <tr><th>AI</th><td>Provider-agnostic: Claude, OpenAI, or local models via Ollama</td></tr>
+      <tr><th>Agent</th><td>One orchestrator with typed tools; LangGraph-ready</td></tr>
+      <tr><th>Data</th><td>Prisma: SQLite for development, PostgreSQL for production</td></tr>
+    </table>
+  </section>
+
+  <section>
+    <p class="eyebrow">Trust by design</p>
+    <h2>Built for teenagers, so built to be trusted.</h2>
+    <div class="grid">
+      <div class="card"><b>✋ Students decide</b><p>No change without approval.</p></div>
+      <div class="card"><b>🔎 Nothing invented</b><p>No made-up deadlines, links, news or achievements.</p></div>
+      <div class="card"><b>🔒 Private by default</b><p>Export or delete everything, anytime.</p></div>
+      <div class="card"><b>🧑‍🏫 Learning, not shortcuts</b><p>The coach teaches; it never does graded work.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <p class="eyebrow">Measuring impact</p>
+    <h2>Four outcomes we'll measure in the pilot</h2>
+    <div class="grid">
+      <div class="card"><b>😌 Less overwhelm</b><p>Student-reported stress and sense of control.</p></div>
+      <div class="card"><b>🧭 The right opportunities</b><p>Saved opportunities that become applications.</p></div>
+      <div class="card"><b>✅ Better follow-through</b><p>Approved plans completed on time.</p></div>
+      <div class="card"><b>📖 A story they own</b><p>Experiences captured and reflected on each term.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <p class="eyebrow">Try it yourself</p>
+    <h2>Run it in your browser</h2>
+    <p class="lead">Open the repository on GitHub › <b style="color:var(--text)">Code</b> › <b style="color:var(--text)">Codespaces</b> › <b style="color:var(--text)">Create codespace on main</b>, then run <code>npm run dev</code>. AI is optional: add Claude, OpenAI or Ollama settings to <code>.env</code> (never commit keys).</p>
+  </section>
+
+  <footer>Prototype status: opportunities are a labeled sample set; news stories link to their real sources. Maya is a fictional student.</footer>
+</main>
+</body>
+</html>
