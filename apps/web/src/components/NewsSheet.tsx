@@ -21,12 +21,13 @@ export default function NewsSheet({ me, setMe, onClose, ask }: { me: Student; se
         <div className="sec">{data.stories.length ? data.stories.map(n => (
           <div className="card spark" key={n.id} style={{ marginTop: 12 }}>
             <div className="k"><span className="tag">{NEWS_EMOJI[n.topic]} {n.topic}</span><span className="src">{n.source} · {storyWhen(n.publishedAt)}</span></div>
-            <h3>{n.headline}</h3>{n.summary && <p className="muted small">{n.summary}</p>}
+            <h3>{n.headline}</h3>{n.checkedAt && <p className="note">Source checked {fmtDay(n.checkedAt.slice(0, 10))}</p>}{n.summary && <p className="muted small">{n.summary}</p>}
             <div className="row"><a className="chipbtn" href={n.url} target="_blank" rel="noreferrer">Read the story ↗</a>{me.aiConsent && <button className="chipbtn" onClick={() => { onClose(); ask(explainAsk(n)); }}>Explain it simply</button>}</div>
-          </div>)) : <div className="card"><p className="muted">No stories in your topics right now. Try adding another topic.</p></div>}
+          </div>)) : <div className="card"><p className="muted">No fresh, reviewed stories in your topics right now. Check back later or add another topic.</p></div>}
           {data.emptyTopics.length > 0 && data.stories.length > 0 && <p className="note">Nothing new yet in {data.emptyTopics.join(', ')}.</p>}</div>
         <p className="note">Every story comes from a real, named source with a link. Pathway never writes the news itself, and your topics are private to you.</p>
       </>}
     </Sheet>
   );
 }
+

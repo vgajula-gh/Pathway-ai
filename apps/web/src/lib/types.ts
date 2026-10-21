@@ -10,8 +10,9 @@ export interface Proposal { id: string; summary: string; rationale: string; acti
 export interface Goal { id: string; title: string; status: string; opportunityId: string | null; milestones: { id: string; title: string; status: string; effortMin: number; targetDate: string }[] }
 export interface PortfolioEntry { id: string; title: string; type: string; date: string; reflection: string; skills: string[]; visibility: 'private' | 'shared' }
 export interface ChatMessage { id: string; role: 'user' | 'assistant'; content: string; toolEvents?: { label: string }[]; proposalIds?: string[]; error?: string }
-export interface Story { id: string; topic: string; headline: string; summary: string; source: string; url: string; publishedAt: string }
+export interface Story { checkedAt?: string; id: string; topic: string; headline: string; summary: string; source: string; url: string; publishedAt: string }
 export interface NewsResponse { allTopics: string[]; topics: string[]; custom: boolean; stories: Story[]; top: Story | null; personal: boolean; emptyTopics: string[]; updatedAt: string | null }
 export interface Conversation { id: string; title: string; updatedAt: string; messageCount: number }
 
 export interface AIHealth { ok: boolean; aiEnabled: boolean; provider: 'anthropic' | 'openai' | 'ollama' | null }
+

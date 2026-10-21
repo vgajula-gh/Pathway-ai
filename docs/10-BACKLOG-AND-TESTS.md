@@ -31,7 +31,7 @@ Status key: ✅ in this kit · 🟡 partial · ⬜ to build
 | M-5 | Streaming Buddy replies (SSE) | ⬜ | Tokens stream; tool status line updates live |
 | M-6 | Agent eval suite | ⬜ | 20 golden cases pass (see 07) |
 | M-7 | Accessibility audit | ⬜ | Axe clean; keyboard-only journey A passes |
-| M-9 | News ingestion job | ⬜ | Daily stories per topic with source + checkedAt; >30 days pruned |
+| M-9 | News ingestion job | 🟡 | Retrieval, dedupe, review gate, 30-day retention and 72-hour read-time freshness implemented/tested; live sources, production schedule and five-topic expansion pending (see 13) |
 | M-10 | Learn from feedback | ⬜ | "Not for me" asks why (too far / not my thing / no time); reasons adjust ranking weights per student |
 | M-11 | Week-ahead check-in | ⬜ | Sunday proposal balances tests, practice and goals; flags overloaded days; one approval |
 | M-12 | Growth insights | ⬜ | Top skills from portfolio; suggests one opportunity for a missing goal skill |
@@ -54,3 +54,4 @@ Opportunity Gap Finder · Opportunity Creator (design your own project/club) · 
 - Read replies aloud is separately selected, reads new replies only, and has a stop control. Unchecking it, disabling Voice, and leaving Buddy cancel playback.
 - Permission denial and speech errors show helpful messages; no audio capture, uploads, or storage.
 - Automated browser API mocks cover recognition, draft updates, opt-in, errors, cleanup, and settings persistence. Manual supported-browser microphone and speaker checks are needed for actual audio hardware.
+

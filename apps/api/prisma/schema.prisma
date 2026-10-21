@@ -215,5 +215,38 @@ model NewsStory {
   publishedAt String   // YYYY-MM-DD
   checkedAt   DateTime @default(now())
   isSample    Boolean  @default(true)
+  sourceId         String   @default("")
+  fingerprint      String?  @unique
+  contentHash      String   @default("")
+  moderationStatus String   @default("pending") // pending|approved|blocked
+  safetyFlags      String   @default("[]")
+  reviewedAt       DateTime?
+  reviewedBy       String?
+  @@index([moderationStatus, publishedAt])
   @@index([topic, publishedAt])
+}
+
+
+// Global operational records contain no student data.
+model NewsIngestionRun {
+  id         String   @id @default(cuid())
+  startedAt  DateTime @default(now())
+  finishedAt DateTime?
+  status     String   @default("running")
+  report     String   @default("{}")
+}
+
+model NewsJobLease {
+  id        String   @id
+  token     String
+  expiresAt DateTime
+}
+
+model NewsReview {
+  id          String   @id @default(cuid())
+  storyId     String
+  contentHash String
+  decision    String
+  reviewer    String
+  at          DateTime @default(now())
 }

@@ -1,5 +1,5 @@
-// Starter news stories (real, sourced, October 2026) for development and demos.
-// Production: replace with the daily ingestion job in docs/08-OPPORTUNITY-AND-NEWS-SOURCING.md.
+// Historical, unverified fixtures only. Never seeded or shown as live news.
+// Live ingestion: src/jobs/ingest-news.ts; these fixture claims have not been validated.
 export const NEWS_TOPICS = ['Space', 'Science', 'AI & Tech', 'Health & Medicine', 'Climate & Nature', 'Arts & Culture', 'Sports'] as const;
 export type NewsTopic = typeof NEWS_TOPICS[number];
 export const INTEREST_TO_TOPIC: Record<string, NewsTopic> = { AI: 'AI & Tech', Coding: 'AI & Tech', Robotics: 'AI & Tech', Engineering: 'AI & Tech', Business: 'AI & Tech', Entrepreneurship: 'AI & Tech', Space: 'Space', Science: 'Science', Math: 'Science', Medicine: 'Health & Medicine', Climate: 'Climate & Nature', Volunteering: 'Climate & Nature', Art: 'Arts & Culture', Writing: 'Arts & Culture', Music: 'Arts & Culture', Debate: 'Arts & Culture', Sports: 'Sports' };
@@ -14,3 +14,4 @@ export const NEWS_SEED = [
   { id: 'mit-sando', topic: 'AI & Tech', headline: 'New method keeps flying robots from crashing in unknown places', summary: 'MIT researchers built a planning system called SANDO that keeps a robot\u2019s flight path collision-free, which could help disaster-response robots.', source: 'MIT News', url: 'https://news.mit.edu/topic/robotics', publishedAt: '2026-10-07' },
   { id: 'imc-students', topic: 'AI & Tech', headline: 'School students show off robots built for medical emergencies', summary: 'Students at India Mobile Congress 2026 demonstrated working robots for health and humanitarian crises ahead of a youth robotics challenge.', source: 'ETV Bharat', url: 'https://etvbharat.com/en/technology/india-mobile-congress-2026-rfgyci-2026-enn26100906905', publishedAt: '2026-10-09' }
 ];
+

@@ -11,7 +11,9 @@
     "test": "vitest run",
     "db:push": "prisma db push",
     "db:seed": "tsx --env-file=../../.env prisma/seed.ts",
-    "db:demo": "tsx --env-file=../../.env prisma/demo.ts"
+    "db:demo": "tsx --env-file=../../.env prisma/demo.ts",
+    "news:ingest": "tsx --env-file=../../.env src/jobs/ingest-news.ts",
+    "news:review": "tsx --env-file=../../.env src/jobs/review-news.ts"
   },
   "prisma": {
     "schema": "prisma/schema.prisma"
@@ -21,6 +23,7 @@
     "@fastify/cors": "^10.0.0",
     "@fastify/multipart": "^9.0.0",
     "@prisma/client": "^6.0.0",
+    "fast-xml-parser": "^5.11.2",
     "fastify": "^5.0.0",
     "openai": "^5.0.0",
     "zod": "^3.23.0"
