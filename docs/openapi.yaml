@@ -139,3 +139,27 @@ paths:
                   ok: { type: boolean }
                   aiEnabled: { type: boolean }
                   provider: { enum: [anthropic, openai, ollama, null] }
+
+
+  /api/news:
+    get:
+      summary: Fresh reviewed news selected by student topics
+      description: Only non-sample reviewed stories within 30 UTC calendar days and rechecked in 72 hours. Empty topics and general top fallback are preserved. No operator review data is exposed.
+      responses:
+        '200':
+          description: Personalized stories, general top fallback, emptyTopics and newest returned source check time
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  allTopics: { type: array, items: { type: string } }
+                  topics: { type: array, items: { type: string } }
+                  custom: { type: boolean }
+                  personal: { type: boolean }
+                  emptyTopics: { type: array, items: { type: string } }
+                  updatedAt: { type: [string, 'null'], format: date-time }
+                  stories:
+                    type: array
+                    items: { type: object, description: 'id, topic, headline, summary (empty for ingested metadata), source, url, publishedAt (date), checkedAt (date-time)' }
+                  top: { type: [object, 'null'], description: 'Same public story shape, or null' }

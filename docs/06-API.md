@@ -36,3 +36,6 @@ Base URL `http://localhost:8787`. JSON in/out. Auth (dev): header `x-student-id`
 Full schema: `docs/openapi.yaml`.
 
 `GET /api/health` returns `{ok, aiEnabled, provider}`. `provider` is `anthropic`, `openai`, `ollama`, or `null` when disabled. `aiEnabled` means configured, not a live provider readiness check; student AI consent is still required for AI requests.
+
+
+`GET /api/news` now returns only fresh, reviewed, non-sample stories from approved source hosts. Each story includes `checkedAt` (ISO timestamp). Publication retention is 30 UTC calendar days and source checks expire after 72 hours. Empty topics and the existing non-personal top fallback are preserved. `updatedAt` is null when nothing eligible is returned. Operator review identities, hashes and statuses are not exposed. Ingestion and review are console jobs, with no new public write endpoints. See `docs/13-NEWS-INGESTION-MVP.md`.

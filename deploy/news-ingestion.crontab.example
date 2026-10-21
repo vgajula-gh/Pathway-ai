@@ -1,0 +1,5 @@
+# Install on the API/database host; example assumes cron supports CRON_TZ.
+# Run as a dedicated service user with read access to .env and DB write access.
+# Replace /srv/pathway-ai and the log destination for your deployment.
+CRON_TZ=UTC
+10 5 * * * cd /srv/pathway-ai && /usr/bin/flock -n /tmp/pathway-news.lock /usr/bin/timeout 300s npm run news:ingest --workspace apps/api >> /var/log/pathway-news.log 2>&1

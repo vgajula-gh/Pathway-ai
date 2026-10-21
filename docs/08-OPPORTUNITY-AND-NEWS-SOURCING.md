@@ -14,10 +14,10 @@ Today the catalog is a **curated sample** (`apps/api/src/data/opportunities.ts`)
 ## Display rules
 Show verified only with source + check date. Otherwise "Not verified — confirm on the official site". Never invent deadlines or acceptance claims.
 
-## News for you pipeline
-1. **Sources** — a licensed news API or an allow-list of reputable publisher RSS feeds (science agencies, universities, established outlets). Respect each provider's terms.
-2. **Daily job** — fetch per topic; keep title, URL, source, publish date.
-3. **Filter** — student-appropriate (no graphic content), non-sensational; prefer explainers and discoveries.
-4. **Summarize** — Claude writes a one-sentence neutral paraphrase from the article text; never invent facts; keep source + link.
-5. **Store** — `NewsStory` with `checkedAt`; keep 30 days; dedupe by URL.
-6. **Show** — `GET /api/news` picks newest per student topics; empty topics say so.
+## News for you pipeline (MVP implemented)
+
+See [News ingestion MVP](13-NEWS-INGESTION-MVP.md) for source evidence, exact rules, operator commands, scheduling, deployment and live-validation limits.
+
+The standalone job retrieves opt-in official NASA/NSF RSS feeds, normalizes actual publisher metadata, deduplicates canonical URLs/headlines, verifies article links and stores review candidates. New or changed stories require a hash-bound human review; keyword triage blocks obvious sensitive/sensational content. No article text or AI summary is generated. Summarization remains deferred.
+
+News is retained for 30 days and hidden after 72 hours without a successful source/link recheck, independently of the job. Only reviewed, sourced, fresh non-sample stories enter the unchanged personalized topic selector. Five topics currently have no adapter and can remain empty. Production source terms, endpoint checks, review operations and cron activation remain deployment work; there is no promise of daily publication per topic.
