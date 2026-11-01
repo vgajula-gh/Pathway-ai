@@ -14,6 +14,9 @@ datasource db {
 model Student {
   id          String   @id @default(cuid())
   name        String
+  signInHash  String? @unique
+  recoveryHash String? @unique
+  sessions    AuthSession[]
   accessCode  String?  // Tester code used at setup (never included in ordinary profile responses)
   grade       Int
   timezone    String   @default("America/New_York")
@@ -224,4 +227,21 @@ model NewsStory {
 model AIUsage {
   key   String @id
   count Int    @default(0)
+}
+
+model AuthSession {
+  tokenHash String @id
+  studentId String
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  @@index([studentId])
+  @@index([expiresAt])
+}
+
+// Account-specific throttling persists across instances; keys are hashed.
+model LoginAttempt {
+  key String @id
+  count Int @default(0)
+  expiresAt DateTime
+  @@index([expiresAt])
 }

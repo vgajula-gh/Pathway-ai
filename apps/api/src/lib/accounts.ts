@@ -1,0 +1,75 @@
+import { createHash, createHmac, randomBytes } from 'node:crypto';
+import { FastifyReply, FastifyRequest } from 'fastify';
+import { z } from 'zod';
+import { prisma } from './db.js';
+import { env } from './env.js';
+import { HttpError } from './errors.js';
+
+export const normalizePhrase = (s: string) => s.normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase();
+const Phrase = z.string().max(128).transform(normalizePhrase).pipe(z.string().min(12, 'Use at least 12 characters').max(128));
+export const Credentials = z.object({ phrase: Phrase, confirmPhrase: Phrase }).refine(b => b.phrase === b.confirmPhrase, { path: ['confirmPhrase'], message: 'The phrases do not match' });
+export const Login = z.object({ phrase: z.string().min(1).max(128).transform(normalizePhrase) });
+export const Recovery = z.object({ recoveryCode: z.string().min(1).max(128), credentials: Credentials });
+export function assertSignInSecret() {
+  if (process.env.NODE_ENV === 'production' && (process.env.SIGN_IN_SECRET || '').length < 32) throw new Error('Set SIGN_IN_SECRET to a persistent random value of at least 32 characters.');
+}
+export function credentialHash(value: string, kind = 'phrase') {
+  assertSignInSecret();
+  const secret = process.env.SIGN_IN_SECRET || 'pathway-local-development-only-secret';
+  return createHmac('sha256', secret).update(`${kind}:${value}`).digest('hex');
+}
+export function newCredentials(phrase: string) {
+  const recoveryCode = randomBytes(24).toString('hex').match(/.{1,8}/g)!.join('-');
+  return { signInHash: credentialHash(normalizePhrase(phrase)), recoveryHash: recoveryHash(recoveryCode), recoveryCode };
+}
+export const recoveryHash = (code: string) => credentialHash(code.trim().replace(/[-\s]/g, '').toLowerCase(), 'recovery');
+export function studentAllowed(s: { accessCode: string | null }) {
+  return !(env.accessCodes.length || process.env.NODE_ENV === 'production') || !!s.accessCode && env.accessCodes.includes(s.accessCode);
+}
+const cookieName = 'pathway_session';
+const sessionSeconds = 30 * 24 * 60 * 60;
+export const tokenHash = (token: string) => createHash('sha256').update(token).digest('hex');
+export function sessionToken(req: FastifyRequest) {
+  const token = req.headers.cookie?.split(';').map(s => s.trim()).find(s => s.startsWith(`${cookieName}=`))?.slice(cookieName.length + 1);
+  return token && /^[a-f0-9]{64}$/.test(token) ? token : null;
+}
+function setCookie(reply: FastifyReply, token: string, seconds: number) {
+  reply.header('set-cookie', `${cookieName}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${seconds}${process.env.NODE_ENV === 'production' ? '; Secure' : ''}`);
+  reply.header('cache-control', 'no-store');
+}
+export async function startSession(studentId: string, reply: FastifyReply) {
+  const token = randomBytes(32).toString('hex');
+  await prisma.authSession.deleteMany({ where: { expiresAt: { lt: new Date() } } });
+  await prisma.authSession.create({ data: { tokenHash: tokenHash(token), studentId, expiresAt: new Date(Date.now() + sessionSeconds * 1000) } });
+  setCookie(reply, token, sessionSeconds);
+}
+export async function endSession(req: FastifyRequest, reply: FastifyReply) {
+  const token = sessionToken(req);
+  if (token) await prisma.authSession.deleteMany({ where: { tokenHash: tokenHash(token) } });
+  setCookie(reply, '', 0);
+}
+const cache = new WeakMap<FastifyRequest, ReturnType<typeof readSession>>();
+async function readSession(req: FastifyRequest) {
+  const token = sessionToken(req);
+  if (!token) return null;
+  const session = await prisma.authSession.findUnique({ where: { tokenHash: tokenHash(token) }, include: { student: { include: { availability: true } } } });
+  if (!session || session.expiresAt <= new Date()) return null;
+  const s = session.student;
+  if (!studentAllowed(s)) return null;
+  return s;
+}
+export function sessionStudent(req: FastifyRequest) {
+  if (!cache.has(req)) cache.set(req, readSession(req));
+  return cache.get(req)!;
+}
+// Rate limits are independent of the chosen phrase, so changing guesses cannot
+// bypass the IP and shared limits. Counters persist across replicas/restarts.
+export async function throttleLogin(ip: string, lookupHash: string) {
+  const now = Date.now();
+  await prisma.loginAttempt.deleteMany({ where: { expiresAt: { lt: new Date(now) } } });
+  for (const [scope, windowMs, max] of [[`ip:${ip}`, 15 * 60 * 1000, 100], [`credential:${lookupHash}`, 15 * 60 * 1000, 10], ['shared', 60 * 1000, 500]] as const) {
+    const key = tokenHash(`${Math.floor(now / windowMs)}:${scope}`);
+    const attempt = await prisma.loginAttempt.upsert({ where: { key }, create: { key, count: 1, expiresAt: new Date((Math.floor(now / windowMs) + 1) * windowMs) }, update: { count: { increment: 1 } } });
+    if (attempt.count > max) throw new HttpError(429, 'Too many sign-in attempts. Please wait a little before trying again.');
+  }
+}

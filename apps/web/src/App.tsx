@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { api, session, access } from './lib/api';
-import { Student, Tab } from './lib/types';
+import { api, session, access, ApiError } from './lib/api';
+import { Student, Tab, SignInResult } from './lib/types';
 import { THEMES, Theme, applyTheme, nextTheme } from './lib/theme';
 import { toast } from './components/ui';
+import SignIn, { RecoveryCode } from './pages/SignIn';
 import Onboarding from './pages/Onboarding';
 import Today from './pages/Today';
 import Explore from './pages/Explore';
@@ -12,34 +13,69 @@ import You from './pages/You';
 
 const TABS: [Tab, string][] = [['today', 'Today'], ['explore', 'Explore'], ['buddy', 'Buddy'], ['grow', 'Grow'], ['you', 'You']];
 
-export default function AccessGate() {
+function InvitationGate({ children, onBack }: { children: React.ReactNode; onBack: () => void }) {
   const [ready, setReady] = useState(false), [required, setRequired] = useState(false);
   const [code, setCode] = useState(''), [error, setError] = useState('');
-  useEffect(() => { api<{ accessRequired: boolean }>('/api/config').then(async config => {
-    if (!config.accessRequired) { setReady(true); return; }
-    if (access.get()) {
-      try { await api('/api/access', { body: { code: access.get() } }); setReady(true); return; } catch { /* Ask again if revoked. */ }
-    }
-    setRequired(true);
-  }).catch(() => setError('Could not open Pathway. Refresh to try again.')); }, []);
-  if (ready) return <App />;
+  const [attempt, setAttempt] = useState(0);
+  useEffect(() => {
+    let active = true;
+    setError(''); setRequired(false);
+    api<{ accessRequired: boolean }>('/api/config').then(async config => {
+      if (!active) return;
+      if (!config.accessRequired) { setReady(true); return; }
+      if (access.get()) {
+        try { await api('/api/access', { body: { code: access.get() } }); if (active) setReady(true); return; }
+        catch (e) { if (!(e instanceof ApiError) || e.status !== 401) throw e; access.clear(); }
+      }
+      if (active) setRequired(true);
+    }).catch(() => { if (active) setError('Could not open Pathway. Your saved profile is safe. Please try again.'); });
+    return () => { active = false; };
+  }, [attempt]);
+  if (ready) return <>{children}</>;
   return <main className="splash"><form onSubmit={async e => {
     e.preventDefault(); setError('');
     try { const clean = code.trim(); await api('/api/access', { body: { code: clean } }); access.set(clean); setReady(true); }
     catch (e) { setError((e as Error).message); }
-  }}><h1>Welcome to Pathway</h1>{required && <><p>Enter your access code to get started.</p><label htmlFor="access-code">Access code</label><input id="access-code" type="password" autoComplete="off" value={code} onChange={e => setCode(e.target.value)} required maxLength={256} /><button type="submit" className="btn">Continue</button></>}{error && <p role="alert">{error}</p>}</form></main>;
+  }}><h1>Your invitation to Pathway</h1><button className="link" type="button" onClick={onBack}>Back to sign in</button>{required && <><p>Enter your tester access code to continue.</p><label htmlFor="access-code">Access code</label><input id="access-code" type="password" autoComplete="off" value={code} onChange={e => setCode(e.target.value)} required maxLength={256} /><button type="submit" className="btn">Continue</button></>}{error && <p role="alert">{error}</p>}{error && !required && <button className="btn" type="button" onClick={() => setAttempt(a => a + 1)}>Try again</button>}</form></main>;
 }
 
-function App() {
+export default function App() {
   const [me, setMe] = useState<Student | null | undefined>(undefined);
   const [tab, setTab] = useState<Tab>('today');
   const [buddySeed, setBuddySeed] = useState<string | null>(null);
   const [buddyKey, setBuddyKey] = useState(0);
-  useEffect(() => { if (!session.get()) { setMe(null); return; } api<Student>('/api/me').then(setMe).catch(() => { session.clear(); setMe(null); }); }, []);
+  const [creating, setCreating] = useState(false), [restoring, setRestoring] = useState(false), [pending, setPending] = useState<SignInResult | null>(null), [loadError, setLoadError] = useState(''), [attempt, setAttempt] = useState(0);
+  useEffect(() => {
+    let active = true;
+    setLoadError(''); setMe(undefined);
+    (async () => {
+      const auth = await api<{ student: Student | null }>('/api/auth/session');
+      if (!active) return;
+      if (auth.student) { session.set(auth.student.id); setMe(auth.student); return; }
+      if (!session.get()) { setMe(null); return; }
+      // Old browser-only profiles can be linked from You without losing data.
+      try { const s = await api<Student>('/api/me'); if (active) setMe(s); }
+      catch (e) {
+        if (!active) return;
+        if (e instanceof ApiError && e.status === 401) { setMe(null); return; }
+        throw e;
+      }
+    })().catch(() => { if (active) setLoadError('Could not load your dashboard. Your saved profile is safe. Please try again.'); });
+    return () => { active = false; };
+  }, [attempt]);
   useEffect(() => { document.body.dataset.tab = tab; window.scrollTo(0, 0); }, [tab]);
   useEffect(() => { applyTheme((me?.settings.theme || 'dusk') as Theme); }, [me?.settings.theme]);
+  const onSignedOut = () => { setCreating(false); setRestoring(false); setMe(null); };
+  const openDashboard = (s: Student) => { session.set(s.id); setCreating(false); setRestoring(false); setTab('today'); setMe(s); };
+  const signedIn = (s: SignInResult) => { if (s.recoveryCode) setPending(s); else openDashboard(s); };
+  if (pending?.recoveryCode) return <RecoveryCode code={pending.recoveryCode} onDone={() => { const { recoveryCode: _, ...profile } = pending; setPending(null); openDashboard(profile); }} />;
+  if (loadError) return <main className="splash"><p role="alert">{loadError}</p><button className="btn" onClick={() => setAttempt(a => a + 1)}>Try again</button></main>;
   if (me === undefined) return <div className="splash"><p className="muted">Opening Pathway…</p></div>;
-  if (me === null) return <Onboarding onDone={s => { session.set(s.id); setMe(s); }} />;
+  if (me === null) {
+    if (creating) return <InvitationGate onBack={() => setCreating(false)}><Onboarding onDone={signedIn} onCancel={() => setCreating(false)} /></InvitationGate>;
+    if (restoring) return <InvitationGate onBack={() => setRestoring(false)}><RestoreProfile onDone={openDashboard} onBack={() => setRestoring(false)} /></InvitationGate>;
+    return <SignIn onDone={signedIn} onCreate={() => setCreating(true)} onRestoreLocal={session.get() ? () => setRestoring(true) : undefined} />;
+  }
   const ask = (text: string) => { setBuddySeed(text); setTab('buddy'); };
   const go = (t: Tab) => { if (t === 'buddy') setBuddyKey(k => k + 1); setTab(t); };
   const theme = (me.settings.theme || 'dusk') as Theme, th = THEMES.find(t => t[0] === theme)!;
@@ -56,8 +92,14 @@ function App() {
         {tab === 'explore' && <Explore me={me} ask={ask} />}
         {tab === 'buddy' && <Buddy key={buddyKey} me={me} seed={buddySeed} clearSeed={() => setBuddySeed(null)} />}
         {tab === 'grow' && <Grow me={me} ask={ask} go={go} />}
-        {tab === 'you' && <You me={me} setMe={setMe} />}
+        {tab === 'you' && <You me={me} setMe={setMe} onSignOut={onSignedOut} />}
       </main>
     </>
   );
+}
+
+function RestoreProfile({ onDone, onBack }: { onDone: (s: Student) => void; onBack: () => void }) {
+  const [error, setError] = useState('');
+  useEffect(() => { let active = true; api<Student>('/api/me').then(s => { if (active) onDone(s); }).catch(() => { if (active) setError('Could not open that browser profile. Use its original invitation code, or sign in with your private phrase.'); }); return () => { active = false; }; }, []);
+  return <main className="splash"><p role={error ? 'alert' : undefined}>{error || 'Opening your existing profile…'}</p>{error && <button className="btn" onClick={onBack}>Back to sign in</button>}</main>;
 }

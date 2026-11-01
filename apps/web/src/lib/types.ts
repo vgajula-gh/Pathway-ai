@@ -1,5 +1,5 @@
 export type Tab = 'today' | 'explore' | 'buddy' | 'grow' | 'you';
-export interface Student { id: string; name: string; grade: number; interests: string[]; skills: string[]; location: string; aiConsent: boolean; budget: string; format: string; settings: { voice: boolean; showWord: boolean; showNews: boolean; theme: 'dusk' | 'dark' | 'light' | 'auto'; newsTopics: string[] | null }; provenance: Record<string, { src: string; at: string }>; availability: { studyStart: string; studyEnd: string; maxStudyMin: number; downtimeStart: string; downtimeEnd: string } | null }
+export interface Student { hasSignIn?: boolean; id: string; name: string; grade: number; interests: string[]; skills: string[]; location: string; aiConsent: boolean; budget: string; format: string; settings: { voice: boolean; showWord: boolean; showNews: boolean; theme: 'dusk' | 'dark' | 'light' | 'auto'; newsTopics: string[] | null }; provenance: Record<string, { src: string; at: string }>; availability: { studyStart: string; studyEnd: string; maxStudyMin: number; downtimeStart: string; downtimeEnd: string } | null }
 export interface TimelineItem { id: string; title: string; type: string; start: string; end: string; source: string; done: boolean; recurring: boolean; clash: boolean }
 export interface Ring { label: string; pct: number; status: string; minutes?: number; limit?: number; inWindow?: number; downtime?: number; done?: number; planned?: number }
 export interface Today { date: string; headline: string; metrics: { focus: Ring; freeTime: Ring; progress: Ring }; brief: { headline: string; insight: string; nextStep?: { title: string; why: string; ask: string }; workload?: string | null } | null; nextAction: { title: string; why: string; ask?: string; opportunityId?: string; route?: string; source: string; dataUsed: string[] }; timeline: TimelineItem[]; comingUp: { id: string; title: string; type: string; start: string }[]; pending: { id: string; summary: string; count: number }[]; word: { word: string; pos: string; meaning: string; example: string } }
@@ -15,3 +15,5 @@ export interface NewsResponse { allTopics: string[]; topics: string[]; custom: b
 export interface Conversation { id: string; title: string; updatedAt: string; messageCount: number }
 
 export interface AIHealth { ok: boolean; aiEnabled: boolean; provider: 'anthropic' | 'openai' | 'ollama' | null }
+
+export type SignInResult = Student & { recoveryCode?: string };
