@@ -34,3 +34,7 @@ The local Ollama provider uses the same prompts, tool validation, proposal appro
 ## AI request caps
 
 The HTTP boundary reserves persistent AI usage before Buddy, extraction, coach, and insight calls. Limits apply equally to every LLM provider; tool execution and proposal approval are unchanged. One feature request includes its internal tool rounds and provider retries. Quota rejection returns 429 before invoking the model. See `docs/06-API.md` and `DEPLOY-REPLIT.md`.
+
+## GPT-5 nano response budget
+
+Hosted `gpt-5-nano` (including dated snapshots) uses low reasoning effort and 4,096 completion tokens of additional headroom for each model call, because reasoning and visible output share the completion allowance. This is a maximum, not a fixed charge. Other models and Ollama keep their existing limits. Incomplete or empty responses return a friendly 502 rather than Buddy's generic empty-answer fallback; truncated tool calls are not executed. No automatic retry is added. Server diagnostics include only model, finish reason and reasoning-token count, never student text or credentials. Live provider quality/availability still needs deployment verification.
