@@ -1,6 +1,6 @@
 -- AlterTable
-ALTER TABLE "Student" ADD COLUMN     "passwordHash" TEXT,
-ADD COLUMN     "username" TEXT;
+ALTER TABLE "Student" ADD COLUMN     "recoveryHash" TEXT,
+ADD COLUMN     "signInHash" TEXT;
 
 -- CreateTable
 CREATE TABLE "AuthSession" (
@@ -30,7 +30,10 @@ CREATE INDEX "AuthSession_expiresAt_idx" ON "AuthSession"("expiresAt");
 CREATE INDEX "LoginAttempt_expiresAt_idx" ON "LoginAttempt"("expiresAt");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Student_username_key" ON "Student"("username");
+CREATE UNIQUE INDEX "Student_signInHash_key" ON "Student"("signInHash");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Student_recoveryHash_key" ON "Student"("recoveryHash");
 
 -- AddForeignKey
 ALTER TABLE "AuthSession" ADD CONSTRAINT "AuthSession_studentId_fkey" FOREIGN KEY ("studentId") REFERENCES "Student"("id") ON DELETE CASCADE ON UPDATE CASCADE;

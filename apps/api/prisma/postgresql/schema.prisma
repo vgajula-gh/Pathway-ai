@@ -14,8 +14,8 @@ datasource db {
 model Student {
   id          String   @id @default(cuid())
   name        String
-  username    String? @unique
-  passwordHash String?
+  signInHash  String? @unique
+  recoveryHash String? @unique
   sessions    AuthSession[]
   accessCode  String?  // Tester code used at setup (never included in ordinary profile responses)
   grade       Int

@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import { root, schema, prisma } from './prisma-production.mjs';
 if (!/^postgres(?:ql)?:\/\//.test(process.env.DATABASE_URL || '')) throw new Error('Production needs a PostgreSQL DATABASE_URL. Use npm run dev for SQLite.');
 if (!(process.env.ACCESS_CODES || '').split(',').some(code => code.trim())) throw new Error('Set ACCESS_CODES before starting production.');
+if ((process.env.SIGN_IN_SECRET || '').length < 32) throw new Error('Set SIGN_IN_SECRET to a persistent random value of at least 32 characters.');
 process.env.NODE_ENV = 'production';
 prisma(['generate', '--schema', schema]);
 prisma(['migrate', 'deploy', '--schema', schema]);

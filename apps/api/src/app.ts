@@ -1,3 +1,4 @@
+import { assertSignInSecret } from './lib/accounts.js';
 import staticFiles from '@fastify/static';
 import { fileURLToPath } from 'node:url';
 import { accessRoutes } from './lib/access.js';
@@ -18,7 +19,8 @@ import ai from './routes/ai.js';
 import news from './routes/news.js';
 
 export async function buildApp() {
-  const app = Fastify({ connectionTimeout: env.provider === 'ollama' ? 1_200_000 : 120_000, logger: { level: 'info', redact: ['req.headers["x-student-id"]', 'req.headers["x-access-code"]', 'req.headers.cookie', 'res.headers["set-cookie"]'] } });
+  assertSignInSecret();
+  const app = Fastify({ trustProxy: process.env.NODE_ENV === 'production' ? (_address: string, hop: number) => hop < 1 : false, connectionTimeout: env.provider === 'ollama' ? 1_200_000 : 120_000, logger: { level: 'info', redact: ['req.headers["x-student-id"]', 'req.headers["x-access-code"]', 'req.headers.cookie', 'res.headers["set-cookie"]'] } });
   await app.register(cors, { origin: env.webOrigin, credentials: true, methods: ['GET', 'POST', 'PATCH', 'DELETE'] });
   await app.register(multipart, { limits: { fileSize: 8 * 1024 * 1024, files: 1 } });
   app.setErrorHandler((err, _req, reply) => {

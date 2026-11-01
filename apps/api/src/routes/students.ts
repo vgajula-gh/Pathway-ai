@@ -1,5 +1,5 @@
 import { Prisma } from '@prisma/client';
-import { Credentials, hashPassword, startSession, endSession } from '../lib/accounts.js';
+import { Credentials, newCredentials, credentialHash, throttleLogin, startSession, endSession } from '../lib/accounts.js';
 import { HttpError } from '../lib/errors.js';
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
@@ -16,25 +16,26 @@ const Patch = z.object({ name: z.string().min(1).max(60), grade: z.number().int(
   settings: z.object({ voice: z.boolean(), showWord: z.boolean(), showNews: z.boolean(), theme: z.enum(['dusk', 'dark', 'light', 'auto']), newsTopics: z.array(z.string()).max(7).nullable() }).partial(), availability: z.object({ studyStart: hhmm, studyEnd: hhmm, maxStudyMin: z.number().int().min(30).max(360), downtimeStart: hhmm, downtimeEnd: hhmm }).partial() }).partial();
 
 export function serializeStudent(s: any) {
-  return { id: s.id, username: s.username || null, name: s.name, grade: s.grade, timezone: s.timezone, location: s.location, interests: j(s.interests, []), skills: j(s.skills, []), aiConsent: s.aiConsent, budget: s.budget, format: s.format, settings: { voice: false, showWord: true, showNews: true, theme: 'dusk', newsTopics: null, ...j(s.settings, {}) }, provenance: j(s.provenance, {}), availability: s.availability, createdAt: s.createdAt };
+  return { id: s.id, hasSignIn: !!s.signInHash, name: s.name, grade: s.grade, timezone: s.timezone, location: s.location, interests: j(s.interests, []), skills: j(s.skills, []), aiConsent: s.aiConsent, budget: s.budget, format: s.format, settings: { voice: false, showWord: true, showNews: true, theme: 'dusk', newsTopics: null, ...j(s.settings, {}) }, provenance: j(s.provenance, {}), availability: s.availability, createdAt: s.createdAt };
 }
 
 export default async function routes(app: FastifyInstance) {
   app.post('/api/students', async (req, reply) => {
     const b = Onboard.parse(req.body), at = new Date().toISOString(), src = 'You told me during setup';
-    if (process.env.NODE_ENV === 'production' && !b.credentials) throw new HttpError(422, 'Choose a username and password to save your profile.');
-    const passwordHash = b.credentials ? await hashPassword(b.credentials.password) : undefined;
-    const s = await prisma.student.create({ data: { username: b.credentials?.username, passwordHash, accessCode: accessCode(req), name: b.name, grade: b.grade, timezone: b.timezone, interests: JSON.stringify(b.interests), aiConsent: b.aiConsent,
+    if (process.env.NODE_ENV === 'production' && !b.credentials) throw new HttpError(422, 'Choose a private sign-in phrase to save your profile.');
+    if (b.credentials) await throttleLogin(req.ip, credentialHash(b.credentials.phrase));
+    const setup = b.credentials ? newCredentials(b.credentials.phrase) : null;
+    const s = await prisma.student.create({ data: { signInHash: setup?.signInHash, recoveryHash: setup?.recoveryHash, accessCode: accessCode(req), name: b.name, grade: b.grade, timezone: b.timezone, interests: JSON.stringify(b.interests), aiConsent: b.aiConsent,
       provenance: JSON.stringify({ grade: { src, at }, interests: { src, at }, availability: { src, at } }),
       availability: { create: { studyStart: b.studyStart, studyEnd: b.studyEnd, downtimeStart: b.downtimeStart, downtimeEnd: b.downtimeEnd } } }, include: { availability: true } }).catch(e => {
-      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') throw new HttpError(409, 'That username is unavailable. Choose another.');
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') throw new HttpError(409, 'That phrase is already in use. Choose a different private phrase.');
       throw e;
     });
     if (b.credentials) await startSession(s.id, reply);
     if (b.goal?.trim()) await prisma.goal.create({ data: { studentId: s.id, title: b.goal.trim(), priority: 'high' } });
     if (b.sampleWeek) await prisma.event.createMany({ data: sampleWeek(s.id) });
     await audit(s.id, 'student', 'Finished setup');
-    return reply.code(201).send(serializeStudent(s));
+    return reply.code(201).send({ ...serializeStudent(s), ...(setup ? { recoveryCode: setup.recoveryCode } : {}) });
   });
 
   app.get('/api/me', async req => serializeStudent(await requireStudent(req)));

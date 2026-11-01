@@ -39,7 +39,7 @@ Full schema: `docs/openapi.yaml`.
 
 ## Replit pilot access and AI caps
 
-All `/api/*` routes except config, access validation, health, session inspection and logout require either a valid account session with a still-allowed setup code, or `x-access-code` when `ACCESS_CODES` is configured (always required in production). Codes are comma-separated, trimmed, case-sensitive secrets; invalid or revoked codes return 401. Account sessions identify the student across devices; unlinked legacy profiles still require `x-student-id` and their original code until linked. A tester code alone never signs into a username-linked profile.
+All `/api/*` routes except config, access validation, health, session inspection, phrase sign-in, recovery and logout require either a valid account session with a still-allowed setup code, or `x-access-code` when `ACCESS_CODES` is configured (always required in production). Codes are comma-separated, trimmed, case-sensitive secrets; invalid or revoked codes return 401. Account sessions identify the student across devices; unlinked legacy profiles still require `x-student-id` and their original code until linked. A tester code alone never signs into a phrase-linked profile.
 
 - `GET /api/config` (public): `{accessRequired, feedbackUrl}`; never exposes allowed codes.
 - `POST /api/access` (public): `{code}` → `{ok:true}` or 401. The client stores the accepted code in sessionStorage and sends it with subsequent requests, including downloads.
@@ -49,17 +49,21 @@ All `/api/*` routes except config, access validation, health, session inspection
 
 Production serves the built website and API from one origin/port; see `DEPLOY-REPLIT.md`.
 
-## Returning students and account sign-in
+## Private phrase sign-in and recovery
 
 | Method | Path | Contract |
 | --- | --- | --- |
-| GET | `/api/auth/session` | Public, no-store; `{student: Student or null}` based on the account cookie. Invalid/expired/revoked sessions return null. |
-| POST | `/api/auth/login` | `{username, password}` plus the original tester code → Student and an HttpOnly session cookie. Returns 401 for incorrect credentials or a mismatched setup code, 429 after 10 attempts per normalized username per 15-minute UTC window. |
-| POST | `/api/auth/link` | Attach `{username, password}` to the current unlinked legacy profile using its original browser ID and tester code. Preserves all existing data, starts a session, and disables ID-only access for that profile. Returns 409 if already linked or username taken. |
-| POST | `/api/auth/logout` | Revoke this device's session and clear the cookie; 204. Other signed-in devices remain signed in. |
+| GET | `/api/auth/session` | Public, no-store; `{student: Student or null}` from the account cookie. |
+| POST | `/api/auth/login` | Public: `{phrase}` → existing Student and HttpOnly session cookie. No invitation, username, or student ID needed. |
+| POST | `/api/auth/link` | Current unlinked legacy browser profile plus original invitation: `{phrase, confirmPhrase}` → same Student plus one-time `recoveryCode`. |
+| POST | `/api/auth/change-phrase` | Signed-in session: `{phrase, confirmPhrase}` → same Student plus a new one-time recovery code. Revokes every old session and recovery code, then signs this device back in. |
+| POST | `/api/auth/recover` | Public: `{recoveryCode, credentials: {phrase, confirmPhrase}}` → same Student plus replacement recovery code and a session. Recovery codes are single use; old sessions/phrase are revoked atomically. |
+| POST | `/api/auth/logout` | Revoke this device's session and clear the cookie; 204. |
 
-`POST /api/students` accepts `credentials: {username, password}`. Required for new production profiles; optional for legacy local/demo compatibility. Username is case-insensitive, 3–30 ASCII letters/digits/underscores; password is 12–128 characters. New sign-ups store a uniquely constrained username and a password hash on the same Student record. Student responses and data exports include `username` but never password hashes or session tokens.
+`POST /api/students` accepts `credentials: {phrase, confirmPhrase}` (required in production; optional for legacy local/demo compatibility). Phrases are 12–128 characters after Unicode normalization, trimming, collapsing whitespace and lowercasing; input is capped at 128 characters. Confirmation must match. The secret phrase must be unique across profiles; conflicts return 409. Failed sign-in/recovery returns generic 401. Removed tester invitation codes still revoke sign-in/session access.
 
-A session lasts 30 days, uses `HttpOnly; SameSite=Lax; Path=/`, and adds `Secure` in production. Only a hash of the random 32-byte cookie token is stored. Passwords use salted scrypt (N=32768, r=8, p=3); password values are never returned or logged. Mutation requests with an Origin header must come from the same host or an explicitly recognized local/Codespaces development origin. Browser clients include credentials; the production website/API share an origin. Removed tester codes also revoke account-session access. Account/session creation, login and logout are audited. Profile deletion cascades to all its sessions.
+Only keyed HMAC-SHA256 hashes of phrases and recovery codes are stored, using a persistent server-only `SIGN_IN_SECRET` (at least 32 random characters in production). This key must stay stable across deployments/instances and be backed up separately from the database; changing it makes existing phrases and recovery codes unusable. Development has a clearly local-only fallback. No raw phrase/code appears in ordinary profile responses, exports or logs. Profile responses expose only `hasSignIn`; a recovery code is returned only when created or replaced. The random 24-byte recovery code is displayed once with a Copy button and save acknowledgement.
 
-Returning authenticated students land on Today. A temporary server/network failure offers retry and preserves the remembered profile ID. New users explicitly select Create a profile. Existing students must link their profile in You → Account from their original browser once before signing in on another device. There is no password-recovery flow yet; students should save their credentials. No email, external identity provider or additional deployment Secret is required.
+Throttling for login, recovery, registration and phrase changes persists across instances: 100 attempts per IP per 15-minute window, 10 per credential hash per 15-minute window, and 500 shared per minute. Exceeded limits return 429; changing guessed phrases cannot bypass the IP/shared limits. Production trusts only the nearest reverse-proxy hop for the client IP. Mutation Origin checks protect cookie-authenticated requests.
+
+Sessions last 30 days with `HttpOnly; SameSite=Lax; Path=/` and `Secure` in production. Only a SHA-256 hash of each random 32-byte session token is stored. Expired sessions/counters are pruned, profile deletion cascades sessions, and account state changes are audited. Invitation codes are required only to create/link profiles and for legacy browser-ID migration. Returning signed-in students open Today; others see phrase sign-in before any invitation gate. Temporary load failures preserve the remembered profile and offer retry. Students who lose both their phrase and recovery code can change their phrase from a signed-in device; without one, there is no identity-based recovery because no email is collected.

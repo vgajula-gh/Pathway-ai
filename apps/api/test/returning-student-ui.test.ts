@@ -17,7 +17,7 @@ vi.mock('../../web/src/pages/Grow', () => ({ default: () => null }));
 vi.mock('../../web/src/pages/You', () => ({ default: () => null }));
 import App from '../../web/src/App';
 import { ApiError } from '../../web/src/lib/api';
-const student = { id: 'existing-student', name: 'Sam', username: 'sam_student', settings: { theme: 'dusk' } };
+const student = { id: 'existing-student', name: 'Sam', hasSignIn: true, settings: { theme: 'dusk' } };
 let renderer: ReactTestRenderer;
 const mount = async () => { await act(async () => { renderer = create(createElement(App)); }); };
 const text = () => JSON.stringify(renderer.toJSON());
@@ -72,4 +72,31 @@ it('shows sign-in after a session expires and starts onboarding only when explic
   await mount(); expect(text()).toContain('Welcome back'); expect(state.id).toBe(student.id);
   await act(async () => { renderer.root.findAllByType('button').find(b => b.children.join('').includes('Create a profile'))!.props.onClick(); });
   expect(text()).toContain('Get started'); expect(text()).toContain('Back to sign in');
+});
+
+it('shows the one-time recovery code and requires saving it before opening the dashboard', async () => {
+  state.api.mockImplementation(async path => {
+    if (path === '/api/auth/session') return { student: null };
+    if (path === '/api/auth/login') return { ...student, recoveryCode: 'saved-once-code' };
+    return { accessRequired: true };
+  });
+  await mount();
+  await act(async () => { await renderer.root.findByType('form').props.onSubmit({ preventDefault() {} }); });
+  expect(text()).toContain('Save your recovery code'); expect(text()).not.toContain('Dashboard');
+  let open = renderer.root.findAllByType('button').find(b => b.children.join('').includes('Open my dashboard'))!;
+  expect(open.props.disabled).toBe(true);
+  await act(async () => { renderer.root.findAllByType('input').find(i => i.props.type === 'checkbox')!.props.onChange({ target: { checked: true } }); });
+  open = renderer.root.findAllByType('button').find(b => b.children.join('').includes('Open my dashboard'))!;
+  expect(open.props.disabled).toBe(false);
+  await act(async () => { open.props.onClick(); });
+  expect(text()).toContain('Dashboard'); expect(text()).not.toContain('saved-once-code');
+});
+it('asks for an invitation only when a new visitor chooses to create a profile', async () => {
+  state.code = null;
+  state.api.mockImplementation(async path => path === '/api/auth/session' ? { student: null } : path === '/api/config' ? { accessRequired: true } : { ok: true });
+  await mount(); expect(text()).toContain('Welcome back'); expect(text()).not.toContain('Your invitation');
+  await act(async () => { renderer.root.findAllByType('button').find(b => b.children.join('').includes('Create a profile'))!.props.onClick(); });
+  expect(text()).toContain('Your invitation to Pathway'); expect(text()).not.toContain('Get started');
+  await act(async () => { await renderer.root.findByType('form').props.onSubmit({ preventDefault() {} }); });
+  expect(text()).toContain('Get started');
 });

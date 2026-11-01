@@ -1,19 +1,19 @@
 import { useState } from 'react';
 import { api } from '../lib/api';
-import { Student } from '../lib/types';
-import { AccountFields } from './SignIn';
+import { SignInResult } from '../lib/types';
+import { PhraseFields, validPhrase } from './SignIn';
 import { toast } from '../components/ui';
 
 const INTERESTS = ['AI', 'Coding', 'Robotics', 'Engineering', 'Science', 'Medicine', 'Space', 'Math', 'Business', 'Entrepreneurship', 'Art', 'Writing', 'Music', 'Sports', 'Volunteering', 'Climate', 'Debate'];
 
 /** Student DNA intake: few, high-value questions; skippable; no mandatory calendar/email connection. */
-export default function Onboarding({ onDone, onCancel }: { onDone: (s: Student) => void; onCancel?: () => void }) {
+export default function Onboarding({ onDone, onCancel }: { onDone: (s: SignInResult) => void; onCancel?: () => void }) {
   const [step, setStep] = useState(0), [busy, setBusy] = useState(false);
-  const [f, setF] = useState({ username: '', password: '', name: '', grade: 10, interests: [] as string[], goal: '', aiConsent: true, studyStart: '16:00', studyEnd: '21:00', downtimeStart: '21:00', downtimeEnd: '23:00', sampleWeek: true });
+  const [f, setF] = useState({ phrase: '', confirmPhrase: '', name: '', grade: 10, interests: [] as string[], goal: '', aiConsent: true, studyStart: '16:00', studyEnd: '21:00', downtimeStart: '21:00', downtimeEnd: '23:00', sampleWeek: true });
   const set = (k: keyof typeof f, v: unknown) => setF(x => ({ ...x, [k]: v }));
-  const finish = async () => { const { username, password, ...profile } = f; setBusy(true); try { onDone(await api<Student>('/api/students', { body: { ...profile, credentials: { username, password }, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone } })); } catch (e) { toast((e as Error).message); setBusy(false); } };
+  const finish = async () => { const { phrase, confirmPhrase, ...profile } = f; setBusy(true); try { onDone(await api<SignInResult>('/api/students', { body: { ...profile, credentials: { phrase, confirmPhrase }, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone } })); } catch (e) { toast((e as Error).message); setBusy(false); } };
   const next = () => (step === 6 ? finish() : setStep(step + 1));
-  const ok = step === 2 ? f.name.trim().length > 0 : step !== 6 || (/^[a-zA-Z0-9_]{3,30}$/.test(f.username) && f.password.length >= 12 && f.password.length <= 128);
+  const ok = step === 2 ? f.name.trim().length > 0 : step !== 6 || validPhrase(f.phrase, f.confirmPhrase);
   const cta = ['Get started', 'Continue', 'Continue', 'Continue', f.goal.trim() ? 'Continue' : 'Skip for now', 'Continue', 'Create account and start my day'][step];
   return (
     <div className="ob">
@@ -33,7 +33,7 @@ export default function Onboarding({ onDone, onCancel }: { onDone: (s: Student) 
       {step === 5 && <><h1>Protect your time.</h1><p className="sub">I’ll only suggest study in your window, and never touch your downtime.</p>
         <div className="rows" style={{ marginTop: 22 }}>{([['studyStart', 'Study from'], ['studyEnd', 'Until'], ['downtimeStart', 'Downtime from'], ['downtimeEnd', 'Until']] as const).map(([k, l]) => <div className="frow" key={k}><label htmlFor={k}>{l}</label><input id={k} type="time" value={f[k]} onChange={e => set(k, e.target.value)} /></div>)}</div>
         <label className="card" style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 14 }}><span style={{ flex: 1 }}><b>Explore with a sample week</b><br /><span className="muted small">Pretend classes, clubs and a test, clearly labeled. Scan your real schedule anytime.</span></span><input type="checkbox" className="switch" checked={f.sampleWeek} onChange={e => set('sampleWeek', e.target.checked)} /></label></>}
-      {step === 6 && <><h1>Keep your journey with you</h1><p className="sub">Choose a sign-in to open your dashboard on any device.</p><AccountFields username={f.username} password={f.password} creating onChange={set} /></>}
+      {step === 6 && <><h1>Keep your journey with you</h1><p className="sub">Create a private phrase to open your dashboard on any device.</p><PhraseFields phrase={f.phrase} confirmPhrase={f.confirmPhrase} onChange={set} /></>}
       <div className="grow" />
       <div className="cta"><div className="dots" aria-hidden="true">{[0, 1, 2, 3, 4, 5, 6].map(i => <i key={i} className={i <= step ? 'on' : ''} />)}</div><button className="btn fill lg" disabled={!ok || busy} onClick={next}>{cta}</button></div>
     </div>

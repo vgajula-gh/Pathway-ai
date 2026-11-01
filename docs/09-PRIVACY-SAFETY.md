@@ -10,7 +10,7 @@
 - Audit log of state-changing actions, visible to the student.
 - No external side effects from the server; downloads are student-initiated.
 - Logger redacts identity/access headers and session cookies.
-- Optional-username legacy profiles can be upgraded to username/password accounts, with salted scrypt passwords, hashed 30-day sessions, account login throttling, and origin checks. No email collected.
+- Legacy browser profiles can be upgraded to private-phrase sign-in with keyed secret hashes, one-time recovery codes, hashed 30-day sessions, persistent IP/credential/shared login throttles, and origin checks. No username or email collected. Server-only SIGN_IN_SECRET is required in production and must be kept stable.
 
 ## Buddy voice
 

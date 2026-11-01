@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { api, session, access, ApiError } from './lib/api';
-import { Student, Tab } from './lib/types';
+import { Student, Tab, SignInResult } from './lib/types';
 import { THEMES, Theme, applyTheme, nextTheme } from './lib/theme';
 import { toast } from './components/ui';
-import SignIn from './pages/SignIn';
+import SignIn, { RecoveryCode } from './pages/SignIn';
 import Onboarding from './pages/Onboarding';
 import Today from './pages/Today';
 import Explore from './pages/Explore';
@@ -13,16 +13,16 @@ import You from './pages/You';
 
 const TABS: [Tab, string][] = [['today', 'Today'], ['explore', 'Explore'], ['buddy', 'Buddy'], ['grow', 'Grow'], ['you', 'You']];
 
-export default function AccessGate() {
+function InvitationGate({ children, onBack }: { children: React.ReactNode; onBack: () => void }) {
   const [ready, setReady] = useState(false), [required, setRequired] = useState(false);
   const [code, setCode] = useState(''), [error, setError] = useState('');
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     let active = true;
     setError(''); setRequired(false);
-    Promise.all([api<{ accessRequired: boolean }>('/api/config'), api<{ student: Student | null }>('/api/auth/session')]).then(async ([config, auth]) => {
+    api<{ accessRequired: boolean }>('/api/config').then(async config => {
       if (!active) return;
-      if (auth.student || !config.accessRequired) { setReady(true); return; }
+      if (!config.accessRequired) { setReady(true); return; }
       if (access.get()) {
         try { await api('/api/access', { body: { code: access.get() } }); if (active) setReady(true); return; }
         catch (e) { if (!(e instanceof ApiError) || e.status !== 401) throw e; access.clear(); }
@@ -31,20 +31,20 @@ export default function AccessGate() {
     }).catch(() => { if (active) setError('Could not open Pathway. Your saved profile is safe. Please try again.'); });
     return () => { active = false; };
   }, [attempt]);
-  if (ready) return <App onSignedOut={() => { setReady(false); setAttempt(a => a + 1); }} />;
+  if (ready) return <>{children}</>;
   return <main className="splash"><form onSubmit={async e => {
     e.preventDefault(); setError('');
     try { const clean = code.trim(); await api('/api/access', { body: { code: clean } }); access.set(clean); setReady(true); }
     catch (e) { setError((e as Error).message); }
-  }}><h1>Welcome to Pathway</h1>{required && <><p>Enter your tester access code to continue.</p><label htmlFor="access-code">Access code</label><input id="access-code" type="password" autoComplete="off" value={code} onChange={e => setCode(e.target.value)} required maxLength={256} /><button type="submit" className="btn">Continue</button></>}{error && <p role="alert">{error}</p>}{error && !required && <button className="btn" type="button" onClick={() => setAttempt(a => a + 1)}>Try again</button>}</form></main>;
+  }}><h1>Your invitation to Pathway</h1><button className="link" type="button" onClick={onBack}>Back to sign in</button>{required && <><p>Enter your tester access code to continue.</p><label htmlFor="access-code">Access code</label><input id="access-code" type="password" autoComplete="off" value={code} onChange={e => setCode(e.target.value)} required maxLength={256} /><button type="submit" className="btn">Continue</button></>}{error && <p role="alert">{error}</p>}{error && !required && <button className="btn" type="button" onClick={() => setAttempt(a => a + 1)}>Try again</button>}</form></main>;
 }
 
-function App({ onSignedOut }: { onSignedOut: () => void }) {
+export default function App() {
   const [me, setMe] = useState<Student | null | undefined>(undefined);
   const [tab, setTab] = useState<Tab>('today');
   const [buddySeed, setBuddySeed] = useState<string | null>(null);
   const [buddyKey, setBuddyKey] = useState(0);
-  const [creating, setCreating] = useState(false), [loadError, setLoadError] = useState(''), [attempt, setAttempt] = useState(0);
+  const [creating, setCreating] = useState(false), [restoring, setRestoring] = useState(false), [pending, setPending] = useState<SignInResult | null>(null), [loadError, setLoadError] = useState(''), [attempt, setAttempt] = useState(0);
   useEffect(() => {
     let active = true;
     setLoadError(''); setMe(undefined);
@@ -65,10 +65,17 @@ function App({ onSignedOut }: { onSignedOut: () => void }) {
   }, [attempt]);
   useEffect(() => { document.body.dataset.tab = tab; window.scrollTo(0, 0); }, [tab]);
   useEffect(() => { applyTheme((me?.settings.theme || 'dusk') as Theme); }, [me?.settings.theme]);
+  const onSignedOut = () => { setCreating(false); setRestoring(false); setMe(null); };
+  const openDashboard = (s: Student) => { session.set(s.id); setCreating(false); setRestoring(false); setTab('today'); setMe(s); };
+  const signedIn = (s: SignInResult) => { if (s.recoveryCode) setPending(s); else openDashboard(s); };
+  if (pending?.recoveryCode) return <RecoveryCode code={pending.recoveryCode} onDone={() => { const { recoveryCode: _, ...profile } = pending; setPending(null); openDashboard(profile); }} />;
   if (loadError) return <main className="splash"><p role="alert">{loadError}</p><button className="btn" onClick={() => setAttempt(a => a + 1)}>Try again</button></main>;
   if (me === undefined) return <div className="splash"><p className="muted">Opening Pathway…</p></div>;
-  const signedIn = (s: Student) => { session.set(s.id); setCreating(false); setTab('today'); setMe(s); };
-  if (me === null) return creating ? <Onboarding onDone={signedIn} onCancel={() => setCreating(false)} /> : <SignIn onDone={signedIn} onCreate={() => setCreating(true)} onChangeCode={() => { access.clear(); onSignedOut(); }} />;
+  if (me === null) {
+    if (creating) return <InvitationGate onBack={() => setCreating(false)}><Onboarding onDone={signedIn} onCancel={() => setCreating(false)} /></InvitationGate>;
+    if (restoring) return <InvitationGate onBack={() => setRestoring(false)}><RestoreProfile onDone={openDashboard} onBack={() => setRestoring(false)} /></InvitationGate>;
+    return <SignIn onDone={signedIn} onCreate={() => setCreating(true)} onRestoreLocal={session.get() ? () => setRestoring(true) : undefined} />;
+  }
   const ask = (text: string) => { setBuddySeed(text); setTab('buddy'); };
   const go = (t: Tab) => { if (t === 'buddy') setBuddyKey(k => k + 1); setTab(t); };
   const theme = (me.settings.theme || 'dusk') as Theme, th = THEMES.find(t => t[0] === theme)!;
@@ -89,4 +96,10 @@ function App({ onSignedOut }: { onSignedOut: () => void }) {
       </main>
     </>
   );
+}
+
+function RestoreProfile({ onDone, onBack }: { onDone: (s: Student) => void; onBack: () => void }) {
+  const [error, setError] = useState('');
+  useEffect(() => { let active = true; api<Student>('/api/me').then(s => { if (active) onDone(s); }).catch(() => { if (active) setError('Could not open that browser profile. Use its original invitation code, or sign in with your private phrase.'); }); return () => { active = false; }; }, []);
+  return <main className="splash"><p role={error ? 'alert' : undefined}>{error || 'Opening your existing profile…'}</p>{error && <button className="btn" onClick={onBack}>Back to sign in</button>}</main>;
 }

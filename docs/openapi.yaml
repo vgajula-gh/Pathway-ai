@@ -12,10 +12,10 @@ components:
   schemas:
     AccountCredentials:
       type: object
-      required: [username, password]
+      required: [phrase, confirmPhrase]
       properties:
-        username: { type: string, minLength: 3, maxLength: 30, pattern: '^[A-Za-z0-9_]+$' }
-        password: { type: string, minLength: 12, maxLength: 128, writeOnly: true }
+        phrase: { type: string, minLength: 12, maxLength: 128, writeOnly: true }
+        confirmPhrase: { type: string, minLength: 12, maxLength: 128, writeOnly: true }
     StudentSettings:
       type: object
       properties:
@@ -80,37 +80,60 @@ paths:
         '200': { description: 'No-store response containing student profile or null; session also checks expiry and tester-code revocation' }
   /api/auth/login:
     post:
-      security: [{ accessCode: [] }]
+      security: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [username, password]
+              required: [phrase]
               properties:
-                username: { type: string, minLength: 3, maxLength: 30 }
-                password: { type: string, minLength: 12, maxLength: 128, writeOnly: true }
+                phrase: { type: string, maxLength: 128, writeOnly: true }
       responses:
-        '200': { description: Student profile and HttpOnly session cookie }
-        '401': { description: Incorrect credentials or original tester code }
-        '429': { description: More than ten sign-in attempts for this username in fifteen minutes }
+        '200': { description: Same student profile and HttpOnly session cookie; no invitation needed }
+        '401': { description: Unknown phrase or access revoked }
+        '429': { description: IP, credential or shared sign-in throttle reached }
   /api/auth/link:
     post:
-      description: Link username and password to the current unlinked legacy browser profile without changing its ID or data.
+      description: Link a unique private phrase to the current unlinked legacy browser profile without changing its ID or data.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AccountCredentials' }
+      responses:
+        '200': { description: Same student profile, one-time recoveryCode and session cookie }
+        '409': { description: Profile already linked or phrase in use }
+  /api/auth/change-phrase:
+    post:
+      security: [{ accountSession: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AccountCredentials' }
+      responses:
+        '200': { description: Private phrase replaced, old sessions revoked, new session and one-time recoveryCode returned }
+        '409': { description: Phrase in use }
+  /api/auth/recover:
+    post:
+      security: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [username, password]
+              required: [recoveryCode, credentials]
               properties:
-                username: { type: string, minLength: 3, maxLength: 30 }
-                password: { type: string, minLength: 12, maxLength: 128, writeOnly: true }
+                recoveryCode: { type: string, maxLength: 128, writeOnly: true }
+                credentials: { $ref: '#/components/schemas/AccountCredentials' }
       responses:
-        '200': { description: Student profile and HttpOnly session cookie }
-        '409': { description: Profile already linked or username unavailable }
+        '200': { description: Same student profile restored; old sessions revoked and replacement recoveryCode returned }
+        '401': { description: Invalid, used or revoked recovery code }
+        '409': { description: New phrase in use; recovery code remains usable }
+        '429': { description: IP, credential or shared sign-in throttle reached }
   /api/auth/logout:
     post:
       security: []

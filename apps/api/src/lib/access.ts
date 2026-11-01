@@ -19,7 +19,7 @@ export async function accessRoutes(app: FastifyInstance) {
   });
   app.addHook('onRequest', async req => {
     const path = req.url.split('?')[0];
-    if (path.startsWith('/api/') && !['/api/config', '/api/access', '/api/health', '/api/auth/session', '/api/auth/logout'].includes(path) && req.method !== 'OPTIONS') {
+    if (path.startsWith('/api/') && !['/api/config', '/api/access', '/api/health', '/api/auth/session', '/api/auth/logout', '/api/auth/login', '/api/auth/recover'].includes(path) && req.method !== 'OPTIONS') {
       if (await sessionStudent(req)) return;
       accessCode(req);
     }
