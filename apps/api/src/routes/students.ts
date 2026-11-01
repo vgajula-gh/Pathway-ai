@@ -9,7 +9,7 @@ import { sampleWeek } from '../lib/sample.js';
 
 const hhmm = z.string().regex(/^\d{2}:\d{2}$/);
 const Onboard = z.object({ name: z.string().min(1).max(60), grade: z.number().int().min(9).max(12), interests: z.array(z.string()).max(20).default([]), goal: z.string().max(140).optional(),
-  aiConsent: z.boolean().default(true), timezone: z.string().default('America/New_York'), studyStart: hhmm.default('16:00'), studyEnd: hhmm.default('21:00'), downtimeStart: hhmm.default('21:00'), downtimeEnd: hhmm.default('23:00'), sampleWeek: z.boolean().default(false) });
+  aiConsent: z.boolean().default(true), timezone: z.string().refine(zone => { try { new Intl.DateTimeFormat('en', { timeZone: zone }); return true; } catch { return false; } }, 'Choose a valid timezone').default('America/New_York'), studyStart: hhmm.default('16:00'), studyEnd: hhmm.default('21:00'), downtimeStart: hhmm.default('21:00'), downtimeEnd: hhmm.default('23:00'), sampleWeek: z.boolean().default(false) });
 const Patch = z.object({ name: z.string().min(1).max(60), grade: z.number().int().min(9).max(12), interests: z.array(z.string()), skills: z.array(z.string()), location: z.string().max(80), aiConsent: z.boolean(), budget: z.enum(['free', 'any']), format: z.enum(['virtual', 'any']),
   settings: z.object({ voice: z.boolean(), showWord: z.boolean(), showNews: z.boolean(), theme: z.enum(['dusk', 'dark', 'light', 'auto']), newsTopics: z.array(z.string()).max(7).nullable() }).partial(), availability: z.object({ studyStart: hhmm, studyEnd: hhmm, maxStudyMin: z.number().int().min(30).max(360), downtimeStart: hhmm, downtimeEnd: hhmm }).partial() }).partial();
 
@@ -50,7 +50,9 @@ export default async function routes(app: FastifyInstance) {
       prisma.portfolioEntry.findMany({ where: { studentId: s.id } }), prisma.savedOpportunity.findMany({ where: { studentId: s.id } }), prisma.agentAction.findMany({ where: { studentId: s.id } }), prisma.auditEvent.findMany({ where: { studentId: s.id } })]);
     await audit(s.id, 'student', 'Exported all data');
     const calendars = (await prisma.calendarLink.findMany({ where: { studentId: s.id } })).map(calendarView);
-    return { calendars, exportedAt: new Date().toISOString(), profile: { ...serializeStudent(s), accessCode: s.accessCode }, events, goals, portfolio, saved, proposals, activity: audits };
+    const notifications = await prisma.notificationSettings.findUnique({ where: { studentId: s.id } });
+    const nudgeHistory = await prisma.nudgeDelivery.findMany({ where: { studentId: s.id } });
+    return { notifications, nudgeHistory, calendars, exportedAt: new Date().toISOString(), profile: { ...serializeStudent(s), accessCode: s.accessCode }, events, goals, portfolio, saved, proposals, activity: audits };
   });
 
   app.delete('/api/me', async (req, reply) => { const s = await requireStudent(req); await prisma.$transaction([

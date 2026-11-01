@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, session, access } from './lib/api';
+import { api, session, access, ApiError } from './lib/api';
 import { Student, Tab } from './lib/types';
 import { THEMES, Theme, applyTheme, nextTheme } from './lib/theme';
 import { toast } from './components/ui';
@@ -32,12 +32,14 @@ export default function AccessGate() {
 
 function App() {
   const [me, setMe] = useState<Student | null | undefined>(undefined);
-  const [tab, setTab] = useState<Tab>('today');
+  const [tab, setTab] = useState<Tab>(() => { const value = new URLSearchParams(window.location.search).get('tab'); return ['today', 'explore', 'buddy', 'grow', 'you'].includes(value || '') ? value as Tab : 'today'; });
+  const [startupError, setStartupError] = useState(''), [attempt, setAttempt] = useState(0);
   const [buddySeed, setBuddySeed] = useState<string | null>(null);
   const [buddyKey, setBuddyKey] = useState(0);
-  useEffect(() => { if (!session.get()) { setMe(null); return; } api<Student>('/api/me').then(setMe).catch(() => { session.clear(); setMe(null); }); }, []);
+  useEffect(() => { if (!session.get()) { setMe(null); return; } setStartupError(''); api<Student>('/api/me').then(setMe).catch(e => { if (e instanceof ApiError && e.status === 401) { session.clear(); setMe(null); } else setStartupError('Could not load your dashboard. Connect to the internet and try again. Your profile is still saved.'); }); }, [attempt]);
   useEffect(() => { document.body.dataset.tab = tab; window.scrollTo(0, 0); }, [tab]);
   useEffect(() => { applyTheme((me?.settings.theme || 'dusk') as Theme); }, [me?.settings.theme]);
+  if (startupError) return <main className="splash"><p role="alert">{startupError}</p><button className="btn" onClick={() => setAttempt(a => a + 1)}>Try again</button></main>;
   if (me === undefined) return <div className="splash"><p className="muted">Opening Pathway…</p></div>;
   if (me === null) return <Onboarding onDone={s => { session.set(s.id); setMe(s); }} />;
   const ask = (text: string) => { setBuddySeed(text); setTab('buddy'); };

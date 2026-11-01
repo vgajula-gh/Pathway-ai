@@ -28,6 +28,9 @@ model Student {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  notificationSettings NotificationSettings?
+  pushSubscriptions PushSubscription[]
+  nudgeDeliveries NudgeDelivery[]
   calendars CalendarLink[]
   availability Availability?
   events       Event[]
@@ -250,4 +253,30 @@ model CalendarLink {
   events Event[]
   @@index([syncAfter])
   @@index([studentId])
+}
+
+model NotificationSettings {
+  studentId String @id
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  enabled Boolean @default(false)
+  time String @default("16:00")
+  pausedUntil DateTime?
+}
+model PushSubscription {
+  id String @id @default(cuid())
+  studentId String
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  endpointHash String @unique
+  encrypted String
+  createdAt DateTime @default(now())
+  @@index([studentId])
+}
+model NudgeDelivery {
+  studentId String
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  date String
+  status String @default("reserved")
+  accepted Int @default(0)
+  createdAt DateTime @default(now())
+  @@id([studentId, date])
 }

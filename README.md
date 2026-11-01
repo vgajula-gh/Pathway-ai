@@ -56,3 +56,6 @@ Explore starts with My applications: track status, student-added deadlines, priv
 
 ### Calendar import and your week
 Add private iCal subscriptions in You → Calendars, or optionally at the end of onboarding. Sync now refreshes them; an always-on worker also syncs every three hours. Imported events are read-only. Today → Your week shows seven days with calm load labels, overlaps and tappable details. Google Calendar, Apple iCloud and Canvas help is in the app.
+
+### Install Pathway and gentle daily nudges
+Install Pathway uses the browser install prompt or iPhone Share → Add to Home Screen instructions. The offline shell contains no cached student data. You → Notifications is opt-in and off by default: choose a daytime nudge, pause for a week, test or unsubscribe. Messages come only from your actual deadlines, schedule, approvals and goals; no AI, streaks or pressure. Quiet/class times are protected, with at most one attempt per student-local day (including tests). An always-running Replit Reserved VM is required for timed jobs.

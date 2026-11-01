@@ -66,6 +66,25 @@ components:
             factors: { type: array, items: { $ref: '#/components/schemas/Factor' } }
 security: [{ devStudent: [], accessCode: [] }]
 paths:
+  /api/notifications:
+    get:
+      responses:
+        '200': { description: Opt-in preferences and public VAPID configuration }
+    patch:
+      responses:
+        '200': { description: Enabled/time/pause preferences saved }
+  /api/notifications/test:
+    post:
+      responses:
+        '200': { description: Actual accepted/quiet/paused/already-sent status; no delivery guarantee }
+  /api/push/subscribe:
+    post:
+      responses:
+        '200': { description: This student browser subscription saved securely }
+  /api/push/unsubscribe:
+    post:
+      responses:
+        '200': { description: This device subscription removed }
   /api/calendars:
     get:
       responses:

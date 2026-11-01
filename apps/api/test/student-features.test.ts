@@ -4,8 +4,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import webpush from 'web-push';
 import { PrismaClient } from '@prisma/client';
 const remote = vi.hoisted(() => vi.fn());
+const sent = vi.hoisted(() => vi.fn());
+vi.mock('../src/lib/push.js', async () => ({ ...await vi.importActual('../src/lib/push.js'), sendPush: sent }));
+const vapid = webpush.generateVAPIDKeys();
 vi.mock('../src/lib/calendar-fetch.js', async () => ({ ...await vi.importActual('../src/lib/calendar-fetch.js'), fetchCalendar: remote }));
 const dir = mkdtempSync(join(tmpdir(), 'pathway-features-')), url = `file:${dir}/test.db`;
 const db = new PrismaClient({ datasourceUrl: url + '?connection_limit=1' });
@@ -22,12 +26,13 @@ beforeAll(async () => {
   await promisify(execFile)(process.execPath, ['../../node_modules/prisma/build/index.js', 'migrate', 'deploy', '--schema', 'prisma/schema.prisma'], { env: { ...process.env, DATABASE_URL: url } });
 }, 30000);
 beforeEach(async () => {
-  remote.mockReset();
+  remote.mockReset(); sent.mockReset(); sent.mockResolvedValue({ statusCode: 201 });
+  vi.stubEnv('VAPID_PUBLIC_KEY', vapid.publicKey); vi.stubEnv('VAPID_PRIVATE_KEY', vapid.privateKey); vi.stubEnv('VAPID_SUBJECT', 'mailto:test@example.org');
   env.accessCodes = []; await db.student.deleteMany();
   const s = await db.student.create({ data: { name: 'Test', grade: 10, availability: { create: {} } } }); studentId = s.id;
   await db.opportunity.upsert({ where: { id: 'test' }, update: {}, create: { id: 'test', name: 'Test opportunity', organizer: 'Test', category: 'STEM', url: 'https://example.org', gradeMin: 9, gradeMax: 12, format: 'Virtual', cost: 'Free', commitment: 'Low', skills: '[]', tags: '[]', checks: '["Check eligibility"]' } });
 });
-afterAll(async () => { env.accessCodes = originalCodes; await db.$disconnect(); rmSync(dir, { recursive: true, force: true }); });
+afterAll(async () => { vi.unstubAllEnvs(); env.accessCodes = originalCodes; await db.$disconnect(); rmSync(dir, { recursive: true, force: true }); });
 it('saves, updates and isolates application metadata and never writes prep events before approval', async () => {
   const app = await buildApp(); app.log.level = 'silent';
   try {
@@ -69,4 +74,41 @@ it('syncs encrypted private calendars without duplicates, preserves failures, de
     expect((await app.inject({ url: '/api/week', headers: headers() })).json()).toHaveLength(7);
     const exported = (await app.inject({ url: '/api/me/export', headers: headers() })).json(); expect(JSON.stringify(exported)).not.toContain(persisted.encryptedUrl);
   } finally { await app.close(); }
+});
+
+it('keeps nudges off by default, encrypts subscriptions and reserves at most one send per student-local day', async () => {
+  const { deliverNudge } = await import('../src/lib/nudges.js');
+  const app = await buildApp(); app.log.level = 'silent';
+  try {
+    expect((await app.inject({ url: '/api/notifications', headers: headers() })).json().enabled).toBe(false);
+    const endpoint = 'https://fcm.googleapis.com/fcm/send/private-endpoint';
+    const payload = { endpoint, keys: { p256dh: Buffer.alloc(65, 4).toString('base64url'), auth: Buffer.alloc(16, 1).toString('base64url') } };
+    expect((await app.inject({ method: 'POST', url: '/api/push/subscribe', headers: headers(), payload })).statusCode).toBe(200);
+    expect((await db.pushSubscription.findFirstOrThrow()).encrypted).not.toContain(endpoint);
+    await db.goal.create({ data: { studentId, title: 'Learn robotics' } });
+    const instant = new Date('2026-11-02T20:00:00Z');
+    expect((await deliverNudge(studentId, false, instant)).status).toBe('paused-or-quiet'); expect(sent).not.toHaveBeenCalled();
+    expect((await app.inject({ method: 'PATCH', url: '/api/notifications', headers: headers(), payload: { enabled: true, time: '14:00' } })).statusCode).toBe(200);
+    const results = await Promise.all(Array.from({ length: 3 }, () => deliverNudge(studentId, false, instant)));
+    expect(results.filter(r => r.status === 'accepted')).toHaveLength(1); expect(sent).toHaveBeenCalledOnce(); expect(await db.nudgeDelivery.count()).toBe(1);
+    expect(sent.mock.calls[0][1]).toMatchObject({ tab: 'grow', date: '2026-11-02', timezone: 'America/New_York' });
+    expect((await deliverNudge(studentId, true, instant)).status).toBe('already-sent-today');
+    expect((await app.inject({ method: 'PATCH', url: '/api/notifications', headers: headers(), payload: { time: '22:00' } })).statusCode).toBe(422);
+    await app.inject({ method: 'PATCH', url: '/api/notifications', headers: headers(), payload: { pauseWeek: true } });
+    expect((await db.notificationSettings.findUniqueOrThrow({ where: { studentId } })).pausedUntil).toBeTruthy();
+    await app.inject({ method: 'POST', url: '/api/push/unsubscribe', headers: headers(), payload: { endpoint } });
+    expect(await db.pushSubscription.count()).toBe(0); expect((await db.notificationSettings.findUniqueOrThrow({ where: { studentId } })).enabled).toBe(false);
+  } finally { await app.close(); }
+});
+it('keeps failed/uncertain sends reserved and removes expired subscriptions without retrying', async () => {
+  const { deliverNudge } = await import('../src/lib/nudges.js');
+  const { encryptSubscription } = await import('../src/lib/push.js');
+  await db.notificationSettings.create({ data: { studentId, enabled: true, time: '14:00' } });
+  await db.goal.create({ data: { studentId, title: 'Learn' } });
+  await db.pushSubscription.create({ data: { studentId, endpointHash: 'test-hash', encrypted: encryptSubscription({ endpoint: 'https://fcm.googleapis.com/fcm/send/test', keys: { p256dh: 'a', auth: 'b' } }) } });
+  sent.mockRejectedValue({ statusCode: 410 });
+  const now = new Date('2026-11-02T20:00:00Z');
+  expect((await deliverNudge(studentId, false, now)).status).toBe('not-delivered');
+  expect(await db.pushSubscription.count()).toBe(0); expect(await db.nudgeDelivery.count()).toBe(1); expect(sent).toHaveBeenCalledOnce();
+  await deliverNudge(studentId, false, now); expect(sent).toHaveBeenCalledOnce();
 });
