@@ -1,3 +1,4 @@
+import { reserveAI } from '../lib/ai-limits.js';
 import { FastifyInstance } from 'fastify';
 import { prisma } from '../lib/db.js';
 import { requireStudent, HttpError } from '../lib/auth.js';
@@ -29,6 +30,7 @@ export default async function routes(app: FastifyInstance) {
     const s = await requireStudent(req); gate(s);
     const { text, conversationId } = req.body as { text: string; conversationId?: string };
     if (!text?.trim()) throw new HttpError(422, 'Empty message');
+    if (getLLM()) await reserveAI(s.id);
     return runBuddy(s.id, text.trim().slice(0, 4000), conversationId);
   });
 
@@ -43,11 +45,13 @@ export default async function routes(app: FastifyInstance) {
       }
     } else text = (req.body as { text?: string })?.text;
     if (!text && !images.length) throw new HttpError(422, 'Send an image or text');
+    if (getLLM()) await reserveAI(s.id);
     return askJSON<{ events: unknown[] }>(EXTRACT_SYSTEM, EXTRACT_PROMPT(new Date().toDateString(), text), images, 3000);
   });
 
   app.post('/api/coach', async req => {
     const s = await requireStudent(req); gate(s); const { question } = req.body as { question: string };
+    if (getLLM()) await reserveAI(s.id);
     return { answer: await requireLLM().text(COACH_SYSTEM(s.grade), String(question || '').slice(0, 2000)) };
   });
 

@@ -1,5 +1,5 @@
 // Pathway AI data model. See docs/05-DATA-MODEL.md.
-// Local dev uses SQLite. For production change provider to "postgresql".
+// Local dev uses SQLite. Production schema is derived by scripts/prisma-production.mjs.
 // JSON-shaped fields are stored as String (serialized) so the schema works on both.
 
 generator client {
@@ -14,6 +14,7 @@ datasource db {
 model Student {
   id          String   @id @default(cuid())
   name        String
+  accessCode  String?  // Tester code used at setup (never included in ordinary profile responses)
   grade       Int
   timezone    String   @default("America/New_York")
   location    String   @default("")   // broad area only, e.g. "Raleigh area"
@@ -216,4 +217,11 @@ model NewsStory {
   checkedAt   DateTime @default(now())
   isSample    Boolean  @default(true)
   @@index([topic, publishedAt])
+}
+
+// Monthly counters are anonymous and survive student deletion. Daily keys use
+// student IDs and are removed when the student deletes their profile.
+model AIUsage {
+  key   String @id
+  count Int    @default(0)
 }

@@ -1,3 +1,4 @@
+import { reserveAI } from '../lib/ai-limits.js';
 import { FastifyInstance } from 'fastify';
 import { prisma, j } from '../lib/db.js';
 import { requireStudent, HttpError } from '../lib/auth.js';
@@ -5,7 +6,7 @@ import { loadContext } from '../lib/context.js';
 import { addDays, dkey, fmtLocal, sod } from '../domain/time.js';
 import { expand, findConflicts } from '../domain/schedule.js';
 import { headline, nudges, todayMetrics } from '../domain/metrics.js';
-import { askJSON } from '../agent/llm/index.js';
+import { askJSON, getLLM } from '../agent/llm/index.js';
 import { BRIEF_PROMPT, BRIEF_SYSTEM } from '../agent/prompts.js';
 import { WORDS } from '../data/words.js';
 
@@ -31,6 +32,7 @@ export default async function routes(app: FastifyInstance) {
 
   app.post('/api/today/insight', async req => {
     const s = await requireStudent(req); if (!s.aiConsent) throw new HttpError(403, 'AI help is turned off');
+    if (getLLM()) await reserveAI(s.id);
     const { events, rules, milestones, goals } = await loadContext(s.id), now = new Date();
     const data = JSON.stringify({ name: s.name, today: now.toDateString(), events: expand(events, sod(now), addDays(sod(now), 1)).map(o => `${fmtLocal(o.s)} ${o.title} [${o.type}]`),
       upcoming: expand(events, addDays(sod(now), 1), addDays(sod(now), 8)).filter(o => ['exam', 'deadline', 'competition'].includes(o.type)).map(o => `${o.s.toDateString()} ${o.title}`),

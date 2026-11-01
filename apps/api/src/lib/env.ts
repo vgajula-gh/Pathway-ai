@@ -3,6 +3,8 @@ const selected = (process.env.LLM_PROVIDER || 'anthropic').toLowerCase();
 const provider = selected === 'ollama' ? 'ollama' : selected === 'openai' ? 'openai' : 'anthropic';
 const key = provider === 'openai' ? process.env.OPENAI_API_KEY : process.env.ANTHROPIC_API_KEY;
 export const env = {
+  accessCodes: (process.env.ACCESS_CODES || '').split(',').map(s => s.trim()).filter(Boolean),
+  feedbackUrl: /^https?:\/\//.test(process.env.FEEDBACK_URL || '') ? process.env.FEEDBACK_URL! : null,
   port: Number(process.env.PORT || 8787),
   webOrigin: process.env.WEB_ORIGIN || 'http://localhost:5173',
   provider: provider as 'anthropic' | 'openai' | 'ollama',

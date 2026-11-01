@@ -30,3 +30,7 @@ Golden conversations for: exam + practice overlap (must not schedule over practi
 ## Ollama testing
 
 The local Ollama provider uses the same prompts, tool validation, proposal approval, and verification flow. Invalid tool-call JSON is returned to the model as an explicit error and never executes a tool. Local JSON-mode failures retry once without JSON mode and parse the response defensively. The default text model cannot read images.
+
+## AI request caps
+
+The HTTP boundary reserves persistent AI usage before Buddy, extraction, coach, and insight calls. Limits apply equally to every LLM provider; tool execution and proposal approval are unchanged. One feature request includes its internal tool rounds and provider retries. Quota rejection returns 429 before invoking the model. See `docs/06-API.md` and `DEPLOY-REPLIT.md`.
