@@ -1,12 +1,14 @@
 import { useState } from 'react';
-import { api, download, session } from '../lib/api';
+import { api, download, session, access } from '../lib/api';
 import { AIHealth, Student } from '../lib/types';
 import { Sheet, toast, useLoad } from '../components/ui';
+import { AccountFields } from './SignIn';
 import NewsSheet from '../components/NewsSheet';
 import { THEMES, applyTheme } from '../lib/theme';
 
-export default function You({ me, setMe }: { me: Student; setMe: (s: Student | null) => void }) {
+export default function You({ me, setMe, onSignOut }: { me: Student; setMe: (s: Student | null) => void; onSignOut?: () => void }) {
   const config = useLoad(() => api<{ feedbackUrl: string | null }>('/api/config'), []);
+  const [account, setAccount] = useState({ username: '', password: '' }), [accountError, setAccountError] = useState(''), [accountBusy, setAccountBusy] = useState(false);
   const health = useLoad(() => api<AIHealth>('/api/health'), []);
   const [edit, setEdit] = useState(false), [log, setLog] = useState(false), [news, setNews] = useState(false);
   const patch = async (body: Record<string, unknown>) => { try { setMe(await api<Student>('/api/me', { method: 'PATCH', body })); toast('Saved'); } catch (e) { toast((e as Error).message); } };
@@ -21,6 +23,17 @@ export default function You({ me, setMe }: { me: Student; setMe: (s: Student | n
         <Row t="Skills" s={me.skills.join(', ') || 'Not set yet'} p={prov('skills')} />
         <Row t="Availability" s={a ? `Study ${a.studyStart}–${a.studyEnd}, up to ${a.maxStudyMin} min a day. Downtime ${a.downtimeStart}–${a.downtimeEnd}.` : 'Not set'} p={prov('availability')} />
       </div><p className="note">Pathway only uses what you tell it. It doesn’t guess sensitive things about you.</p></div>
+      <div className="sec"><div className="sec-h"><h2>Account</h2></div>
+        {me.username ? <><p>Signed in as <b>{me.username}</b></p><button className="link" onClick={async () => {
+          try { await api('/api/auth/logout', { method: 'POST' }); session.clear(); access.clear(); setMe(null); onSignOut?.(); }
+          catch (e) { toast((e as Error).message); }
+        }}>Sign out</button></> : <form onSubmit={async e => {
+          e.preventDefault(); setAccountBusy(true); setAccountError('');
+          try { setMe(await api<Student>('/api/auth/link', { body: account })); setAccount({ username: '', password: '' }); toast('Your profile is ready to use on other devices.'); }
+          catch (e) { setAccountError((e as Error).message); } finally { setAccountBusy(false); }
+        }}><p>Keep this profile and sign in on any device.</p><AccountFields {...account} creating onChange={(key, value) => setAccount(a => ({ ...a, [key]: value }))} />
+          {accountError && <p role="alert">{accountError}</p>}<button className="btn" disabled={accountBusy} type="submit">{accountBusy ? 'Saving…' : 'Enable sign-in'}</button></form>}
+      </div>
       <div className="sec"><div className="sec-h"><h2>My Day</h2></div><div className="rows">
         <label className="frow"><span>Word of the day</span><input type="checkbox" className="switch" checked={me.settings.showWord} onChange={e => patch({ settings: { showWord: e.target.checked } })} /></label>
         <label className="frow"><span>News for you</span><input type="checkbox" className="switch" checked={me.settings.showNews} onChange={e => patch({ settings: { showNews: e.target.checked } })} /></label>
@@ -36,7 +49,7 @@ export default function You({ me, setMe }: { me: Student; setMe: (s: Student | n
         <button className="r" onClick={() => setLog(true)}><span className="b"><span className="t">Activity log</span></span></button></div></div>
       <div className="sec"><div className="sec-h"><h2>Your data</h2></div><div className="rows">
         <button className="r" onClick={() => download('/api/me/export', 'pathway-my-data.json')}><span className="b"><span className="t" style={{ color: 'var(--peri)' }}>Export my data</span></span></button>
-        <button className="r" onClick={async () => { if (!confirm('Delete everything in Pathway? This can’t be undone.')) return; await api('/api/me', { method: 'DELETE' }); session.clear(); setMe(null); }}><span className="b"><span className="t c-rose">Delete everything</span></span></button></div></div>
+        <button className="r" onClick={async () => { if (!confirm('Delete everything in Pathway? This can’t be undone.')) return; await api('/api/me', { method: 'DELETE' }); session.clear(); access.clear(); setMe(null); onSignOut?.(); }}><span className="b"><span className="t c-rose">Delete everything</span></span></button></div></div>
       {config.data?.feedbackUrl && <div className="sec"><a className="link" href={config.data.feedbackUrl} target="_blank" rel="noopener noreferrer">Send feedback</a></div>}
       {edit && <EditSheet me={me} onClose={() => setEdit(false)} onSave={async b => { await patch(b); setEdit(false); }} />}
       {log && <AuditSheet onClose={() => setLog(false)} />}

@@ -2,13 +2,20 @@ openapi: 3.1.0
 info:
   title: Pathway AI API
   version: 0.1.0
-  description: Student-success companion API. Pilot access uses x-access-code plus the existing x-student-id header. AI feature requests can return 429 with a friendly error when daily or shared monthly caps are reached.
+  description: Student-success companion API. Account sessions identify students; tester codes gate new visitors, and x-student-id is restricted to unlinked legacy profiles. AI feature requests can return 429 with a friendly error when daily or shared monthly caps are reached.
 servers: [{ url: http://localhost:8787 }]
 components:
   securitySchemes:
+    accountSession: { type: apiKey, in: cookie, name: pathway_session }
     accessCode: { type: apiKey, in: header, name: x-access-code }
     devStudent: { type: apiKey, in: header, name: x-student-id }
   schemas:
+    AccountCredentials:
+      type: object
+      required: [username, password]
+      properties:
+        username: { type: string, minLength: 3, maxLength: 30, pattern: '^[A-Za-z0-9_]+$' }
+        password: { type: string, minLength: 12, maxLength: 128, writeOnly: true }
     StudentSettings:
       type: object
       properties:
@@ -64,8 +71,51 @@ components:
             fit: { enum: [strong, good, look] }
             why: { type: string }
             factors: { type: array, items: { $ref: '#/components/schemas/Factor' } }
-security: [{ devStudent: [], accessCode: [] }]
+security: [{ accountSession: [] }, { devStudent: [], accessCode: [] }]
 paths:
+  /api/auth/session:
+    get:
+      security: []
+      responses:
+        '200': { description: 'No-store response containing student profile or null; session also checks expiry and tester-code revocation' }
+  /api/auth/login:
+    post:
+      security: [{ accessCode: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username: { type: string, minLength: 3, maxLength: 30 }
+                password: { type: string, minLength: 12, maxLength: 128, writeOnly: true }
+      responses:
+        '200': { description: Student profile and HttpOnly session cookie }
+        '401': { description: Incorrect credentials or original tester code }
+        '429': { description: More than ten sign-in attempts for this username in fifteen minutes }
+  /api/auth/link:
+    post:
+      description: Link username and password to the current unlinked legacy browser profile without changing its ID or data.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username: { type: string, minLength: 3, maxLength: 30 }
+                password: { type: string, minLength: 12, maxLength: 128, writeOnly: true }
+      responses:
+        '200': { description: Student profile and HttpOnly session cookie }
+        '409': { description: Profile already linked or username unavailable }
+  /api/auth/logout:
+    post:
+      security: []
+      responses:
+        '204': { description: Current session revoked and cookie cleared }
   /api/config:
     get:
       security: []
@@ -89,8 +139,8 @@ paths:
   /api/students:
     post:
       security: [{ accessCode: [] }]
-      summary: Onboard a student
-      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [name, grade], properties: { name: { type: string }, grade: { type: integer, minimum: 9, maximum: 12 }, interests: { type: array, items: { type: string } }, goal: { type: string }, aiConsent: { type: boolean }, timezone: { type: string }, studyStart: { type: string }, studyEnd: { type: string }, downtimeStart: { type: string }, downtimeEnd: { type: string }, sampleWeek: { type: boolean } } } } } }
+      summary: Onboard a student (credentials required in production)
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [name, grade], properties: { credentials: { $ref: '#/components/schemas/AccountCredentials' }, name: { type: string }, grade: { type: integer, minimum: 9, maximum: 12 }, interests: { type: array, items: { type: string } }, goal: { type: string }, aiConsent: { type: boolean }, timezone: { type: string }, studyStart: { type: string }, studyEnd: { type: string }, downtimeStart: { type: string }, downtimeEnd: { type: string }, sampleWeek: { type: boolean } } } } } }
       responses: { '201': { description: Created } }
   /api/me:
     get: { summary: Current student, responses: { '200': { description: OK } } }

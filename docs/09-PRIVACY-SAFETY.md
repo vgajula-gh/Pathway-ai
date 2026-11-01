@@ -9,14 +9,15 @@
 - Export (JSON) and delete-everything (cascade).
 - Audit log of state-changing actions, visible to the student.
 - No external side effects from the server; downloads are student-initiated.
-- Logger redacts identity headers.
+- Logger redacts identity/access headers and session cookies.
+- Optional-username legacy profiles can be upgraded to username/password accounts, with salted scrypt passwords, hashed 30-day sessions, account login throttling, and origin checks. No email collected.
 
 ## Buddy voice
 
 Voice is off by default and enabled explicitly in You › Privacy. Browser SpeechRecognition (or webkitSpeechRecognition) writes only text into an editable draft, never sends automatically, and is hidden when unsupported. Students stop listening before editing or sending. “Read replies aloud” is a separate, session-only choice for new replies using speechSynthesis, with a stop control. Listening and playback stop when leaving Buddy or disabling Voice. Pathway does not record, upload, or store audio; browser speech recognition may process audio through the browser provider, whose handling requires review before launch. Only the Voice preference is saved; transcripts become chat messages only after the student sends them.
 
 ## Required before real students *(launch blockers)*
-- Real authentication; age gate; verifiable parental consent where required; teen-appropriate terms and privacy notice.
+- Review account security and recovery (legacy unlinked profiles still use browser-ID authentication); age gate; verifiable parental consent where required; teen-appropriate terms and privacy notice.
 - Encryption at rest (managed DB), TLS everywhere, secrets in a vault, least-privilege service accounts.
 - Data retention policy (e.g., auto-delete chat after N days unless saved); don't retain schedule photos by default.
 - Content moderation for chat input/output; escalation copy for crisis language (provide resources, don't diagnose).

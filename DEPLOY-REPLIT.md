@@ -1,6 +1,6 @@
 # Publish Pathway AI on Replit
 
-You need a GitHub account, a Replit account with publishing enabled, and optionally an AI provider account. Use this for an invitation-only tester pilot. Access codes are shared secrets, not full individual account authentication: give each tester a different, long, random code and keep it private.
+You need a GitHub account, a Replit account with publishing enabled, and optionally an AI provider account. Use this for an invitation-only tester pilot. Access codes are invitation secrets: give each tester a different, long, random code and keep it private. Students also choose a username and password for their own profile.
 
 ## 1. Import the app
 
@@ -44,10 +44,18 @@ Limits count accepted AI feature requests (Buddy, schedule scan, coach, and Toda
 
 For an update, import/pull the latest `main` and republish. Back up the database before schema upgrades. Do not delete migration files. On startup failures, inspect deployment logs: confirm the database URL, database availability, and non-empty access codes. A database migration failure stops startup rather than serving a broken schema.
 
+## Returning students
+
+Students choose a username and password during their first setup. On a new device they enter their original tester access code, then select **Sign in** to open their existing Today dashboard. On a device with a valid remembered session, Pathway opens Today directly. Use **You → Account → Sign out** before leaving a shared device.
+
+Existing students from before account sign-in was added should first open Pathway in their original browser, go to **You → Account**, and choose **Enable sign-in**. This links their current profile, goals and chats without redoing setup. A name or access code alone cannot recover an old browser-only profile on a new device. Password recovery is not available yet; save the username/password securely.
+
+No new Secrets or identity-provider accounts are needed. Startup applies an additive PostgreSQL migration, preserving existing student data. Sessions are stored in PostgreSQL, last 30 days, and work across Replit restarts/instances. Removing a tester's access code also blocks their account sessions.
+
 ## Local development and Codespaces
 
-Keep `.env` with `DATABASE_URL="file:./dev.db"`. Run `npm install`, `npm run db:setup`, and `npm run dev`. `db:setup` uses the SQLite schema and generates the matching Prisma client. Codespaces keeps this workflow. Leave `ACCESS_CODES` empty to skip the gate locally, or set codes to test it. After running a production build locally, run `npm run db:push --workspace apps/api` to regenerate the SQLite client before local development/tests.
+Keep `.env` with `DATABASE_URL="file:./dev.db"`. Run `npm install`, `npm run db:setup`, and `npm run dev`. `db:setup` uses the SQLite schema and generates the matching Prisma client. On an existing SQLite database, Prisma may warn about the new nullable username unique index. Back up the local database first; if username is a new, entirely null column, a developer can apply this additive upgrade with `node --env-file=.env node_modules/prisma/build/index.js db push --schema apps/api/prisma/schema.prisma --accept-data-loss`. Do not use that flag to bypass unrelated data-loss warnings. Codespaces keeps this workflow. Leave `ACCESS_CODES` empty to skip the gate locally, or set codes to test it. After running a production build locally, run `npm run db:push --workspace apps/api` to regenerate the SQLite client before local development/tests.
 
 `npm run build` generates the PostgreSQL Prisma client and builds the API and web app. `npm start` requires PostgreSQL and access codes, runs migrations, and serves the production build without a `.env` file. Its environment comes from Replit Secrets. The SQLite schema is the data-model source; the build derives the PostgreSQL schema from it. Future model changes must include a new PostgreSQL migration.
 
-Existing local SQLite profiles are not copied to PostgreSQL automatically. The pilot database starts empty. Returning testers use their original code and browser profile; removing a code revokes its API access. Browser sessions retain the access code only for that tab's session. This pilot gate retains the existing browser-stored student ID and is not a substitute for production account authentication.
+Existing local SQLite profiles are not copied to PostgreSQL automatically. The pilot database starts empty. Returning testers sign in to their linked profile with their original tester code; removing a code revokes its API access. Browser sessions retain the access code only for that tab's session. Unlinked legacy profiles retain the browser-ID migration fallback. Linked profiles require an account session, and the browser-stored ID cannot bypass sign-in.

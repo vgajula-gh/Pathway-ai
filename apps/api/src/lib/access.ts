@@ -1,7 +1,8 @@
 import { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { env } from './env.js';
-import { HttpError } from './auth.js';
+import { HttpError } from './errors.js';
+import { sessionStudent } from './accounts.js';
 
 export function accessCode(req: Pick<FastifyRequest, 'headers'>): string | null {
   if (!env.accessCodes.length && process.env.NODE_ENV !== 'production') return null;
@@ -18,6 +19,9 @@ export async function accessRoutes(app: FastifyInstance) {
   });
   app.addHook('onRequest', async req => {
     const path = req.url.split('?')[0];
-    if (path.startsWith('/api/') && !['/api/config', '/api/access', '/api/health'].includes(path) && req.method !== 'OPTIONS') accessCode(req);
+    if (path.startsWith('/api/') && !['/api/config', '/api/access', '/api/health', '/api/auth/session', '/api/auth/logout'].includes(path) && req.method !== 'OPTIONS') {
+      if (await sessionStudent(req)) return;
+      accessCode(req);
+    }
   });
 }
