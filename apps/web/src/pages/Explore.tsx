@@ -1,3 +1,4 @@
+import Applications from '../components/Applications';
 import { useState } from 'react';
 import { api } from '../lib/api';
 import { Opportunity, Proposal, Student } from '../lib/types';
@@ -16,6 +17,7 @@ export default function Explore({ me, ask }: { me: Student; ask: (t: string) => 
   const compared = data.recommended.filter(o => cmp.includes(o.id));
   return (
     <>
+      <Applications refresh={data.recommended.map(o => o.status).join()} />
       <div className="top"><p className="date">Discover · Opportunities</p></div>
       <h1 className="display">Experiences that fit you</h1>
       <p className="muted" style={{ marginTop: 8 }}>Checked against your grade, time and interests, with the reasons shown.</p>
@@ -24,7 +26,7 @@ export default function Explore({ me, ask }: { me: Student; ask: (t: string) => 
           <button className="main" onClick={() => setOpen(o)}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><span className="emo">{CEMO[o.category] || '✨'}</span><span className={`fit ${o.fit.fit}`}>{FIT_LABEL[o.fit.fit!]}</span></div>
             <h3>{o.name}</h3><p className="muted small" style={{ marginTop: 4 }}>{o.fit.why}</p>
             <div className="factors">{o.fit.factors!.slice(0, 5).map(f => <span key={f.key} className="factor"><i className={`f-${f.state}`} />{f.key}</span>)}</div></button>
-          <div className="foot"><button aria-pressed={o.status === 'saved'} onClick={() => status(o.id, o.status === 'saved' ? 'none' : 'saved')}>{o.status === 'saved' ? 'Saved' : 'Save'}</button>
+          <div className="foot"><button aria-pressed={!!o.status && o.status !== 'dismissed'} onClick={() => status(o.id, !!o.status && o.status !== 'dismissed' ? 'none' : 'saved')}>{!!o.status && o.status !== 'dismissed' ? 'Saved' : 'Save'}</button>
             <button aria-pressed={cmp.includes(o.id)} onClick={() => setCmp(c => c.includes(o.id) ? c.filter(x => x !== o.id) : [...c, o.id].slice(-3))}>{cmp.includes(o.id) ? 'Comparing' : 'Compare'}</button>
             <button onClick={() => status(o.id, 'dismissed')}>Not for me</button></div></div>))}</div>
       {data.excluded.length > 0 && <details className="fold" style={{ marginTop: 14 }}><summary>Not a fit right now ({data.excluded.length})</summary><div className="rows">{data.excluded.map(x => <div className="r" key={x.id}><span className="b"><span className="t">{x.name}</span><span className="s" style={{ display: 'block' }}>{x.reasons.join('; ')}</span></span></div>)}</div></details>}

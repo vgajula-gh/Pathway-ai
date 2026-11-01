@@ -7,4 +7,4 @@ if (!/^postgres(?:ql)?:\/\//.test(process.env.DATABASE_URL || '')) {
   throw new Error('Replit schema sync requires the development PostgreSQL DATABASE_URL. Run this inside the Replit workspace.');
 }
 
-prisma(['db', 'push', '--schema', schema]);
+prisma(['migrate', 'deploy', '--schema', schema]);

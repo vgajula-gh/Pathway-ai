@@ -67,3 +67,40 @@ describe('Ollama provider', () => {
     expect((await import('../src/agent/llm/index.js')).getLLM()).toBeNull();
   });
 });
+
+describe('hosted GPT-5 nano', () => {
+  it.each(['gpt-5-nano', 'gpt-5-nano-2025-08-07'])('reserves reasoning headroom for %s across all feature methods', async model => {
+    const llm = openaiLLM('test-key', model);
+    sdk.create.mockResolvedValueOnce(response('Hello')).mockResolvedValueOnce(response('{"events":[]}')).mockResolvedValueOnce(response('Here is a small next step.'));
+    expect(await llm.text('System', 'Hi')).toBe('Hello');
+    expect(await llm.json('System', 'Schedule')).toEqual({ events: [] });
+    expect(await llm.runTools({ system: '', history: [], tools: [], maxRounds: 1, exec: vi.fn() })).toContain('next step');
+    expect(sdk.create.mock.calls.map(([r]) => [r.reasoning_effort, r.max_completion_tokens])).toEqual([
+      ['low', 4996], ['low', 5596], ['low', 5296]
+    ]);
+  });
+  it('rejects reasoning-only exhaustion before executing tools and never retries automatically', async () => {
+    const exec = vi.fn(), warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    sdk.create.mockResolvedValue({ choices: [{ finish_reason: 'length', message: { content: null, tool_calls: [call('{"actions":[]}')] } }], usage: { completion_tokens_details: { reasoning_tokens: 5296 } } });
+    try {
+      await expect(openaiLLM('test-key', 'gpt-5-nano').runTools({ system: '', history: [], tools: [], maxRounds: 2, exec })).rejects.toMatchObject({ status: 502, message: expect.stringContaining('shorter question') });
+      expect(exec).not.toHaveBeenCalled(); expect(sdk.create).toHaveBeenCalledOnce();
+      expect(warn).toHaveBeenCalledWith('OpenAI incomplete response', { model: 'gpt-5-nano', finishReason: 'length', reasoningTokens: 5296 });
+    } finally { warn.mockRestore(); }
+  });
+  it('rejects an empty stopped response rather than passing it to the generic Buddy fallback', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    sdk.create.mockResolvedValue({ choices: [{ finish_reason: 'stop', message: { content: '' } }] });
+    try { await expect(openaiLLM('test-key', 'gpt-5-nano').text('', '')).rejects.toMatchObject({ status: 502 }); }
+    finally { warn.mockRestore(); }
+  });
+  it('keeps existing limits for non-nano and local models', async () => {
+    sdk.create.mockResolvedValue(response('Hello'));
+    await openaiLLM('test-key', 'gpt-4.1-mini').text('', '');
+    expect(sdk.create.mock.calls[0][0]).toMatchObject({ max_completion_tokens: 900 });
+    expect(sdk.create.mock.calls[0][0]).not.toHaveProperty('reasoning_effort');
+    await ollamaLLM('http://localhost:11434/v1', 'gpt-5-nano').text('', '');
+    expect(sdk.create.mock.calls[1][0]).toMatchObject({ max_tokens: 900 });
+    expect(sdk.create.mock.calls[1][0]).not.toHaveProperty('reasoning_effort');
+  });
+});

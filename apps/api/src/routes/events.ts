@@ -27,7 +27,7 @@ export default async function routes(app: FastifyInstance) {
     const from = parseLocal(q.from) || sod(new Date()), to = addDays(parseLocal(q.to) || addDays(from, 6), 1);
     const { events } = await loadContext(s.id), occ = expand(events, from, to);
     const clash = new Set(findConflicts(occ).filter(c => c.kind === 'overlap').flatMap(c => [c.a.id + (c.a.occ || ''), c.b.id + (c.b.occ || '')]));
-    return occ.map(o => ({ id: o.id, title: o.title, type: o.type, start: fmtLocal(o.s), end: fmtLocal(o.e), location: o.location, recurring: o.recurDays.length > 0, source: o.source, done: o.done, clash: clash.has(o.id + (o.occ || '')) }));
+    return occ.map(o => ({ id: o.id, title: o.title, type: o.type, start: fmtLocal(o.s), end: fmtLocal(o.e), location: o.location, recurring: o.recurDays.length > 0, source: o.source, done: o.done, readOnly: o.readOnly, clash: clash.has(o.id + (o.occ || '')) }));
   });
 
   app.post('/api/events', async (req, reply) => {
@@ -50,6 +50,7 @@ export default async function routes(app: FastifyInstance) {
   app.patch('/api/events/:id', async req => {
     const s = await requireStudent(req), { id } = req.params as { id: string }, b = z.object({ done: z.boolean() }).parse(req.body);
     const e = await prisma.event.findFirst({ where: { id, studentId: s.id } }); if (!e) throw new HttpError(404, 'Not found');
+    if (e.readOnly) throw new HttpError(409, 'Imported events are read-only. Change them in the source calendar.');
     await audit(s.id, 'student', b.done ? 'Marked done' : 'Marked not done', e.title);
     return toCalEvent(await prisma.event.update({ where: { id }, data: { done: b.done } }));
   });
@@ -57,6 +58,7 @@ export default async function routes(app: FastifyInstance) {
   app.delete('/api/events/:id', async (req, reply) => {
     const s = await requireStudent(req), { id } = req.params as { id: string };
     const e = await prisma.event.findFirst({ where: { id, studentId: s.id } }); if (!e) throw new HttpError(404, 'Not found');
+    if (e.readOnly) throw new HttpError(409, 'Imported events are read-only. Change them in the source calendar.');
     await prisma.event.delete({ where: { id } }); await audit(s.id, 'student', 'Deleted event', e.title);
     return reply.code(204).send();
   });
@@ -65,6 +67,7 @@ export default async function routes(app: FastifyInstance) {
   app.get('/api/events/:id/ics', async (req, reply) => {
     const s = await requireStudent(req), { id } = req.params as { id: string }, q = req.query as { location?: string };
     const e = await prisma.event.findFirst({ where: { id, studentId: s.id } }); if (!e) throw new HttpError(404, 'Not found');
+    if (e.readOnly) throw new HttpError(409, 'Imported events are read-only. Change them in the source calendar.');
     await audit(s.id, 'student', 'Downloaded calendar file', e.title);
     return reply.header('content-type', 'text/calendar').header('content-disposition', `attachment; filename="${e.title.replace(/[^\w-]+/g, '-')}.ics"`).send(ics(e, q.location !== 'false'));
   });

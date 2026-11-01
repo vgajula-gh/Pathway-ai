@@ -4,8 +4,8 @@ import { AvailabilityRules, CalEvent, StudentContext } from '../domain/types.js'
 
 export const DEFAULT_RULES: AvailabilityRules = { studyStart: '16:00', studyEnd: '21:00', maxStudyMin: 120, downtimeStart: '21:00', downtimeEnd: '23:00' };
 
-export function toCalEvent(e: { id: string; title: string; type: string; start: string; end: string; location: string; recurDays: string; recurUntil: string; source: string; done: boolean }): CalEvent {
-  return { id: e.id, title: e.title, type: e.type, start: e.start, end: e.end, location: e.location, recurDays: j<number[]>(e.recurDays, []), recurUntil: e.recurUntil, source: e.source, done: e.done };
+export function toCalEvent(e: { id: string; title: string; type: string; start: string; end: string; location: string; recurDays: string; recurUntil: string; source: string; done: boolean; readOnly?: boolean }): CalEvent {
+  return { id: e.id, title: e.title, type: e.type, start: e.start, end: e.end, location: e.location, recurDays: j<number[]>(e.recurDays, []), recurUntil: e.recurUntil, source: e.source, done: e.done, readOnly: e.readOnly };
 }
 
 export async function loadContext(studentId: string) {

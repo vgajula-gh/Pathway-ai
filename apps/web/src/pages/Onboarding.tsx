@@ -1,21 +1,25 @@
 import { useState } from 'react';
-import { api } from '../lib/api';
-import { Student } from '../lib/types';
+import { CalendarHelp } from '../components/Calendars';
+import { api, session } from '../lib/api';
+import { SignInResult } from '../lib/types';
+import { PhraseFields, validPhrase } from './SignIn';
 import { toast } from '../components/ui';
 
 const INTERESTS = ['AI', 'Coding', 'Robotics', 'Engineering', 'Science', 'Medicine', 'Space', 'Math', 'Business', 'Entrepreneurship', 'Art', 'Writing', 'Music', 'Sports', 'Volunteering', 'Climate', 'Debate'];
 
 /** Student DNA intake: few, high-value questions; skippable; no mandatory calendar/email connection. */
-export default function Onboarding({ onDone }: { onDone: (s: Student) => void }) {
+export default function Onboarding({ onDone, onCancel }: { onDone: (s: SignInResult) => void; onCancel?: () => void }) {
   const [step, setStep] = useState(0), [busy, setBusy] = useState(false);
-  const [f, setF] = useState({ name: '', grade: 10, interests: [] as string[], goal: '', aiConsent: true, studyStart: '16:00', studyEnd: '21:00', downtimeStart: '21:00', downtimeEnd: '23:00', sampleWeek: true });
+  const [calendarUrl, setCalendarUrl] = useState('');
+  const [f, setF] = useState({ phrase: '', confirmPhrase: '', name: '', grade: 10, interests: [] as string[], goal: '', aiConsent: true, studyStart: '16:00', studyEnd: '21:00', downtimeStart: '21:00', downtimeEnd: '23:00', sampleWeek: true });
   const set = (k: keyof typeof f, v: unknown) => setF(x => ({ ...x, [k]: v }));
-  const finish = async () => { setBusy(true); try { onDone(await api<Student>('/api/students', { body: { ...f, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone } })); } catch (e) { toast((e as Error).message); setBusy(false); } };
-  const next = () => (step === 5 ? finish() : setStep(step + 1));
-  const ok = step !== 2 || f.name.trim().length > 0;
-  const cta = ['Get started', 'Continue', 'Continue', 'Continue', f.goal.trim() ? 'Continue' : 'Skip for now', 'Start my day'][step];
+  const finish = async () => { const { phrase, confirmPhrase, ...profile } = f; setBusy(true); try { const student = await api<SignInResult>('/api/students', { body: { ...profile, credentials: { phrase, confirmPhrase }, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone } }); session.set(student.id); if (calendarUrl.trim()) { try { await api('/api/calendars', { body: { label: 'School calendar', url: calendarUrl.trim() } }); } catch { toast('Your profile is ready. You can finish linking your calendar in You.'); } } setCalendarUrl(''); onDone(student); } catch (e) { toast((e as Error).message); setBusy(false); } };
+  const next = () => (step === 7 ? finish() : setStep(step + 1));
+  const ok = step === 2 ? f.name.trim().length > 0 : step !== 7 || validPhrase(f.phrase, f.confirmPhrase);
+  const cta = ['Get started', 'Continue', 'Continue', 'Continue', f.goal.trim() ? 'Continue' : 'Skip for now', 'Continue', calendarUrl.trim() ? 'Continue' : 'Skip for now', 'Create account and start my day'][step];
   return (
     <div className="ob">
+      {onCancel && <button className="link" disabled={busy} onClick={onCancel}>Back to sign in</button>}
       <div style={{ minHeight: 44, display: 'flex', alignItems: 'center' }}>{step > 0 && <button className="navbtn" onClick={() => setStep(step - 1)}>Back</button>}</div>
       {step === 0 && <div style={{ textAlign: 'center', marginTop: '12vh' }}><div className="orb" /><p className="label">PATHWAY AI</p><h1>Make the most of today.<br />Build a better tomorrow.</h1><p className="sub">A companion for your high school years: find what fits you, keep life simple, and grow.</p></div>}
       {step === 1 && <><h1>Your journey is yours.</h1>
@@ -31,8 +35,10 @@ export default function Onboarding({ onDone }: { onDone: (s: Student) => void })
       {step === 5 && <><h1>Protect your time.</h1><p className="sub">I’ll only suggest study in your window, and never touch your downtime.</p>
         <div className="rows" style={{ marginTop: 22 }}>{([['studyStart', 'Study from'], ['studyEnd', 'Until'], ['downtimeStart', 'Downtime from'], ['downtimeEnd', 'Until']] as const).map(([k, l]) => <div className="frow" key={k}><label htmlFor={k}>{l}</label><input id={k} type="time" value={f[k]} onChange={e => set(k, e.target.value)} /></div>)}</div>
         <label className="card" style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 14 }}><span style={{ flex: 1 }}><b>Explore with a sample week</b><br /><span className="muted small">Pretend classes, clubs and a test, clearly labeled. Scan your real schedule anytime.</span></span><input type="checkbox" className="switch" checked={f.sampleWeek} onChange={e => set('sampleWeek', e.target.checked)} /></label></>}
+      {step === 7 && <><h1>Keep your journey with you</h1><p className="sub">Create a private phrase to open your dashboard on any device.</p><PhraseFields phrase={f.phrase} confirmPhrase={f.confirmPhrase} onChange={set} /></>}
+      {step === 6 && <><h1>Add your calendar?</h1><p className="sub">Optional. Bring classes and dates into Pathway without typing them again.</p><label htmlFor="onboard-calendar">Private iCal link</label><input id="onboard-calendar" className="field" type="password" autoComplete="off" maxLength={4096} value={calendarUrl} onChange={e => setCalendarUrl(e.target.value)} /><CalendarHelp /></>}
       <div className="grow" />
-      <div className="cta"><div className="dots" aria-hidden="true">{[0, 1, 2, 3, 4, 5].map(i => <i key={i} className={i <= step ? 'on' : ''} />)}</div><button className="btn fill lg" disabled={!ok || busy} onClick={next}>{cta}</button></div>
+      <div className="cta"><div className="dots" aria-hidden="true">{[0, 1, 2, 3, 4, 5, 6, 7].map(i => <i key={i} className={i <= step ? 'on' : ''} />)}</div><button className="btn fill lg" disabled={!ok || busy} onClick={next}>{cta}</button></div>
     </div>
   );
 }

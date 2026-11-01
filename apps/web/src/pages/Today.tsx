@@ -1,3 +1,4 @@
+import Week from '../components/Week';
 import { useState } from 'react';
 import { api } from '../lib/api';
 import { Proposal, Student, Tab, Today as TodayData } from '../lib/types';
@@ -55,14 +56,16 @@ export default function Today({ me, go, ask, setMe }: { me: Student; go: (t: Tab
           : <div className="card next"><div className="k"><i /><span className="label">NEXT BEST STEP</span></div><h3>{na.title}</h3><p className="muted">{na.why}</p>
               <div className="acts"><button className="btn fill" onClick={doIt}>Do it</button><button className="btn" onClick={() => { setSnoozed(true); toast('Snoozed until tomorrow'); }}>Later</button><button className="btn" onClick={() => setSheet({ k: 'why' })}>Why this?</button></div></div>}
       </div>
+      {!!d.dueSoon?.length && <section className="sec"><div className="card"><h2>Due soon</h2>{d.dueSoon.map(a => <p key={a.opportunityId}>{a.name} · {a.countdown?.label}<br /><span className="note">{a.deadlineSource}</span></p>)}<button className="btn fill" onClick={() => go('explore')}>Review my applications</button></div></section>}
       <div className="sec"><div className="sec-h"><h2>Your day at a glance</h2><span className="tiny">Tap a ring</span></div><div className="card glance"><div className="rings">{(['focus', 'freeTime', 'progress'] as const).map(k => (
         <button key={k} className="ringbtn" onClick={() => setSheet({ k: 'ring', v: k })} aria-label={`${m[k].label}: ${ringVal(k)}, ${m[k].status}`}>
           <Ring pct={m[k].pct} color={COLORS[k]}>{ringVal(k)}</Ring><span className="n">{m[k].label}</span><span className={`st ${CLS[k]}`}>{m[k].status}</span></button>))}</div></div></div>
+      <Week />
       <div className="sec"><div className="sec-h"><h2>Timeline</h2><button className="link" onClick={() => setSheet({ k: 'scan' })}>Scan schedule</button></div>
         <div className="card" style={{ padding: '8px 14px' }}>{d.timeline.length ? <div className="tl">{d.timeline.map(o => { const flex = !o.recurring && ['study', 'reminder', 'personal'].includes(o.type); return (
           <div key={o.id + o.start} className={`tl-i ${o.done ? 'done' : ''}`}><span className="tm">{o.end > o.start ? fmtTime(o.start) : 'Due'}</span><span className="dot" style={{ background: o.clash ? 'var(--rose)' : 'var(--peri)' }} />
-            <div><div className="tt">{EMO[o.type]} {o.title}</div><div className="tg">{o.clash && <span className="c-rose">Overlaps another event · </span>}{SOURCE_TAG[o.source] || 'You added'}</div></div>
-            {flex ? <button className={`chk ${o.done ? 'on' : ''}`} onClick={() => toggleDone(o.id, o.done)} aria-label={o.done ? 'Mark not done' : 'Mark done'}>{o.done ? '✓' : ''}</button> : <span />}</div>); })}</div>
+            <div><div className="tt">{EMO[o.type]} {o.title}</div><div className="tg">{o.clash && <span className="c-rose">Overlaps another event · </span>}{SOURCE_TAG[o.source] || (o.source.startsWith('From ') ? o.source + ' · read-only' : 'You added')}</div></div>
+            {flex && !o.readOnly ? <button className={`chk ${o.done ? 'on' : ''}`} onClick={() => toggleDone(o.id, o.done)} aria-label={o.done ? 'Mark not done' : 'Mark done'}>{o.done ? '✓' : ''}</button> : <span />}</div>); })}</div>
           : <p className="muted small" style={{ padding: 4 }}>Nothing scheduled today.</p>}</div></div>
       {d.comingUp.length > 0 && <div className="sec"><div className="sec-h"><h2>Coming up</h2></div><div className="rows">{d.comingUp.map(o => <div className="r" key={o.id + o.start}><span className="emo">{EMO[o.type]}</span><span className="b"><span className="t">{o.title}</span><span className="s" style={{ display: 'block' }}>{fmtDay(o.start)}</span></span></div>)}</div></div>}
 

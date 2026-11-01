@@ -1,31 +1,42 @@
+import { Prisma } from '@prisma/client';
+import { Credentials, newCredentials, credentialHash, throttleLogin, startSession, endSession } from '../lib/accounts.js';
+import { HttpError } from '../lib/errors.js';
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { prisma, j } from '../lib/db.js';
 import { requireStudent } from '../lib/auth.js';
 import { accessCode } from '../lib/access.js';
+import { calendarView } from '../lib/calendars.js';
 import { audit } from '../lib/audit.js';
 import { sampleWeek } from '../lib/sample.js';
 
 const hhmm = z.string().regex(/^\d{2}:\d{2}$/);
-const Onboard = z.object({ name: z.string().min(1).max(60), grade: z.number().int().min(9).max(12), interests: z.array(z.string()).max(20).default([]), goal: z.string().max(140).optional(),
-  aiConsent: z.boolean().default(true), timezone: z.string().default('America/New_York'), studyStart: hhmm.default('16:00'), studyEnd: hhmm.default('21:00'), downtimeStart: hhmm.default('21:00'), downtimeEnd: hhmm.default('23:00'), sampleWeek: z.boolean().default(false) });
+const Onboard = z.object({ credentials: Credentials.optional(), name: z.string().min(1).max(60), grade: z.number().int().min(9).max(12), interests: z.array(z.string()).max(20).default([]), goal: z.string().max(140).optional(),
+  aiConsent: z.boolean().default(true), timezone: z.string().refine(zone => { try { new Intl.DateTimeFormat('en', { timeZone: zone }); return true; } catch { return false; } }, 'Choose a valid timezone').default('America/New_York'), studyStart: hhmm.default('16:00'), studyEnd: hhmm.default('21:00'), downtimeStart: hhmm.default('21:00'), downtimeEnd: hhmm.default('23:00'), sampleWeek: z.boolean().default(false) });
 const Patch = z.object({ name: z.string().min(1).max(60), grade: z.number().int().min(9).max(12), interests: z.array(z.string()), skills: z.array(z.string()), location: z.string().max(80), aiConsent: z.boolean(), budget: z.enum(['free', 'any']), format: z.enum(['virtual', 'any']),
   settings: z.object({ voice: z.boolean(), showWord: z.boolean(), showNews: z.boolean(), theme: z.enum(['dusk', 'dark', 'light', 'auto']), newsTopics: z.array(z.string()).max(7).nullable() }).partial(), availability: z.object({ studyStart: hhmm, studyEnd: hhmm, maxStudyMin: z.number().int().min(30).max(360), downtimeStart: hhmm, downtimeEnd: hhmm }).partial() }).partial();
 
 export function serializeStudent(s: any) {
-  return { id: s.id, name: s.name, grade: s.grade, timezone: s.timezone, location: s.location, interests: j(s.interests, []), skills: j(s.skills, []), aiConsent: s.aiConsent, budget: s.budget, format: s.format, settings: { voice: false, showWord: true, showNews: true, theme: 'dusk', newsTopics: null, ...j(s.settings, {}) }, provenance: j(s.provenance, {}), availability: s.availability, createdAt: s.createdAt };
+  return { id: s.id, hasSignIn: !!s.signInHash, name: s.name, grade: s.grade, timezone: s.timezone, location: s.location, interests: j(s.interests, []), skills: j(s.skills, []), aiConsent: s.aiConsent, budget: s.budget, format: s.format, settings: { voice: false, showWord: true, showNews: true, theme: 'dusk', newsTopics: null, ...j(s.settings, {}) }, provenance: j(s.provenance, {}), availability: s.availability, createdAt: s.createdAt };
 }
 
 export default async function routes(app: FastifyInstance) {
   app.post('/api/students', async (req, reply) => {
     const b = Onboard.parse(req.body), at = new Date().toISOString(), src = 'You told me during setup';
-    const s = await prisma.student.create({ data: { accessCode: accessCode(req), name: b.name, grade: b.grade, timezone: b.timezone, interests: JSON.stringify(b.interests), aiConsent: b.aiConsent,
+    if (process.env.NODE_ENV === 'production' && !b.credentials) throw new HttpError(422, 'Choose a private sign-in phrase to save your profile.');
+    if (b.credentials) await throttleLogin(req.ip, credentialHash(b.credentials.phrase));
+    const setup = b.credentials ? newCredentials(b.credentials.phrase) : null;
+    const s = await prisma.student.create({ data: { signInHash: setup?.signInHash, recoveryHash: setup?.recoveryHash, accessCode: accessCode(req), name: b.name, grade: b.grade, timezone: b.timezone, interests: JSON.stringify(b.interests), aiConsent: b.aiConsent,
       provenance: JSON.stringify({ grade: { src, at }, interests: { src, at }, availability: { src, at } }),
-      availability: { create: { studyStart: b.studyStart, studyEnd: b.studyEnd, downtimeStart: b.downtimeStart, downtimeEnd: b.downtimeEnd } } }, include: { availability: true } });
+      availability: { create: { studyStart: b.studyStart, studyEnd: b.studyEnd, downtimeStart: b.downtimeStart, downtimeEnd: b.downtimeEnd } } }, include: { availability: true } }).catch(e => {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') throw new HttpError(409, 'That phrase is already in use. Choose a different private phrase.');
+      throw e;
+    });
+    if (b.credentials) await startSession(s.id, reply);
     if (b.goal?.trim()) await prisma.goal.create({ data: { studentId: s.id, title: b.goal.trim(), priority: 'high' } });
     if (b.sampleWeek) await prisma.event.createMany({ data: sampleWeek(s.id) });
     await audit(s.id, 'student', 'Finished setup');
-    return reply.code(201).send(serializeStudent(s));
+    return reply.code(201).send({ ...serializeStudent(s), ...(setup ? { recoveryCode: setup.recoveryCode } : {}) });
   });
 
   app.get('/api/me', async req => serializeStudent(await requireStudent(req)));
@@ -48,11 +59,14 @@ export default async function routes(app: FastifyInstance) {
     const [events, goals, portfolio, saved, proposals, audits] = await Promise.all([prisma.event.findMany({ where: { studentId: s.id } }), prisma.goal.findMany({ where: { studentId: s.id }, include: { milestones: true } }),
       prisma.portfolioEntry.findMany({ where: { studentId: s.id } }), prisma.savedOpportunity.findMany({ where: { studentId: s.id } }), prisma.agentAction.findMany({ where: { studentId: s.id } }), prisma.auditEvent.findMany({ where: { studentId: s.id } })]);
     await audit(s.id, 'student', 'Exported all data');
-    return { exportedAt: new Date().toISOString(), profile: { ...serializeStudent(s), accessCode: s.accessCode }, events, goals, portfolio, saved, proposals, activity: audits };
+    const calendars = (await prisma.calendarLink.findMany({ where: { studentId: s.id } })).map(calendarView);
+    const notifications = await prisma.notificationSettings.findUnique({ where: { studentId: s.id } });
+    const nudgeHistory = await prisma.nudgeDelivery.findMany({ where: { studentId: s.id } });
+    return { notifications, nudgeHistory, calendars, exportedAt: new Date().toISOString(), profile: { ...serializeStudent(s), accessCode: s.accessCode }, events, goals, portfolio, saved, proposals, activity: audits };
   });
 
   app.delete('/api/me', async (req, reply) => { const s = await requireStudent(req); await prisma.$transaction([
     prisma.aIUsage.deleteMany({ where: { key: { startsWith: 'day:', endsWith: `:${s.id}` } } }),
     prisma.student.delete({ where: { id: s.id } })
-  ]); return reply.code(204).send(); });
+  ]); await endSession(req, reply); return reply.code(204).send(); });
 }

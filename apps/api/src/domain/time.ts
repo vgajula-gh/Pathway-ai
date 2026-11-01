@@ -13,3 +13,10 @@ export const addDays = (d: Date, n: number) => { const x = new Date(d); x.setDat
 export const sod = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
 export const minOf = (t: string) => { const [h, m] = String(t || '0:0').split(':').map(Number); return (h || 0) * 60 + (m || 0); };
 export const mondayOf = (d: Date) => addDays(sod(d), -((d.getDay() + 6) % 7));
+
+/** Wall-clock representation for deterministic existing engine helpers. */
+export function wallNow(timezone: string, instant = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(instant);
+  const get = (k: string) => Number(parts.find(p => p.type === k)?.value);
+  return new Date(get('year'), get('month') - 1, get('day'), get('hour'), get('minute'));
+}
