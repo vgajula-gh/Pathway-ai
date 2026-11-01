@@ -8,11 +8,9 @@ You need a GitHub account, a Replit account with publishing enabled, and optiona
 2. In Replit, choose **Create App → Import from GitHub** (the labels may vary).
 3. Paste your Pathway AI GitHub repository URL and import the `main` branch.
 
-## 2. Add PostgreSQL
+## 2. Use Replit-managed PostgreSQL
 
-1. Open Replit's **Database** tool and create a PostgreSQL database.
-2. Copy its connection URL. It begins with `postgres://` or `postgresql://`.
-3. Make sure the published app has access to this same database. Use Replit's production database option if offered, and use its production URL in deployment Secrets.
+Replit provides separate development and production PostgreSQL databases. Do not copy a development connection URL into production secrets. In the Replit workspace, run `npm run db:sync:replit` to apply the app's Prisma schema to the development database. During Publish, enable **Create production database** so Replit creates the production database and supplies its own `DATABASE_URL`.
 
 ## 3. Add Secrets
 
@@ -20,7 +18,6 @@ Open **Secrets** (the padlock), and add the following. Also check them in the pu
 
 | Name | Value |
 | --- | --- |
-| `DATABASE_URL` | The PostgreSQL connection URL from step 2, including any SSL options. |
 | `ACCESS_CODES` | Different long random codes separated by commas, for example `random-code-for-tester-one,random-code-for-tester-two`. Replace these examples. Codes are case-sensitive; do not include commas within a code. |
 | `AI_DAILY_LIMIT` | `20` requests per student per day, or another non-negative whole number. |
 | `AI_MONTHLY_LIMIT` | `1000` requests total per month, or your chosen non-negative whole number. Set `0` to stop all new AI requests. |
@@ -39,15 +36,15 @@ Limits count accepted AI feature requests (Buddy, schedule scan, coach, and Toda
 1. Open **Publish** / **Deployments**, and choose an Autoscale web deployment.
 2. The repository's `.replit` sets the build command to `npm ci --include=dev && npm run build` and the run command to `npm start`. Keep these settings.
 3. Replit supplies `PORT`; the API listens on `0.0.0.0` and serves both the website and `/api` on that port. If configuring a port manually, use `8787` (the default).
-4. Publish and wait for the build and startup to finish. Startup automatically runs versioned Prisma PostgreSQL migrations before accepting traffic. The existing sample opportunity and sourced news catalogues are inserted if missing, without overwriting existing records; no demo students are created. No manual database commands or seed are required. Never use `db:setup` on the production database.
+4. Ensure **Create production database** is enabled, then publish. Replit applies the development-to-production schema diff during Publish. The app inserts its sample opportunity and news catalogues at startup if missing; no demo students are created. Never run `db:setup` or `db:sync:replit` against production.
 5. Open the published URL. Check that a wrong code is rejected, enter a valid code, finish setup, then open Today and You. Check Send feedback if configured. Share the URL and each tester's own code privately.
 
-For an update, import/pull the latest `main` and republish. Back up the database before schema upgrades. Do not delete migration files. On startup failures, inspect deployment logs: confirm the database URL, database availability, and non-empty access codes. A database migration failure stops startup rather than serving a broken schema.
+For an update, import/pull the latest `main` and republish. Replit applies schema changes during Publish. On startup failures, inspect deployment logs and confirm the production database was created and access codes are configured. A missing or unreachable production database prevents startup.
 
 ## Local development and Codespaces
 
 Keep `.env` with `DATABASE_URL="file:./dev.db"`. Run `npm install`, `npm run db:setup`, and `npm run dev`. `db:setup` uses the SQLite schema and generates the matching Prisma client. Codespaces keeps this workflow. Leave `ACCESS_CODES` empty to skip the gate locally, or set codes to test it. After running a production build locally, run `npm run db:push --workspace apps/api` to regenerate the SQLite client before local development/tests.
 
-`npm run build` generates the PostgreSQL Prisma client and builds the API and web app. `npm start` requires PostgreSQL and access codes, runs migrations, and serves the production build without a `.env` file. Its environment comes from Replit Secrets. The SQLite schema is the data-model source; the build derives the PostgreSQL schema from it. Future model changes must include a new PostgreSQL migration.
+`npm run build` generates the PostgreSQL Prisma client and builds the API and web app. `npm start` requires PostgreSQL and access codes, then serves the production build without a `.env` file. Replit supplies the production database URL and applies schema changes during Publish. The SQLite schema is the data-model source; the build derives the PostgreSQL schema from it. Future model changes must be synced to the Replit development database with `npm run db:sync:replit` before publishing.
 
 Existing local SQLite profiles are not copied to PostgreSQL automatically. The pilot database starts empty. Returning testers use their original code and browser profile; removing a code revokes its API access. Browser sessions retain the access code only for that tab's session. This pilot gate retains the existing browser-stored student ID and is not a substitute for production account authentication.

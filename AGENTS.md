@@ -4,7 +4,7 @@ You are building **Pathway AI**, an AI companion for high school students. Read 
 
 ## Commands
 - Install: `npm install`
-- DB: `npm run db:setup` (Prisma push + seed). After schema edits: `npm run db:push --workspace apps/api`
+- DB: `npm run db:setup` (local SQLite push + seed). After schema edits, use `npm run db:push --workspace apps/api` locally and `npm run db:sync:replit` in the Replit workspace for the development PostgreSQL schema. Replit Publish applies the production schema diff.
 - Dev: `npm run dev` · API only: `npm run dev:api` · Web only: `npm run dev:web`
 - Tests: `npm test` (must pass before you finish a task)
 - Types: `npm run typecheck`

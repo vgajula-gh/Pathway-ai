@@ -12,6 +12,7 @@
     "dev:api": "npm run dev --workspace apps/api",
     "dev:web": "npm run dev --workspace apps/web",
     "db:setup": "npm run db:push --workspace apps/api && npm run db:seed --workspace apps/api",
+    "db:sync:replit": "node scripts/sync-replit-development-schema.mjs",
     "test": "npm run test --workspace apps/api",
     "typecheck": "npm run typecheck --workspace apps/api && npm run typecheck --workspace apps/web",
     "build": "node scripts/prisma-production.mjs && npm run build --workspace apps/api && npm run build --workspace apps/web",

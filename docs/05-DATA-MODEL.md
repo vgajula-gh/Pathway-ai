@@ -25,4 +25,4 @@ Source of truth: `apps/api/prisma/schema.prisma`.
 - Never store: exact home address, health data, sensitive inferences. Location stays broad.
 
 ## Switching to Postgres
-1. `docker compose up -d` 2. `DATABASE_URL=postgresql://pathway:pathway@localhost:5432/pathway` 3. set `provider = "postgresql"` 4. `npm run db:setup`. For production use `prisma migrate` instead of `db push`.
+Local development stays on SQLite. The build derives a PostgreSQL Prisma schema from `apps/api/prisma/schema.prisma`. In the Replit workspace, `npm run db:sync:replit` applies that schema to the development PostgreSQL database; Replit Publish applies the development-to-production schema diff. The application must not run schema migrations against Replit's production database at startup.

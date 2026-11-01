@@ -4,7 +4,6 @@ if (!/^postgres(?:ql)?:\/\//.test(process.env.DATABASE_URL || '')) throw new Err
 if (!(process.env.ACCESS_CODES || '').split(',').some(code => code.trim())) throw new Error('Set ACCESS_CODES before starting production.');
 process.env.NODE_ENV = 'production';
 prisma(['generate', '--schema', schema]);
-prisma(['migrate', 'deploy', '--schema', schema]);
 const child = spawn(process.execPath, ['apps/api/dist/index.js'], { cwd: root, stdio: 'inherit', env: process.env });
 for (const signal of ['SIGTERM', 'SIGINT']) process.on(signal, () => child.kill(signal));
 child.on('exit', code => process.exit(code ?? 1));

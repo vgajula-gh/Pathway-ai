@@ -27,7 +27,8 @@ The web app uses its own address for `/api`; Vite proxies development requests
 to the API, so only port 5173 needs forwarding. Leave `VITE_API_URL=` empty in
 `.env` (clear the old localhost value if upgrading). For Replit publishing,
 follow [DEPLOY-REPLIT.md](DEPLOY-REPLIT.md): `npm run build` builds both apps,
-and `npm start` migrates PostgreSQL and serves the API and website on one port.
+and `npm start` serves the API and website on one port. Replit Publish manages
+the production PostgreSQL schema.
 
 Setup preserves existing `.env` and demo profile changes. Without an AI key,
 deterministic features work automatically; configure a provider in `.env` only
