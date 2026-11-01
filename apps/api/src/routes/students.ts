@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { prisma, j } from '../lib/db.js';
 import { requireStudent } from '../lib/auth.js';
+import { accessCode } from '../lib/access.js';
 import { audit } from '../lib/audit.js';
 import { sampleWeek } from '../lib/sample.js';
 
@@ -18,7 +19,7 @@ export function serializeStudent(s: any) {
 export default async function routes(app: FastifyInstance) {
   app.post('/api/students', async (req, reply) => {
     const b = Onboard.parse(req.body), at = new Date().toISOString(), src = 'You told me during setup';
-    const s = await prisma.student.create({ data: { name: b.name, grade: b.grade, timezone: b.timezone, interests: JSON.stringify(b.interests), aiConsent: b.aiConsent,
+    const s = await prisma.student.create({ data: { accessCode: accessCode(req), name: b.name, grade: b.grade, timezone: b.timezone, interests: JSON.stringify(b.interests), aiConsent: b.aiConsent,
       provenance: JSON.stringify({ grade: { src, at }, interests: { src, at }, availability: { src, at } }),
       availability: { create: { studyStart: b.studyStart, studyEnd: b.studyEnd, downtimeStart: b.downtimeStart, downtimeEnd: b.downtimeEnd } } }, include: { availability: true } });
     if (b.goal?.trim()) await prisma.goal.create({ data: { studentId: s.id, title: b.goal.trim(), priority: 'high' } });
@@ -47,8 +48,11 @@ export default async function routes(app: FastifyInstance) {
     const [events, goals, portfolio, saved, proposals, audits] = await Promise.all([prisma.event.findMany({ where: { studentId: s.id } }), prisma.goal.findMany({ where: { studentId: s.id }, include: { milestones: true } }),
       prisma.portfolioEntry.findMany({ where: { studentId: s.id } }), prisma.savedOpportunity.findMany({ where: { studentId: s.id } }), prisma.agentAction.findMany({ where: { studentId: s.id } }), prisma.auditEvent.findMany({ where: { studentId: s.id } })]);
     await audit(s.id, 'student', 'Exported all data');
-    return { exportedAt: new Date().toISOString(), profile: serializeStudent(s), events, goals, portfolio, saved, proposals, activity: audits };
+    return { exportedAt: new Date().toISOString(), profile: { ...serializeStudent(s), accessCode: s.accessCode }, events, goals, portfolio, saved, proposals, activity: audits };
   });
 
-  app.delete('/api/me', async (req, reply) => { const s = await requireStudent(req); await prisma.student.delete({ where: { id: s.id } }); return reply.code(204).send(); });
+  app.delete('/api/me', async (req, reply) => { const s = await requireStudent(req); await prisma.$transaction([
+    prisma.aIUsage.deleteMany({ where: { key: { startsWith: 'day:', endsWith: `:${s.id}` } } }),
+    prisma.student.delete({ where: { id: s.id } })
+  ]); return reply.code(204).send(); });
 }

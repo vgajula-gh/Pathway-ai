@@ -70,7 +70,11 @@ Tool definitions are written once (JSON Schema) and translated by each adapter. 
 5. `VERIFIED` with result + created ids, or `FAILED` with rollback note. Both audited.
 6. Proposals expire after 48h (`EXPIRED`).
 
-## Production path *(proposed)*
+## Replit pilot deployment
+
+The current pilot uses one Fastify server to serve the compiled React app and `/api` on `PORT`, binding `0.0.0.0`. Production generates a PostgreSQL Prisma client and runs versioned migrations at startup; SQLite remains the local/Codespaces default. Access codes gate API use and are bound to each student at onboarding. Persistent daily student and shared monthly AI quotas are enforced before provider calls. See `DEPLOY-REPLIT.md` for publishing and `docs/06-API.md` for the API contract.
+
+## Longer-term production path *(proposed)*
 - **Auth:** Clerk / Auth.js / Supabase Auth; age gate; verified parental consent flows where required.
 - **Hosting:** API on Fly.io / Render / Railway; web on Vercel / Netlify; managed Postgres (Neon / Supabase / RDS).
 - **Storage:** object storage for attachments (S3/R2) with signed URLs; don't persist schedule photos after extraction unless the student opts in.

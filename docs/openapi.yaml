@@ -2,10 +2,11 @@ openapi: 3.1.0
 info:
   title: Pathway AI API
   version: 0.1.0
-  description: Student-success companion API. Dev auth uses the x-student-id header; replace before launch.
+  description: Student-success companion API. Pilot access uses x-access-code plus the existing x-student-id header. AI feature requests can return 429 with a friendly error when daily or shared monthly caps are reached.
 servers: [{ url: http://localhost:8787 }]
 components:
   securitySchemes:
+    accessCode: { type: apiKey, in: header, name: x-access-code }
     devStudent: { type: apiKey, in: header, name: x-student-id }
   schemas:
     StudentSettings:
@@ -63,11 +64,31 @@ components:
             fit: { enum: [strong, good, look] }
             why: { type: string }
             factors: { type: array, items: { $ref: '#/components/schemas/Factor' } }
-security: [{ devStudent: [] }]
+security: [{ devStudent: [], accessCode: [] }]
 paths:
-  /api/students:
+  /api/config:
+    get:
+      security: []
+      responses:
+        '200': { description: 'Public runtime config: accessRequired boolean and feedbackUrl string or null; no access codes' }
+  /api/access:
     post:
       security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code: { type: string, minLength: 1, maxLength: 256 }
+      responses:
+        '200': { description: Code accepted; send x-access-code on subsequent API requests }
+        '401': { description: Invalid or revoked code }
+  /api/students:
+    post:
+      security: [{ accessCode: [] }]
       summary: Onboard a student
       requestBody: { required: true, content: { application/json: { schema: { type: object, required: [name, grade], properties: { name: { type: string }, grade: { type: integer, minimum: 9, maximum: 12 }, interests: { type: array, items: { type: string } }, goal: { type: string }, aiConsent: { type: boolean }, timezone: { type: string }, studyStart: { type: string }, studyEnd: { type: string }, downtimeStart: { type: string }, downtimeEnd: { type: string }, sampleWeek: { type: boolean } } } } } }
       responses: { '201': { description: Created } }

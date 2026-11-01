@@ -1,6 +1,6 @@
 # 06 · API Reference (v0)
 
-Base URL `http://localhost:8787`. JSON in/out. Auth (dev): header `x-student-id`. Errors: `{ error, details? }` with 401/403/404/409/415/422/502/503.
+Base URL `http://localhost:8787`. JSON in/out. Auth (dev): header `x-student-id`. Errors: `{ error, details? }` with 401/403/404/409/415/422/429/502/503.
 
 | Method | Path | Purpose |
 |---|---|---|
@@ -36,3 +36,15 @@ Base URL `http://localhost:8787`. JSON in/out. Auth (dev): header `x-student-id`
 Full schema: `docs/openapi.yaml`.
 
 `GET /api/health` returns `{ok, aiEnabled, provider}`. `provider` is `anthropic`, `openai`, `ollama`, or `null` when disabled. `aiEnabled` means configured, not a live provider readiness check; student AI consent is still required for AI requests.
+
+## Replit pilot access and AI caps
+
+All `/api/*` routes except config, access validation, and health require `x-access-code` when `ACCESS_CODES` is configured (always required in production). Codes are comma-separated, trimmed, case-sensitive secrets; invalid or revoked codes return 401. Student routes still require `x-student-id` and the same code recorded at onboarding. This pilot gate is not individual account authentication.
+
+- `GET /api/config` (public): `{accessRequired, feedbackUrl}`; never exposes allowed codes.
+- `POST /api/access` (public): `{code}` → `{ok:true}` or 401. The client stores the accepted code in sessionStorage and sends it with subsequent requests, including downloads.
+- Student setup records `Student.accessCode`. It is excluded from profile responses and included only in the student's full data export.
+- Buddy messages, extract, coach, and Today insight reserve one AI request before invoking a configured provider. Consent and AI-disabled behavior remain unchanged. `AI_DAILY_LIMIT` defaults to 20 per student per UTC day; `AI_MONTHLY_LIMIT` defaults to 1000 shared requests per UTC month. Both accept non-negative integers, including zero.
+- A reached cap returns 429 with friendly `{error}` copy. Failed provider calls count; internal tool rounds/retries do not add feature requests. Transactional persistent counters prevent concurrent overspending. Other routes remain available. Deleting a profile removes its daily counters; anonymous monthly totals remain.
+
+Production serves the built website and API from one origin/port; see `DEPLOY-REPLIT.md`.

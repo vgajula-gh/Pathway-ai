@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, session } from './lib/api';
+import { api, session, access } from './lib/api';
 import { Student, Tab } from './lib/types';
 import { THEMES, Theme, applyTheme, nextTheme } from './lib/theme';
 import { toast } from './components/ui';
@@ -12,7 +12,25 @@ import You from './pages/You';
 
 const TABS: [Tab, string][] = [['today', 'Today'], ['explore', 'Explore'], ['buddy', 'Buddy'], ['grow', 'Grow'], ['you', 'You']];
 
-export default function App() {
+export default function AccessGate() {
+  const [ready, setReady] = useState(false), [required, setRequired] = useState(false);
+  const [code, setCode] = useState(''), [error, setError] = useState('');
+  useEffect(() => { api<{ accessRequired: boolean }>('/api/config').then(async config => {
+    if (!config.accessRequired) { setReady(true); return; }
+    if (access.get()) {
+      try { await api('/api/access', { body: { code: access.get() } }); setReady(true); return; } catch { /* Ask again if revoked. */ }
+    }
+    setRequired(true);
+  }).catch(() => setError('Could not open Pathway. Refresh to try again.')); }, []);
+  if (ready) return <App />;
+  return <main className="splash"><form onSubmit={async e => {
+    e.preventDefault(); setError('');
+    try { const clean = code.trim(); await api('/api/access', { body: { code: clean } }); access.set(clean); setReady(true); }
+    catch (e) { setError((e as Error).message); }
+  }}><h1>Welcome to Pathway</h1>{required && <><p>Enter your access code to get started.</p><label htmlFor="access-code">Access code</label><input id="access-code" type="password" autoComplete="off" value={code} onChange={e => setCode(e.target.value)} required maxLength={256} /><button type="submit" className="btn">Continue</button></>}{error && <p role="alert">{error}</p>}</form></main>;
+}
+
+function App() {
   const [me, setMe] = useState<Student | null | undefined>(undefined);
   const [tab, setTab] = useState<Tab>('today');
   const [buddySeed, setBuddySeed] = useState<string | null>(null);
