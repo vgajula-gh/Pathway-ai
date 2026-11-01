@@ -41,3 +41,12 @@ it('accepts a broad region and rejects arbitrary addresses',async()=>{
  expect((await app.inject({method:'PATCH',url:'/api/me',headers:headers(),payload:{region:'123 Main Street'}})).statusCode).toBe(422);
  }finally{await app.close();}
 });
+it('discovers for shared groups, targets short buckets and deduplicates official programs',async()=>{
+ const {discover}=await import('../src/discovery/pipeline.js');const {RunBudget}=await import('../src/discovery/config.js');const {Extraction}=await import('../src/discovery/extraction.js');
+ const sourceUrl='https://example.edu/robotics',text='Example Robotics is organized by Example. Grades 9–12. Participation is free.';
+ const data=Extraction.parse({...Object.fromEntries(Object.keys(Extraction.shape).map(k=>[k,null])),name:'Example Robotics',organizer:'Example',gradeMin:9,gradeMax:12,costType:'free',evidence:Object.fromEntries(['name','organizer','gradeMin','gradeMax','costType'].map(k=>[k,{sourceUrl,quote:k==='costType'?'Participation is free.':text}]))});
+ const search=vi.fn().mockResolvedValue({urls:[sourceUrl,sourceUrl],tokens:20}),fetch=vi.fn().mockResolvedValue({sourceUrl,text,pageTitle:'Program',contentHash:'h',checkedAt:new Date(),links:[]}),extract=vi.fn().mockResolvedValue(data);
+ const group={key:'robotics|9-10|NC',topic:'robotics',gradeBand:'9-10',region:'NC'};
+ const ids=await discover(group,['free'],new RunBudget(),{search:{search},fetch,extract});await discover(group,['free'],new RunBudget(),{search:{search},fetch,extract});
+ expect(ids).toHaveLength(1);expect(await db.opportunity.count({where:{name:'Example Robotics'}})).toBe(1);expect(await db.sourcePage.count()).toBe(1);expect(search.mock.calls[0][0]).toContain('free no participation fee');expect(search.mock.calls[0][0]).not.toContain('Private student');
+});

@@ -117,6 +117,7 @@ model Opportunity {
   source          String @default("seed")
   evidence        String @default("{}")
   requirements    String @default("[]")
+  pages           SourcePage[]
   picks           StudentPick[]
 }
 
@@ -338,4 +339,26 @@ model LoginAttempt {
   count Int @default(0)
   expiresAt DateTime
   @@index([expiresAt])
+}
+
+model SourcePage {
+  id String @id @default(cuid())
+  opportunityId String
+  opportunity Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  sourceUrl String
+  pageTitle String
+  text String
+  contentHash String
+  checkedAt DateTime @default(now())
+  @@unique([opportunityId, sourceUrl])
+}
+
+model DiscoveryGroup {
+  key String @id
+  topic String
+  gradeBand String
+  region String
+  lastDiscoveredAt DateTime?
+  status String @default("idle")
+  error String @default("")
 }
