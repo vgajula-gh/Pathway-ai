@@ -12,6 +12,7 @@ export function actionLine(a: Action): [string, string, string] {
     case 'remove_event': return ['🗑️', 'Remove an event', ''];
     case 'add_goal': return ['🎯', a.title || '', 'New goal'];
     case 'add_milestone': return ['◦', a.title || '', `${a.effortMin} min${a.targetDate ? ' · by ' + fmtDay(a.targetDate) : ''}`];
+    case 'add_application_requirements': return ['☑', `Add ${a.checklist?.length || 0} official checklist steps`, `${a.checklist?.map(c=>c.title).join(' · ') || ''}${a.deadline ? ` · Deadline ${a.deadline}` : ''}`];
     case 'save_opportunity': return ['⭐', 'Save opportunity', ''];
     case 'add_portfolio_entry': return ['🏅', a.title || '', 'Add to portfolio'];
     default: return ['•', a.type, ''];

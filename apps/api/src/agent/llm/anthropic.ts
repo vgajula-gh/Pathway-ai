@@ -2,8 +2,8 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { LLM, RunToolsOptions, ImageInput, parseJSON } from './types.js';
 
-export function anthropicLLM(apiKey: string, model: string): LLM {
-  const c = new Anthropic({ apiKey });
+export function anthropicLLM(apiKey: string, model: string, options: {maxRetries?:number;timeout?:number} = {}): LLM {
+  const c = new Anthropic({ apiKey, ...options });
   const textOf = (r: Anthropic.Message) => r.content.filter(b => b.type === 'text').map(b => (b as Anthropic.TextBlock).text).join('');
   return {
     provider: 'anthropic',

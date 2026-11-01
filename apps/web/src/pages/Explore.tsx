@@ -6,9 +6,9 @@ import { CEMO, FIT_LABEL } from '../lib/format';
 import { Sheet, Typing, toast, useLoad } from '../components/ui';
 import ProposalReview from '../components/ProposalReview';
 
-type List = { picks: Opportunity[]; recommended: Opportunity[]; excluded: { id: string; name: string; reasons: string[] }[]; dismissed: number; sampleData: boolean };
+type List = { discoveryEnabled: boolean; picks: Opportunity[]; recommended: Opportunity[]; excluded: { id: string; name: string; reasons: string[] }[]; dismissed: number; sampleData: boolean };
 
-export default function Explore({ me, ask }: { me: Student; ask: (t: string) => void }) {
+export default function Explore({ me, ask }: { me: Student; ask: (t: string, opportunityId?: string) => void }) {
   const { data, reload } = useLoad(() => api<List>('/api/opportunities'), []);
   const [dismiss, setDismiss] = useState<Opportunity | null>(null);
   const [open, setOpen] = useState<Opportunity | null>(null), [review, setReview] = useState<Proposal | null>(null), [cmp, setCmp] = useState<string[]>([]), [showCmp, setShowCmp] = useState(false);
@@ -22,6 +22,7 @@ export default function Explore({ me, ask }: { me: Student; ask: (t: string) => 
       <div className="top"><p className="date">Discover · Opportunities</p></div>
       <h1 className="display">Picked for you</h1>
       <p className="muted" style={{ marginTop: 8 }}>Checked against your grade, time and interests, with the reasons shown.</p>
+      {!data.discoveryEnabled && <p className="note">Showing catalog picks. Live discovery and program questions are not available right now.</p>}
       <div className="sec" style={{ marginTop: 18 }}>{(['free', 'paid'] as const).map(bucket => <details key={bucket} className="fold" open={bucket === 'free' || me.budget !== 'free'}><summary>{bucket === 'free' ? 'Free' : me.budget === 'free' ? 'Show paid options' : 'Paid'} ({data.picks.filter(o=>o.bucket===bucket).length})</summary>{!data.picks.some(o=>o.bucket===bucket) && <p className="note">No suitable {bucket} options in the catalog yet. We’ll show them here when available.</p>}{data.picks.filter(o=>o.bucket===bucket).map(o => (
         <div className="opp" key={o.id}>
           <button className="main" onClick={() => setOpen(o)}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><span className="emo">{CEMO[o.category] || '✨'}</span><span className={`fit ${o.fit.fit}`}>{FIT_LABEL[o.fit.fit!]}</span></div>
@@ -29,7 +30,7 @@ export default function Explore({ me, ask }: { me: Student; ask: (t: string) => 
             <div className="factors">{o.fit.factors!.slice(0, 5).map(f => <span key={f.key} className="factor"><i className={`f-${f.state}`} />{f.key}</span>)}</div></button>
           <div className="foot"><button aria-pressed={!!o.status && o.status !== 'dismissed'} onClick={() => status(o.id, !!o.status && o.status !== 'dismissed' ? 'none' : 'saved')}>Interested</button>
             <button aria-pressed={cmp.includes(o.id)} onClick={() => setCmp(c => c.includes(o.id) ? c.filter(x => x !== o.id) : [...c, o.id].slice(-3))}>{cmp.includes(o.id) ? 'Comparing' : 'Compare'}</button>
-            <button onClick={() => setDismiss(o)}>Not for me</button></div></div>))}</details>)}</div>
+            <button onClick={() => setDismiss(o)}>Not for me</button>{o.canAsk && <button onClick={()=>ask(`What should I know about ${o.name}?`,o.id)}>Ask about this program</button>}</div></div>))}</details>)}</div>
       {data.excluded.length > 0 && <details className="fold" style={{ marginTop: 14 }}><summary>Not a fit right now ({data.excluded.length})</summary><div className="rows">{data.excluded.map(x => <div className="r" key={x.id}><span className="b"><span className="t">{x.name}</span><span className="s" style={{ display: 'block' }}>{x.reasons.join('; ')}</span></span></div>)}</div></details>}
       {data.sampleData && <p className="note">Sample data: a curated starter set, not verified for this year. Confirm dates and deadlines on each official site.</p>}
       {cmp.length >= 2 && <div className="cmpbar"><button className="btn fill" onClick={() => setShowCmp(true)}>Compare {cmp.length}</button></div>}

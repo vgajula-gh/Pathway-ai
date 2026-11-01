@@ -1,4 +1,5 @@
 // Tool-use loop for Buddy. See docs/07-AGENT-AND-TOOLS.md.
+import { runProgramBuddy } from '../knowledge/buddy.js';
 import { requireLLM, ChatTurn } from './llm/index.js';
 import { BUDDY_SYSTEM } from './prompts.js';
 import { TOOLS, ToolEvent } from './tools.js';
@@ -8,7 +9,9 @@ import { ZodError } from 'zod';
 
 const MAX_ROUNDS = 6;
 
-export async function runBuddy(studentId: string, userText: string, conversationId?: string) {
+export async function runBuddy(studentId: string, userText: string, conversationId?: string, opportunityId?: string) {
+  const scoped=conversationId?await prisma.conversation.findFirst({where:{id:conversationId,studentId}}):null;
+  if(opportunityId || scoped?.opportunityId) return runProgramBuddy(studentId,userText,opportunityId||scoped!.opportunityId!,conversationId);
   const llm = requireLLM();
   const { student, goals, ctx, rules } = await loadContext(studentId);
   // New topics start a new conversation; follow-ups pass the conversationId to continue it.

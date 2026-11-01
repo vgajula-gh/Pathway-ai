@@ -117,6 +117,7 @@ model Opportunity {
   source          String @default("seed")
   evidence        String @default("{}")
   requirements    String @default("[]")
+  chunks          KnowledgeChunk[]
   pages           SourcePage[]
   picks           StudentPick[]
 }
@@ -147,6 +148,8 @@ model SavedOpportunity {
   studentId     String
   opportunityId String
   deadline      String? // Added by student, never a verified source deadline
+  citedDeadline String?
+  citations     String @default("{}")
   notes         String @default("")
   checklist     String @default("[]")
   status        String   @default("interested") // saved|dismissed|preparing|applied|done
@@ -232,6 +235,7 @@ model Conversation {
   id        String        @id @default(cuid())
   studentId String
   student   Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  opportunityId String?
   title     String        @default("Conversation")
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
@@ -361,4 +365,19 @@ model DiscoveryGroup {
   lastDiscoveredAt DateTime?
   status String @default("idle")
   error String @default("")
+}
+
+model KnowledgeChunk {
+  id String @id
+  opportunityId String
+  opportunity Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  text String
+  sourceUrl String
+  pageTitle String
+  checkedAt DateTime
+  contentHash String
+  scope String @default("opportunity")
+  localEmbedding String @default("[]") // only the memory/SQLite adapter persists vectors here
+  embeddingModel String
+  @@index([opportunityId, sourceUrl])
 }

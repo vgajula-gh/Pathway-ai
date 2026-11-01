@@ -1,4 +1,6 @@
 import { FastifyInstance } from 'fastify';
+import { initializeKnowledge } from '../knowledge/runtime.js';
+import { requirementsAction } from '../knowledge/requirements.js';
 import { personalPicks, toOpp } from '../lib/picks.js';
 import { prisma, j } from '../lib/db.js';
 import { requireStudent, HttpError } from '../lib/auth.js';
@@ -25,7 +27,9 @@ export default async function routes(app: FastifyInstance) {
     const s = await requireStudent(req), list = await scored(s.id);
     const ok = list.filter(o => !o.fit.excluded && o.status !== 'dismissed').sort((a, b) => ((b.fit as any).score - (a.fit as any).score));
     const picks = await personalPicks(s.id);
-    return { picks, recommended: ok, excluded: list.filter(o => o.fit.excluded).map(o => ({ id: o.id, name: o.name, reasons: o.fit.eligibility.reasons })), dismissed: list.filter(o => o.status === 'dismissed').length, sampleData: list.some(o => o.isSample) };
+    const enabled=!!await initializeKnowledge();
+    const chunks=enabled?await prisma.knowledgeChunk.findMany({where:{opportunityId:{in:picks.map(p=>p.id)}},select:{opportunityId:true}}):[];
+    return { discoveryEnabled:enabled, picks:picks.map(p=>({...p,canAsk:enabled&&s.aiConsent&&chunks.some(c=>c.opportunityId===p.id)})), recommended: ok, excluded: list.filter(o => o.fit.excluded).map(o => ({ id: o.id, name: o.name, reasons: o.fit.eligibility.reasons })), dismissed: list.filter(o => o.status === 'dismissed').length, sampleData: list.some(o => o.isSample) };
   });
 
   app.get('/api/opportunities/:id', async req => {
@@ -44,6 +48,8 @@ export default async function routes(app: FastifyInstance) {
     await audit(s.id, 'student', status === 'saved' ? 'Saved opportunity' : status === 'dismissed' ? 'Dismissed opportunity' : 'Cleared opportunity', id);
     return { ok: true };
   });
+
+  app.post('/api/opportunities/:id/requirements',async req=>{const s=await requireStudent(req),{id}=z.object({id:z.string().max(200)}).parse(req.params);const o=await prisma.opportunity.findUnique({where:{id}});if(!o)throw new HttpError(404,'Program not found');const action=requirementsAction(o);return serializeProposal(await createProposal(s.id,{summary:`Add official requirements for ${o.name}`.slice(0,200),rationale:'Review these source-backed checklist steps and deadline. Your notes and completed steps are preserved.',actions:[action]},'student',{dataUsed:[...action.checklist.map(c=>`${c.title} — ${c.sourceUrl}`)],effect:'Adds to your Interested checklist after approval. Nothing is submitted to the program.'}));});
 
   // Journey A: deterministic prep plan (no AI needed) → proposal awaiting approval.
   app.post('/api/opportunities/:id/prep', async req => {

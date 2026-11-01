@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { reserveAI } from '../lib/ai-limits.js';
 import { FastifyInstance } from 'fastify';
 import { prisma } from '../lib/db.js';
@@ -28,10 +29,10 @@ export default async function routes(app: FastifyInstance) {
   });
   app.post('/api/buddy/messages', async req => {
     const s = await requireStudent(req); gate(s);
-    const { text, conversationId } = req.body as { text: string; conversationId?: string };
+    const {text,conversationId,opportunityId}=z.object({text:z.string().min(1).max(4000),conversationId:z.string().max(200).optional(),opportunityId:z.string().max(200).optional()}).parse(req.body);
     if (!text?.trim()) throw new HttpError(422, 'Empty message');
     if (getLLM()) await reserveAI(s.id);
-    return runBuddy(s.id, text.trim().slice(0, 4000), conversationId);
+    return runBuddy(s.id, text.trim().slice(0, 4000), conversationId, opportunityId);
   });
 
   // Returns CANDIDATE events only. Nothing is saved until the student confirms via POST /api/events/bulk.

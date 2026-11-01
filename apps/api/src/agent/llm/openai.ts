@@ -3,9 +3,9 @@ import OpenAI from 'openai';
 import { HttpError } from '../../lib/auth.js';
 import { LLM, RunToolsOptions, ImageInput, parseJSON } from './types.js';
 
-export function openaiLLM(apiKey: string, model: string, options: { baseURL?: string; local?: boolean } = {}): LLM {
+export function openaiLLM(apiKey: string, model: string, options: { baseURL?: string; local?: boolean; maxRetries?: number; timeout?: number } = {}): LLM {
   if (!model) throw new Error(`Set ${options.local ? 'OLLAMA_MODEL' : 'OPENAI_MODEL'} to a model id`);
-  const c = new OpenAI({ apiKey: options.local ? 'ollama' : apiKey, baseURL: options.baseURL,
+  const c = new OpenAI({ apiKey: options.local ? 'ollama' : apiKey, baseURL: options.baseURL, ...(options.maxRetries!==undefined?{maxRetries:options.maxRetries}:{}), ...(options.timeout!==undefined?{timeout:options.timeout}:{}),
     ...(options.local ? { defaultHeaders: { Authorization: null }, timeout: 900_000, maxRetries: 0 } : {}) });
   // Original GPT-5 nano spends completion tokens on reasoning as well as text.
   // Give it explicit headroom and low effort instead of the provider default.
