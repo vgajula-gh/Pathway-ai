@@ -1,3 +1,4 @@
+import Calendars from '../components/Calendars';
 import { useState } from 'react';
 import { api, download, session } from '../lib/api';
 import { AIHealth, Student } from '../lib/types';
@@ -21,6 +22,7 @@ export default function You({ me, setMe }: { me: Student; setMe: (s: Student | n
         <Row t="Skills" s={me.skills.join(', ') || 'Not set yet'} p={prov('skills')} />
         <Row t="Availability" s={a ? `Study ${a.studyStart}–${a.studyEnd}, up to ${a.maxStudyMin} min a day. Downtime ${a.downtimeStart}–${a.downtimeEnd}.` : 'Not set'} p={prov('availability')} />
       </div><p className="note">Pathway only uses what you tell it. It doesn’t guess sensitive things about you.</p></div>
+      <Calendars />
       <div className="sec"><div className="sec-h"><h2>My Day</h2></div><div className="rows">
         <label className="frow"><span>Word of the day</span><input type="checkbox" className="switch" checked={me.settings.showWord} onChange={e => patch({ settings: { showWord: e.target.checked } })} /></label>
         <label className="frow"><span>News for you</span><input type="checkbox" className="switch" checked={me.settings.showNews} onChange={e => patch({ settings: { showNews: e.target.checked } })} /></label>

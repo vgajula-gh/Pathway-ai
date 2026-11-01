@@ -4,7 +4,7 @@ run = "npm run dev"
 [deployment]
 build = ["sh", "-c", "npm ci --include=dev && npm run build"]
 run = ["sh", "-c", "npm start"]
-deploymentTarget = "autoscale"
+deploymentTarget = "vm"
 
 [[ports]]
 localPort = 8787

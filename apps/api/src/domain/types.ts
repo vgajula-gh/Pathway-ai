@@ -5,7 +5,7 @@ export const FIXED: Record<string, boolean> = { class: true, exam: true, deadlin
 
 export interface CalEvent {
   id: string; title: string; type: string; start: string; end: string;
-  location?: string; recurDays: number[]; recurUntil?: string; source?: string; done?: boolean;
+  location?: string; recurDays: number[]; recurUntil?: string; source?: string; done?: boolean; readOnly?: boolean;
 }
 export interface Occurrence extends CalEvent { s: Date; e: Date; occ?: string }
 export interface AvailabilityRules {

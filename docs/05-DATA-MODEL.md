@@ -28,3 +28,5 @@ Source of truth: `apps/api/prisma/schema.prisma`.
 1. `docker compose up -d` 2. `DATABASE_URL=postgresql://pathway:pathway@localhost:5432/pathway` 3. set `provider = "postgresql"` 4. `npm run db:setup`. For production use `prisma migrate` instead of `db push`.
 
 SavedOpportunity now stores deadline (student-entered, separate from Opportunity.deadline), notes and a serialized checklist. Statuses are interested/preparing/applied/result; dismissed remains an internal discovery flag. Migration maps saved→interested and done→result without discarding notes or records.
+
+CalendarLink stores student ownership, a label, maskedUrl, AES-256-GCM encryptedUrl, eventType, lastSync, syncAfter, leaseUntil and sanitized error. Event adds calendarId/importKey (unique together), readOnly and a cascading source relation. A successful sync atomically upserts its mirror and removes absent occurrences; failed syncs preserve events. Exports contain masked calendar metadata only, never the private URL or ciphertext.

@@ -28,7 +28,7 @@ export default async function routes(app: FastifyInstance) {
       : { title: 'Find one opportunity that fits you', why: 'Picked around your interests.', route: '/explore', source: 'Based on your interests', dataUsed: ['Your interests and grade'] };
     const word = WORDS[Math.floor((+sod(now) - +new Date(now.getFullYear(), 0, 0)) / 864e5) % WORDS.length];
     return { dueSoon: dueSoon(await applicationsFor(s.id, today), today), date: today, headline: headline(events, rules, now), metrics: todayMetrics(events, rules, milestones, now), brief: brief ? j(brief.data, null) : null, nextAction, nudges: n,
-      timeline: occ.map(o => ({ id: o.id, title: o.title, type: o.type, start: fmtLocal(o.s), end: fmtLocal(o.e), source: o.source, done: o.done, recurring: o.recurDays.length > 0, clash: clash.has(o.id) })),
+      timeline: occ.map(o => ({ id: o.id, title: o.title, type: o.type, start: fmtLocal(o.s), end: fmtLocal(o.e), source: o.source, done: o.done, readOnly: o.readOnly, recurring: o.recurDays.length > 0, clash: clash.has(o.id) })),
       comingUp: expand(events, addDays(sod(now), 1), addDays(sod(now), 8)).filter(o => ['exam', 'deadline', 'competition', 'reminder'].includes(o.type)).slice(0, 4).map(o => ({ id: o.id, title: o.title, type: o.type, start: fmtLocal(o.s) })),
       pending: pending.map(p => ({ id: p.id, summary: p.summary, count: j<unknown[]>(p.actions, []).length })), word: { word: word[0], pos: word[1], meaning: word[2], example: word[3] } };
   });

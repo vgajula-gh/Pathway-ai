@@ -66,6 +66,28 @@ components:
             factors: { type: array, items: { $ref: '#/components/schemas/Factor' } }
 security: [{ devStudent: [], accessCode: [] }]
 paths:
+  /api/calendars:
+    get:
+      responses:
+        '200': { description: Masked private calendar metadata }
+    post:
+      responses:
+        '201': { description: Calendar linked; inspect lastSync and error for actual sync result }
+  /api/calendars/{id}:
+    delete:
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        '204': { description: Calendar link and imported mirror removed }
+  /api/calendars/{id}/sync:
+    post:
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: Calendar sync metadata with plain-language error if unavailable }
+  /api/week:
+    get:
+      parameters: [{ name: from, in: query, schema: { type: string, format: date } }]
+      responses:
+        '200': { description: Seven-day load, overlaps and day details }
   /api/applications:
     get:
       responses:

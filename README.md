@@ -53,3 +53,6 @@ the seeded demo profile, and a training walkthrough.
 
 ### My applications
 Explore starts with My applications: track status, student-added deadlines, private notes and checklist steps. Today highlights active deadlines within seven days. Plan my prep creates a proposal; no reminder or study block is added until approval. Works with AI disabled.
+
+### Calendar import and your week
+Add private iCal subscriptions in You → Calendars, or optionally at the end of onboarding. Sync now refreshes them; an always-on worker also syncs every three hours. Imported events are read-only. Today → Your week shows seven days with calm load labels, overlaps and tappable details. Google Calendar, Apple iCloud and Canvas help is in the app.

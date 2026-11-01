@@ -15,6 +15,7 @@ async function calendarProblems(studentId: string, actions: Action[]) {
   const { events, rules } = await loadContext(studentId);
   const moving = new Set(actions.filter(a => a.type === 'move_event' || a.type === 'remove_event').map(a => (a as { eventId: string }).eventId));
   for (const a of actions) if ((a.type === 'move_event' || a.type === 'remove_event') && !events.some(e => e.id === a.eventId)) return [`Event ${a.eventId} no longer exists`];
+  for (const a of actions) if ((a.type === 'move_event' || a.type === 'remove_event') && events.find(e => e.id === a.eventId)?.readOnly) return ['Imported calendar events are read-only. Change them in the source calendar.'];
   for (const a of actions) if (a.type === 'move_event' && events.find(e => e.id === a.eventId)?.recurDays.length) return ['Recurring events can\u2019t be moved by a proposal'];
   const sessions = actions.flatMap(a => a.type === 'add_event' ? [{ title: a.title, type: a.eventType, start: a.start, end: a.end }]
     : a.type === 'move_event' ? [{ title: events.find(e => e.id === a.eventId)!.title, type: events.find(e => e.id === a.eventId)!.type, start: a.start, end: a.end }] : []);

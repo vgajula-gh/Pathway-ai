@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { prisma, j } from '../lib/db.js';
 import { requireStudent } from '../lib/auth.js';
 import { accessCode } from '../lib/access.js';
+import { calendarView } from '../lib/calendars.js';
 import { audit } from '../lib/audit.js';
 import { sampleWeek } from '../lib/sample.js';
 
@@ -48,7 +49,8 @@ export default async function routes(app: FastifyInstance) {
     const [events, goals, portfolio, saved, proposals, audits] = await Promise.all([prisma.event.findMany({ where: { studentId: s.id } }), prisma.goal.findMany({ where: { studentId: s.id }, include: { milestones: true } }),
       prisma.portfolioEntry.findMany({ where: { studentId: s.id } }), prisma.savedOpportunity.findMany({ where: { studentId: s.id } }), prisma.agentAction.findMany({ where: { studentId: s.id } }), prisma.auditEvent.findMany({ where: { studentId: s.id } })]);
     await audit(s.id, 'student', 'Exported all data');
-    return { exportedAt: new Date().toISOString(), profile: { ...serializeStudent(s), accessCode: s.accessCode }, events, goals, portfolio, saved, proposals, activity: audits };
+    const calendars = (await prisma.calendarLink.findMany({ where: { studentId: s.id } })).map(calendarView);
+    return { calendars, exportedAt: new Date().toISOString(), profile: { ...serializeStudent(s), accessCode: s.accessCode }, events, goals, portfolio, saved, proposals, activity: audits };
   });
 
   app.delete('/api/me', async (req, reply) => { const s = await requireStudent(req); await prisma.$transaction([

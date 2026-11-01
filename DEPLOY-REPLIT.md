@@ -36,7 +36,7 @@ Limits count accepted AI feature requests (Buddy, schedule scan, coach, and Toda
 
 ## 4. Publish
 
-1. Open **Publish** / **Deployments**, and choose an Autoscale web deployment.
+1. Open **Publish** / **Deployments**, and choose a Reserved VM web deployment (always running).
 2. The repository's `.replit` sets the build command to `npm ci --include=dev && npm run build` and the run command to `npm start`. Keep these settings.
 3. Replit supplies `PORT`; the API listens on `0.0.0.0` and serves both the website and `/api` on that port. If configuring a port manually, use `8787` (the default).
 4. Publish and wait for the build and startup to finish. Startup automatically runs versioned Prisma PostgreSQL migrations before accepting traffic. The existing sample opportunity and sourced news catalogues are inserted if missing, without overwriting existing records; no demo students are created. No manual database commands or seed are required. Never use `db:setup` on the production database.
@@ -54,3 +54,8 @@ Existing local SQLite profiles are not copied to PostgreSQL automatically. The p
 
 ## Applications tracker upgrade
 No new Secrets. Startup applies the PostgreSQL applications migration automatically. SQLite now also has versioned migrations (`prisma migrate deploy --schema apps/api/prisma/schema.prisma` for a new local database); keep db:push for existing local/Codespaces databases without migration history. Save an opportunity in Explore, edit its deadline/steps, check Today → Due soon, then review Plan my prep before approving. Student dates are always labeled as added by you, never source-verified.
+
+## Private calendars and background scheduling
+Choose a **Reserved VM (always running)** deployment for scheduled calendars and notifications; the repository now sets `deploymentTarget = "vm"`. Autoscale deployments may sleep with no visitors and cannot guarantee three-hour syncs or timed nudges. Database leases coordinate multiple always-on replicas.
+Add `CALENDAR_SECRET` as a deployment Secret: generate it with `node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"` in Replit Shell, copy the result into Secrets, and keep a secure backup. It encrypts private calendar URLs; changing it makes existing links unreadable until re-added. It is separate from API keys. Development uses a local-only fallback. Missing production configuration disables calendar linking with a friendly message, not the rest of the app.
+Test with a private Google/Canvas iCal link you control (or an Apple share link after considering its link-access sharing). Save in You → Calendars, check the masked URL and last-sync status, edit/delete an event at the provider, then Sync now. Confirm the mirror updates and cannot be edited in Pathway. Calendar HTTP access depends on the deployment's provider/network permissions. Mirrors cover the rolling previous 30 / next 180 days; unsupported/oversized calendars show an error and keep prior events.
