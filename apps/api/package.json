@@ -9,7 +9,7 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "prisma generate --schema prisma/schema.prisma && vitest run",
-    "db:push": "prisma db push",
+    "db:push": "node --env-file=../../.env ../../node_modules/prisma/build/index.js db push",
     "db:seed": "tsx --env-file=../../.env prisma/seed.ts",
     "db:demo": "tsx --env-file=../../.env prisma/demo.ts"
   },
