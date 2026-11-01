@@ -94,7 +94,10 @@ model Opportunity {
 model SavedOpportunity {
   studentId     String
   opportunityId String
-  status        String   @default("saved") // saved|dismissed|preparing|applied|done
+  deadline      String? // Added by student, never a verified source deadline
+  notes         String @default("")
+  checklist     String @default("[]")
+  status        String   @default("interested") // saved|dismissed|preparing|applied|done
   createdAt     DateTime @default(now())
   student       Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
   @@id([studentId, opportunityId])

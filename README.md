@@ -50,3 +50,6 @@ the seeded demo profile, and a training walkthrough.
 - ⚠️ Dev-only identity (`x-student-id` header). Real auth, verified parental consent and legal review (COPPA/FERPA where applicable) are required before real students use it. See `docs/09-PRIVACY-SAFETY.md`.
 - ⚠️ News stories are a real, sourced starter set (Oct 2026) and do not refresh until the ingestion job in `docs/08` is built.
 - ⚠️ Opportunities are **sample data** and marked unverified. Live sourcing is designed in `docs/08-OPPORTUNITY-SOURCING.md`.
+
+### My applications
+Explore starts with My applications: track status, student-added deadlines, private notes and checklist steps. Today highlights active deadlines within seven days. Plan my prep creates a proposal; no reminder or study block is added until approval. Works with AI disabled.

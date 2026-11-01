@@ -55,6 +55,7 @@ export default function Today({ me, go, ask, setMe }: { me: Student; go: (t: Tab
           : <div className="card next"><div className="k"><i /><span className="label">NEXT BEST STEP</span></div><h3>{na.title}</h3><p className="muted">{na.why}</p>
               <div className="acts"><button className="btn fill" onClick={doIt}>Do it</button><button className="btn" onClick={() => { setSnoozed(true); toast('Snoozed until tomorrow'); }}>Later</button><button className="btn" onClick={() => setSheet({ k: 'why' })}>Why this?</button></div></div>}
       </div>
+      {!!d.dueSoon?.length && <section className="sec"><div className="card"><h2>Due soon</h2>{d.dueSoon.map(a => <p key={a.opportunityId}>{a.name} · {a.countdown?.label}<br /><span className="note">{a.deadlineSource}</span></p>)}<button className="btn fill" onClick={() => go('explore')}>Review my applications</button></div></section>}
       <div className="sec"><div className="sec-h"><h2>Your day at a glance</h2><span className="tiny">Tap a ring</span></div><div className="card glance"><div className="rings">{(['focus', 'freeTime', 'progress'] as const).map(k => (
         <button key={k} className="ringbtn" onClick={() => setSheet({ k: 'ring', v: k })} aria-label={`${m[k].label}: ${ringVal(k)}, ${m[k].status}`}>
           <Ring pct={m[k].pct} color={COLORS[k]}>{ringVal(k)}</Ring><span className="n">{m[k].label}</span><span className={`st ${CLS[k]}`}>{m[k].status}</span></button>))}</div></div></div>

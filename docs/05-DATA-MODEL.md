@@ -26,3 +26,5 @@ Source of truth: `apps/api/prisma/schema.prisma`.
 
 ## Switching to Postgres
 1. `docker compose up -d` 2. `DATABASE_URL=postgresql://pathway:pathway@localhost:5432/pathway` 3. set `provider = "postgresql"` 4. `npm run db:setup`. For production use `prisma migrate` instead of `db push`.
+
+SavedOpportunity now stores deadline (student-entered, separate from Opportunity.deadline), notes and a serialized checklist. Statuses are interested/preparing/applied/result; dismissed remains an internal discovery flag. Migration maps saved→interested and done→result without discarding notes or records.

@@ -1,6 +1,7 @@
 // Proposal service: create → approve (revalidate, execute atomically, verify) → audit.
 // External actions (emails, registrations, phone calendars) are NOT executed by the server;
 // they require separate, explicit user actions on the client. Never report success early.
+import { saveApplication } from './applications.js';
 import { prisma, j } from './db.js';
 import { audit } from './audit.js';
 import { loadContext } from './context.js';
@@ -77,7 +78,7 @@ export async function approveProposal(studentId: string, id: string) {
         if (a.type === 'remove_event') { await tx.event.delete({ where: { id: a.eventId } }); out.push(['removed', a.eventId]); }
         if (a.type === 'add_goal') { const g = await tx.goal.create({ data: { studentId, title: a.title, category: a.category, priority: a.priority, targetDate: a.targetDate, opportunityId: a.opportunityId } }); refs[a.ref] = g.id; out.push(['goal', g.id]); }
         if (a.type === 'add_milestone') { const m = await tx.milestone.create({ data: { goalId: refs[a.goalRef] || a.goalRef, title: a.title, purpose: a.purpose, effortMin: a.effortMin, targetDate: a.targetDate } }); out.push(['milestone', m.id]); }
-        if (a.type === 'save_opportunity') { await tx.savedOpportunity.upsert({ where: { studentId_opportunityId: { studentId, opportunityId: a.opportunityId } }, update: { status: 'saved' }, create: { studentId, opportunityId: a.opportunityId } }); out.push(['saved', a.opportunityId]); }
+        if (a.type === 'save_opportunity') { await saveApplication(tx, studentId, a.opportunityId); out.push(['saved', a.opportunityId]); }
         if (a.type === 'add_portfolio_entry') { const x = await tx.portfolioEntry.create({ data: { studentId, title: a.title, type: a.entryType, date: a.date || new Date().toISOString().slice(0, 10), reflection: a.reflection, skills: JSON.stringify(a.skills) } }); out.push(['portfolio', x.id]); }
       }
       // Verify inside the transaction: every intended change must be observable.

@@ -66,6 +66,21 @@ components:
             factors: { type: array, items: { $ref: '#/components/schemas/Factor' } }
 security: [{ devStudent: [], accessCode: [] }]
 paths:
+  /api/applications:
+    get:
+      responses:
+        '200': { description: Student application tracker with deadline provenance and checklist progress }
+  /api/applications/{id}:
+    patch:
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: Tracker updated }
+  /api/applications/{id}/prep:
+    post:
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: Prep proposal awaiting approval }
+        '422': { description: Missing deadline or no free prep time }
   /api/config:
     get:
       security: []

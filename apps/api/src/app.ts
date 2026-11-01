@@ -7,6 +7,7 @@ import multipart from '@fastify/multipart';
 import { ZodError } from 'zod';
 import { env } from './lib/env.js';
 import { HttpError } from './lib/auth.js';
+import applications from './routes/applications.js';
 import students from './routes/students.js';
 import events from './routes/events.js';
 import today from './routes/today.js';
@@ -34,6 +35,6 @@ export async function buildApp() {
       return reply.sendFile('index.html');
     });
   }
-  for (const r of [students, events, today, opportunities, proposals, growth, ai, news]) await app.register(r);
+  for (const r of [applications, students, events, today, opportunities, proposals, growth, ai, news]) await app.register(r);
   return app;
 }

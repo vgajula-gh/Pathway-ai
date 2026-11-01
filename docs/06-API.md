@@ -48,3 +48,6 @@ All `/api/*` routes except config, access validation, and health require `x-acce
 - A reached cap returns 429 with friendly `{error}` copy. Failed provider calls count; internal tool rounds/retries do not add feature requests. Transactional persistent counters prevent concurrent overspending. Other routes remain available. Deleting a profile removes its daily counters; anonymous monthly totals remain.
 
 Production serves the built website and API from one origin/port; see `DEPLOY-REPLIT.md`.
+
+## My applications
+`GET /api/applications` lists the student's saved tracker with deadline provenance/countdown/checklist progress. `PATCH /api/applications/:opportunityId` accepts status (interested/preparing/applied/result), deadline (real YYYY-MM-DD or null), private notes and checklist [{title,done}]. `POST /api/applications/:id/prep` proposes reminders/study blocks only in real free time before the known deadline; no fallback booking or AI is used. Approval revalidates with the existing engine. Today returns `dueSoon` for active applications within seven student-local days. Saving an opportunity pre-fills checks plus official-deadline confirmation.
