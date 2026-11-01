@@ -1,5 +1,5 @@
 // Pathway AI data model. See docs/05-DATA-MODEL.md.
-// Local dev uses SQLite. Production schema is derived by scripts/prisma-production.mjs.
+// Local dev uses SQLite. Replit's PostgreSQL schema is derived by scripts/prisma-production.mjs.
 // JSON-shaped fields are stored as String (serialized) so the schema works on both.
 
 generator client {

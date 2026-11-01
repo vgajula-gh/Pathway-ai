@@ -1,0 +1,1 @@
+- [Replit database environment](replit-database-environment.md) — `REPLIT_ENVIRONMENT` may not identify which managed database a shell connection targets.

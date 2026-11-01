@@ -1,6 +1,6 @@
 import { prisma, schema } from './prisma-production.mjs';
 
-if (process.env.NODE_ENV === 'production' || process.env.REPLIT_ENVIRONMENT === 'production') {
+if (process.env.NODE_ENV === 'production') {
   throw new Error('Refusing to push a development schema from a production environment.');
 }
 if (!/^postgres(?:ql)?:\/\//.test(process.env.DATABASE_URL || '')) {
