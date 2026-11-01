@@ -112,3 +112,25 @@ it('keeps failed/uncertain sends reserved and removes expired subscriptions with
   expect(await db.pushSubscription.count()).toBe(0); expect(await db.nudgeDelivery.count()).toBe(1); expect(sent).toHaveBeenCalledOnce();
   await deliverNudge(studentId, false, now); expect(sent).toHaveBeenCalledOnce();
 });
+
+it('keeps phrase-authenticated access to the student features and removes this device push on logout', async () => {
+  const app = await buildApp(); app.log.level = 'silent';
+  try {
+    const phrase = 'forest comet river bicycle';
+    const registered = await app.inject({ method: 'POST', url: '/api/students', payload: { name: 'Signed in', grade: 10, credentials: { phrase, confirmPhrase: phrase } } });
+    expect(registered.statusCode).toBe(201);
+    const signedHeaders = { cookie: String(registered.headers['set-cookie']).split(';')[0] };
+    expect((await app.inject({ method: 'POST', url: '/api/opportunities/test/status', headers: signedHeaders, payload: { status: 'saved' } })).statusCode).toBe(200);
+    expect((await app.inject({ url: '/api/applications', headers: signedHeaders })).json()[0].name).toBe('Test opportunity');
+    expect((await app.inject({ url: '/api/calendars', headers: signedHeaders })).statusCode).toBe(200);
+    expect((await app.inject({ url: '/api/week', headers: signedHeaders })).json()).toHaveLength(7);
+    const endpoint = 'https://fcm.googleapis.com/fcm/send/signed-in-device';
+    const payload = { endpoint, keys: { p256dh: Buffer.alloc(65, 4).toString('base64url'), auth: Buffer.alloc(16, 1).toString('base64url') } };
+    expect((await app.inject({ method: 'POST', url: '/api/push/subscribe', headers: signedHeaders, payload })).statusCode).toBe(200);
+    expect((await app.inject({ method: 'PATCH', url: '/api/notifications', headers: signedHeaders, payload: { enabled: true } })).statusCode).toBe(200);
+    expect((await app.inject({ method: 'POST', url: '/api/auth/logout', headers: signedHeaders, payload: { endpoint } })).statusCode).toBe(204);
+    expect((await app.inject({ url: '/api/auth/session', headers: signedHeaders })).json().student).toBeNull();
+    expect(await db.pushSubscription.count({ where: { studentId: registered.json().id } })).toBe(0);
+    expect((await db.notificationSettings.findUniqueOrThrow({ where: { studentId: registered.json().id } })).enabled).toBe(false);
+  } finally { await app.close(); }
+});
