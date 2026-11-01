@@ -1,3 +1,4 @@
+import RegionSelect from '../components/RegionSelect';
 import { useState } from 'react';
 import { CalendarHelp } from '../components/Calendars';
 import { api, session } from '../lib/api';
@@ -11,7 +12,7 @@ const INTERESTS = ['AI', 'Coding', 'Robotics', 'Engineering', 'Science', 'Medici
 export default function Onboarding({ onDone, onCancel }: { onDone: (s: SignInResult) => void; onCancel?: () => void }) {
   const [step, setStep] = useState(0), [busy, setBusy] = useState(false);
   const [calendarUrl, setCalendarUrl] = useState('');
-  const [f, setF] = useState({ phrase: '', confirmPhrase: '', name: '', grade: 10, interests: [] as string[], goal: '', aiConsent: true, studyStart: '16:00', studyEnd: '21:00', downtimeStart: '21:00', downtimeEnd: '23:00', sampleWeek: true });
+  const [f, setF] = useState({ phrase: '', confirmPhrase: '', name: '', region: '', grade: 10, interests: [] as string[], goal: '', aiConsent: true, studyStart: '16:00', studyEnd: '21:00', downtimeStart: '21:00', downtimeEnd: '23:00', sampleWeek: true });
   const set = (k: keyof typeof f, v: unknown) => setF(x => ({ ...x, [k]: v }));
   const finish = async () => { const { phrase, confirmPhrase, ...profile } = f; setBusy(true); try { const student = await api<SignInResult>('/api/students', { body: { ...profile, credentials: { phrase, confirmPhrase }, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone } }); session.set(student.id); if (calendarUrl.trim()) { try { await api('/api/calendars', { body: { label: 'School calendar', url: calendarUrl.trim() } }); } catch { toast('Your profile is ready. You can finish linking your calendar in You.'); } } setCalendarUrl(''); onDone(student); } catch (e) { toast((e as Error).message); setBusy(false); } };
   const next = () => (step === 7 ? finish() : setStep(step + 1));
@@ -26,7 +27,7 @@ export default function Onboarding({ onDone, onCancel }: { onDone: (s: SignInRes
         {[['You decide', 'Pathway suggests. Nothing changes until you approve it.'], ['Private by default', 'Only you see your plans and reflections unless you choose to share.'], ['Delete anytime', 'See, export or erase everything from the You tab.']].map(([t, s]) => <div className="promise" key={t}><span className="ic">✓</span><div><b>{t}</b><p className="muted small">{s}</p></div></div>)}
         <label className="card" style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 28 }}><span style={{ flex: 1 }}><b>Use AI to help me</b><br /><span className="muted small">Pathway uses the configured AI model to write insights and plans from what you share. You can turn this off later.</span></span><input type="checkbox" className="switch" checked={f.aiConsent} onChange={e => set('aiConsent', e.target.checked)} /></label></>}
       {step === 2 && <><h1>What should I call you?</h1><input className="field" style={{ marginTop: 26 }} placeholder="First name" value={f.name} onChange={e => set('name', e.target.value)} aria-label="First name" autoFocus />
-        <p className="sub" style={{ marginTop: 28 }}>Your grade</p><div className="seg">{[9, 10, 11, 12].map(g => <button key={g} aria-pressed={f.grade === g} onClick={() => set('grade', g)}>{g}th</button>)}</div></>}
+        <p className="sub" style={{ marginTop: 28 }}>Your grade</p><div className="seg">{[9, 10, 11, 12].map(g => <button key={g} aria-pressed={f.grade === g} onClick={() => set('grade', g)}>{g}th</button>)}</div><RegionSelect value={f.region} onChange={v=>set('region',v)} /></>}
       {step === 3 && <><h1>What lights you up?</h1><p className="sub">Pick a few. I’ll find opportunities around these.</p>
         <div className="chips">{INTERESTS.map(i => <button key={i} className="chip" aria-pressed={f.interests.includes(i)} onClick={() => set('interests', f.interests.includes(i) ? f.interests.filter(x => x !== i) : [...f.interests, i])}>{i}</button>)}</div></>}
       {step === 4 && <><h1>Something you’re reaching for?</h1><p className="sub">An aspiration, a skill, a project. Optional.</p>

@@ -1,3 +1,4 @@
+import RegionSelect from '../components/RegionSelect';
 import Notifications from '../components/Notifications';
 import Calendars from '../components/Calendars';
 import { useState } from 'react';
@@ -77,12 +78,12 @@ const Row = ({ t, s, p }: { t: string; s: string; p?: string }) => <div classNam
 
 function EditSheet({ me, onClose, onSave }: { me: Student; onClose: () => void; onSave: (b: Record<string, unknown>) => void }) {
   const a = me.availability || { studyStart: '16:00', studyEnd: '21:00', maxStudyMin: 120, downtimeStart: '21:00', downtimeEnd: '23:00' };
-  const [f, setF] = useState({ name: me.name, grade: me.grade, interests: me.interests.join(', '), skills: me.skills.join(', '), location: me.location, budget: me.budget, format: me.format, ...a });
+  const [f, setF] = useState({ region: me.region || '', name: me.name, grade: me.grade, interests: me.interests.join(', '), skills: me.skills.join(', '), location: me.location, budget: me.budget, format: me.format, ...a });
   const list = (s: string) => s.split(',').map(x => x.trim()).filter(Boolean);
-  const save = () => onSave({ name: f.name, grade: Number(f.grade), interests: list(f.interests), skills: list(f.skills), location: f.location, budget: f.budget, format: f.format, availability: { studyStart: f.studyStart, studyEnd: f.studyEnd, maxStudyMin: Number(f.maxStudyMin), downtimeStart: f.downtimeStart, downtimeEnd: f.downtimeEnd } });
+  const save = () => onSave({ region: f.region, name: f.name, grade: Number(f.grade), interests: list(f.interests), skills: list(f.skills), location: f.location, budget: f.budget, format: f.format, availability: { studyStart: f.studyStart, studyEnd: f.studyEnd, maxStudyMin: Number(f.maxStudyMin), downtimeStart: f.downtimeStart, downtimeEnd: f.downtimeEnd } });
   const inp = (k: keyof typeof f, l: string, type = 'text') => <div className="frow"><label htmlFor={k}>{l}</label><input id={k} type={type} value={String(f[k])} onChange={e => setF({ ...f, [k]: e.target.value })} /></div>;
   return <Sheet title="Edit your DNA" onClose={onClose} left={<button className="navbtn" onClick={onClose}>Cancel</button>} right={<button className="navbtn strong" onClick={save}>Save</button>}>
-    <div className="rows">{inp('name', 'Name')}{inp('grade', 'Grade', 'number')}{inp('interests', 'Interests')}{inp('skills', 'Skills')}{inp('location', 'Area (broad)')}</div>
+    <div className="rows">{inp('name', 'Name')}{inp('grade', 'Grade', 'number')}{inp('interests', 'Interests')}{inp('skills', 'Skills')}{inp('location', 'Area (broad)')}<RegionSelect value={f.region} onChange={v=>setF({...f,region:v})} /></div>
     <p className="label" style={{ margin: '20px 2px 8px' }}>AVAILABILITY</p><div className="rows">{inp('studyStart', 'Study from', 'time')}{inp('studyEnd', 'Until', 'time')}{inp('maxStudyMin', 'Most per day (min)', 'number')}{inp('downtimeStart', 'Downtime from', 'time')}{inp('downtimeEnd', 'Until', 'time')}</div>
     <p className="label" style={{ margin: '20px 2px 8px' }}>OPPORTUNITIES</p><div className="rows">
       <div className="frow"><label htmlFor="b">Budget</label><select id="b" value={f.budget} onChange={e => setF({ ...f, budget: e.target.value })}><option value="free">Free only</option><option value="any">Any</option></select></div>

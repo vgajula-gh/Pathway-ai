@@ -2,14 +2,18 @@
 // Never present the numeric score to students as objective truth; show factors instead.
 import { StudentContext } from './types.js';
 
-export interface Opp { id: string; name: string; category: string; gradeMin: number; gradeMax: number; minAge?: number | null; format: string; cost: string; commitment: string; skills: string[]; tags: string[]; checks: string[]; sourceCheckedAt?: Date | null; deadline?: string | null }
+export interface Opp { id: string; name: string; category: string; gradeMin: number | null; gradeMax: number | null; region?: string[]; verificationStatus?: string; minAge?: number | null; format: string; cost: string; commitment: string; skills: string[]; tags: string[]; checks: string[]; sourceCheckedAt?: Date | null; deadline?: string | null }
 export type FactorState = 'ok' | 'mid' | 'no' | 'na';
 export interface Factor { key: string; state: FactorState; text: string }
 
 export function eligibility(o: Opp, s: StudentContext) {
   const reasons: string[] = [], checks = [...o.checks];
-  if (s.grade < o.gradeMin || s.grade > o.gradeMax) reasons.push(o.gradeMin === o.gradeMax ? `Only for grade ${o.gradeMin}` : `For grades ${o.gradeMin}–${o.gradeMax}`);
+  if ((o.gradeMin != null && s.grade < o.gradeMin) || (o.gradeMax != null && s.grade > o.gradeMax)) reasons.push(o.gradeMin === o.gradeMax ? `Only for grade ${o.gradeMin}` : `For grades ${o.gradeMin}–${o.gradeMax}`);
   if (o.deadline && o.deadline < new Date().toISOString().slice(0, 10)) reasons.push('The deadline has passed');
+  if (o.gradeMin == null || o.gradeMax == null) checks.push('Grade eligibility is not confirmed');
+  if (o.verificationStatus === 'expired') reasons.push('The deadline has passed');
+  if (s.region === 'virtual' && !/virtual|online/i.test(o.format)) reasons.push('You chose virtual opportunities only');
+  if (s.region && s.region !== 'virtual' && o.region?.length && !o.region.some(r => ['virtual', 'US', s.region].includes(r))) reasons.push('Outside your selected region');
   if (o.minAge) checks.push(`Minimum age ${o.minAge}`);
   if (s.budget === 'free' && !/^free/i.test(o.cost)) checks.push(`Cost: ${o.cost}`);
   if (s.format === 'virtual' && !/virtual|online|application/i.test(o.format)) checks.push('In-person participation');

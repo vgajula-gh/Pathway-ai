@@ -20,6 +20,9 @@ model Student {
   accessCode  String?  // Tester code used at setup (never included in ordinary profile responses)
   grade       Int
   timezone    String   @default("America/New_York")
+  region      String   @default("") // US state abbreviation, virtual, or unspecified
+  picks       StudentPick[]
+  feedback    OpportunityFeedback[]
   location    String   @default("")   // broad area only, e.g. "Raleigh area"
   interests   String   @default("[]") // JSON string[]
   skills      String   @default("[]") // JSON string[]
@@ -89,8 +92,8 @@ model Opportunity {
   organizer       String
   category        String
   url             String
-  gradeMin        Int
-  gradeMax        Int
+  gradeMin        Int?
+  gradeMax        Int?
   minAge          Int?
   format          String
   cost            String
@@ -101,6 +104,42 @@ model Opportunity {
   deadline        String?  // ISO date if verified, else null
   sourceCheckedAt DateTime? // null => not verified
   isSample        Boolean  @default(true)
+  verificationStatus String @default("new_find")
+  verifiedAt      DateTime?
+  officialDomain  String @default("")
+  region          String @default("[]")
+  costType        String @default("unknown")
+  costAmount      String?
+  costVerifiedAt  DateTime?
+  financialAidNote String?
+  feeFlag         Boolean @default(false)
+  discoveredFor  String @default("[]")
+  source          String @default("seed")
+  evidence        String @default("{}")
+  requirements    String @default("[]")
+  picks           StudentPick[]
+}
+
+model StudentPick {
+  studentId String
+  opportunityId String
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  opportunity Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  bucket String
+  rank Int
+  isStretch Boolean @default(false)
+  pickedAt DateTime @default(now())
+  refreshCycle String
+  @@id([studentId, opportunityId])
+}
+
+model OpportunityFeedback {
+  studentId String
+  opportunityId String
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  reason String
+  createdAt DateTime @default(now())
+  @@id([studentId, opportunityId])
 }
 
 model SavedOpportunity {

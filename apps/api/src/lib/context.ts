@@ -16,6 +16,6 @@ export async function loadContext(studentId: string) {
   ]);
   const a = student.availability;
   const rules: AvailabilityRules = a ? { studyStart: a.studyStart, studyEnd: a.studyEnd, maxStudyMin: a.maxStudyMin, downtimeStart: a.downtimeStart, downtimeEnd: a.downtimeEnd } : DEFAULT_RULES;
-  const ctx: StudentContext = { grade: student.grade, interests: j(student.interests, []), skills: j(student.skills, []), budget: student.budget, format: student.format, goals: goals.filter(g => g.status !== 'done').map(g => g.title) };
+  const ctx: StudentContext = { region: student.region, grade: student.grade, interests: j(student.interests, []), skills: j(student.skills, []), budget: student.budget, format: student.format, goals: goals.filter(g => g.status !== 'done').map(g => g.title) };
   return { student, rules, events: events.map(toCalEvent), goals, ctx, milestones: goals.flatMap(g => g.milestones) };
 }
