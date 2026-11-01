@@ -1,3 +1,5 @@
+import Notifications from '../components/Notifications';
+import Calendars from '../components/Calendars';
 import { useState } from 'react';
 import { api, download, session, access } from '../lib/api';
 import { AIHealth, Student } from '../lib/types';
@@ -25,10 +27,17 @@ export default function You({ me, setMe, onSignOut }: { me: Student; setMe: (s: 
         <Row t="Skills" s={me.skills.join(', ') || 'Not set yet'} p={prov('skills')} />
         <Row t="Availability" s={a ? `Study ${a.studyStart}–${a.studyEnd}, up to ${a.maxStudyMin} min a day. Downtime ${a.downtimeStart}–${a.downtimeEnd}.` : 'Not set'} p={prov('availability')} />
       </div><p className="note">Pathway only uses what you tell it. It doesn’t guess sensitive things about you.</p></div>
+      <Calendars />
+      <Notifications />
+
       <div className="sec"><div className="sec-h"><h2>Account</h2></div>
         {recoveryCode ? <RecoveryCode code={recoveryCode} onDone={() => { setRecoveryCode(null); setChangingPhrase(false); }} /> : <>
           {me.hasSignIn && <><p>Your private phrase opens this profile on any device.</p><button className="link" onClick={() => setChangingPhrase(c => !c)}>{changingPhrase ? 'Cancel' : 'Change private phrase'}</button><button className="link" onClick={async () => {
-            try { await api('/api/auth/logout', { method: 'POST' }); session.clear(); access.clear(); setMe(null); onSignOut?.(); }
+            try {
+              const subscription = typeof navigator !== 'undefined' && 'serviceWorker' in navigator ? await (await navigator.serviceWorker.getRegistration())?.pushManager?.getSubscription() : null;
+              await api('/api/auth/logout', { method: 'POST', ...(subscription ? { body: { endpoint: subscription.endpoint } } : {}) });
+              if (subscription) await subscription.unsubscribe().catch(() => false);
+              session.clear(); access.clear(); setMe(null); onSignOut?.(); }
             catch (e) { toast((e as Error).message); }
           }}>Sign out</button></>}
           {(!me.hasSignIn || changingPhrase) && <form onSubmit={async e => {
@@ -37,7 +46,7 @@ export default function You({ me, setMe, onSignOut }: { me: Student; setMe: (s: 
               const { recoveryCode: code, ...profile } = await api<SignInResult>(me.hasSignIn ? '/api/auth/change-phrase' : '/api/auth/link', { body: account });
               setMe(profile); setAccount({ phrase: '', confirmPhrase: '' }); setRecoveryCode(code || null);
             } catch (e) { setAccountError((e as Error).message); } finally { setAccountBusy(false); }
-          }}><p>{me.hasSignIn ? 'Choose a new phrase. This signs out your other devices and replaces your old recovery code.' : 'Keep this profile and open it on any device with a private phrase.'}</p><PhraseFields {...account} onChange={(key, value) => setAccount(a => ({ ...a, [key]: value }))} />
+          }}><p>{me.hasSignIn ? 'Choose a new phrase. This signs out your other devices, turns off notifications, and replaces your old recovery code.' : 'Keep this profile and open it on any device with a private phrase.'}</p><PhraseFields {...account} onChange={(key, value) => setAccount(a => ({ ...a, [key]: value }))} />
             {accountError && <p role="alert">{accountError}</p>}<button className="btn" disabled={accountBusy || !validPhrase(account.phrase, account.confirmPhrase)} type="submit">{accountBusy ? 'Saving…' : me.hasSignIn ? 'Save new phrase' : 'Enable sign-in'}</button></form>}
         </>}
       </div>

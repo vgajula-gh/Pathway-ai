@@ -176,4 +176,18 @@ describe('private phrase sign-in', () => {
     vi.stubEnv('SIGN_IN_SECRET', 'a different persistent random test secret'); expect(credentialHash(credentials.phrase)).not.toBe(before);
     vi.stubEnv('SIGN_IN_SECRET', ''); vi.stubEnv('NODE_ENV', 'production'); await expect(buildApp()).rejects.toThrow('SIGN_IN_SECRET');
   });
+  it('revokes other-device push capabilities when a private phrase is recovered', async () => {
+    const a = await app();
+    try {
+      const created = await a.inject({ method: 'POST', url: '/api/students', headers, payload: profile });
+      const studentId = created.json().id;
+      await db.pushSubscription.create({ data: { studentId, endpointHash: 'other-device', encrypted: 'capability' } });
+      await db.notificationSettings.create({ data: { studentId, enabled: true } });
+      const recovered = await a.inject({ method: 'POST', url: '/api/auth/recover', payload: { recoveryCode: created.json().recoveryCode, credentials: replacement } });
+      expect(recovered.statusCode).toBe(200);
+      expect(await db.pushSubscription.count({ where: { studentId } })).toBe(0);
+      expect((await db.notificationSettings.findUniqueOrThrow({ where: { studentId } })).enabled).toBe(false);
+    } finally { await a.close(); }
+  });
+
 });

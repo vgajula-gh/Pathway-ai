@@ -1,4 +1,6 @@
 import { FastifyInstance } from 'fastify';
+import { z } from 'zod';
+import { endpointHash } from '../lib/push.js';
 import { Prisma } from '@prisma/client';
 import { requireStudent, HttpError } from '../lib/auth.js';
 import { prisma } from '../lib/db.js';
@@ -45,6 +47,8 @@ export default async function routes(app: FastifyInstance) {
     await prisma.$transaction(async tx => {
       await tx.student.update({ where: { id: s.id }, data: hashes });
       await tx.authSession.deleteMany({ where: { studentId: s.id } });
+      await tx.pushSubscription.deleteMany({ where: { studentId: s.id } });
+      await tx.notificationSettings.updateMany({ where: { studentId: s.id }, data: { enabled: false } });
     }).catch(unavailable);
     await startSession(s.id, reply);
     await audit(s.id, 'student', 'Changed private sign-in phrase');
@@ -61,6 +65,8 @@ export default async function routes(app: FastifyInstance) {
       const changed = await tx.student.updateMany({ where: { id: s.id, recoveryHash: hash }, data: hashes });
       if (!changed.count) throw new HttpError(401, 'That recovery code has already been used.');
       await tx.authSession.deleteMany({ where: { studentId: s.id } });
+      await tx.pushSubscription.deleteMany({ where: { studentId: s.id } });
+      await tx.notificationSettings.updateMany({ where: { studentId: s.id }, data: { enabled: false } });
     }).catch(unavailable);
     await startSession(s.id, reply);
     await audit(s.id, 'student', 'Recovered profile and changed private phrase');
@@ -68,6 +74,11 @@ export default async function routes(app: FastifyInstance) {
   });
   app.post('/api/auth/logout', async (req, reply) => {
     const s = await sessionStudent(req);
+    const b = z.object({ endpoint: z.string().max(4096).optional() }).parse(req.body || {});
+    if (s && b.endpoint) {
+      await prisma.pushSubscription.deleteMany({ where: { studentId: s.id, endpointHash: endpointHash(b.endpoint) } });
+      if (!await prisma.pushSubscription.count({ where: { studentId: s.id } })) await prisma.notificationSettings.updateMany({ where: { studentId: s.id }, data: { enabled: false } });
+    }
     await endSession(req, reply);
     if (s) await audit(s.id, 'student', 'Signed out');
     return reply.code(204).send();

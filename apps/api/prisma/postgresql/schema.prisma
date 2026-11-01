@@ -31,6 +31,10 @@ model Student {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  notificationSettings NotificationSettings?
+  pushSubscriptions PushSubscription[]
+  nudgeDeliveries NudgeDelivery[]
+  calendars CalendarLink[]
   availability Availability?
   events       Event[]
   goals        Goal[]
@@ -69,6 +73,11 @@ model Event {
   source      String   @default("manual") // manual|upload|pathway|sample
   confidence  String   @default("")       // extraction confidence when source=upload
   done        Boolean  @default(false)
+  calendarId String?
+  calendar CalendarLink? @relation(fields: [calendarId], references: [id], onDelete: Cascade)
+  importKey String?
+  readOnly Boolean @default(false)
+  @@unique([calendarId, importKey])
   proposalId  String?
   createdAt   DateTime @default(now())
   @@index([studentId])
@@ -97,7 +106,10 @@ model Opportunity {
 model SavedOpportunity {
   studentId     String
   opportunityId String
-  status        String   @default("saved") // saved|dismissed|preparing|applied|done
+  deadline      String? // Added by student, never a verified source deadline
+  notes         String @default("")
+  checklist     String @default("[]")
+  status        String   @default("interested") // saved|dismissed|preparing|applied|done
   createdAt     DateTime @default(now())
   student       Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
   @@id([studentId, opportunityId])
@@ -227,6 +239,49 @@ model NewsStory {
 model AIUsage {
   key   String @id
   count Int    @default(0)
+}
+
+model CalendarLink {
+  id String @id @default(cuid())
+  studentId String
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  label String
+  maskedUrl String
+  encryptedUrl String
+  eventType String @default("class")
+  lastSync DateTime?
+  syncAfter DateTime @default(now())
+  leaseUntil DateTime?
+  error String @default("")
+  events Event[]
+  @@index([syncAfter])
+  @@index([studentId])
+}
+
+model NotificationSettings {
+  studentId String @id
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  enabled Boolean @default(false)
+  time String @default("16:00")
+  pausedUntil DateTime?
+}
+model PushSubscription {
+  id String @id @default(cuid())
+  studentId String
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  endpointHash String @unique
+  encrypted String
+  createdAt DateTime @default(now())
+  @@index([studentId])
+}
+model NudgeDelivery {
+  studentId String
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  date String
+  status String @default("reserved")
+  accepted Int @default(0)
+  createdAt DateTime @default(now())
+  @@id([studentId, date])
 }
 
 model AuthSession {

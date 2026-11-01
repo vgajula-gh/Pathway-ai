@@ -39,9 +39,11 @@ function InvitationGate({ children, onBack }: { children: React.ReactNode; onBac
   }}><h1>Your invitation to Pathway</h1><button className="link" type="button" onClick={onBack}>Back to sign in</button>{required && <><p>Enter your tester access code to continue.</p><label htmlFor="access-code">Access code</label><input id="access-code" type="password" autoComplete="off" value={code} onChange={e => setCode(e.target.value)} required maxLength={256} /><button type="submit" className="btn">Continue</button></>}{error && <p role="alert">{error}</p>}{error && !required && <button className="btn" type="button" onClick={() => setAttempt(a => a + 1)}>Try again</button>}</form></main>;
 }
 
+const requestedTab = (): Tab => { const value = new URLSearchParams(window.location?.search).get('tab'); return ['today', 'explore', 'buddy', 'grow', 'you'].includes(value || '') ? value as Tab : 'today'; };
+
 export default function App() {
   const [me, setMe] = useState<Student | null | undefined>(undefined);
-  const [tab, setTab] = useState<Tab>('today');
+  const [tab, setTab] = useState<Tab>(requestedTab);
   const [buddySeed, setBuddySeed] = useState<string | null>(null);
   const [buddyKey, setBuddyKey] = useState(0);
   const [creating, setCreating] = useState(false), [restoring, setRestoring] = useState(false), [pending, setPending] = useState<SignInResult | null>(null), [loadError, setLoadError] = useState(''), [attempt, setAttempt] = useState(0);
@@ -66,7 +68,7 @@ export default function App() {
   useEffect(() => { document.body.dataset.tab = tab; window.scrollTo(0, 0); }, [tab]);
   useEffect(() => { applyTheme((me?.settings.theme || 'dusk') as Theme); }, [me?.settings.theme]);
   const onSignedOut = () => { setCreating(false); setRestoring(false); setMe(null); };
-  const openDashboard = (s: Student) => { session.set(s.id); setCreating(false); setRestoring(false); setTab('today'); setMe(s); };
+  const openDashboard = (s: Student) => { session.set(s.id); setCreating(false); setRestoring(false); setTab(requestedTab()); setMe(s); };
   const signedIn = (s: SignInResult) => { if (s.recoveryCode) setPending(s); else openDashboard(s); };
   if (pending?.recoveryCode) return <RecoveryCode code={pending.recoveryCode} onDone={() => { const { recoveryCode: _, ...profile } = pending; setPending(null); openDashboard(profile); }} />;
   if (loadError) return <main className="splash"><p role="alert">{loadError}</p><button className="btn" onClick={() => setAttempt(a => a + 1)}>Try again</button></main>;

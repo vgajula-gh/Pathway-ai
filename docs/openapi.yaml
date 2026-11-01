@@ -73,6 +73,63 @@ components:
             factors: { type: array, items: { $ref: '#/components/schemas/Factor' } }
 security: [{ accountSession: [] }, { devStudent: [], accessCode: [] }]
 paths:
+  /api/notifications:
+    get:
+      responses:
+        '200': { description: Opt-in preferences and public VAPID configuration }
+    patch:
+      responses:
+        '200': { description: Enabled/time/pause preferences saved }
+  /api/notifications/test:
+    post:
+      responses:
+        '200': { description: Actual accepted/quiet/paused/already-sent status; no delivery guarantee }
+  /api/push/subscribe:
+    post:
+      responses:
+        '200': { description: This student browser subscription saved securely }
+  /api/push/unsubscribe:
+    post:
+      responses:
+        '200': { description: This device subscription removed }
+  /api/calendars:
+    get:
+      responses:
+        '200': { description: Masked private calendar metadata }
+    post:
+      responses:
+        '201': { description: Calendar linked; inspect lastSync and error for actual sync result }
+  /api/calendars/{id}:
+    delete:
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        '204': { description: Calendar link and imported mirror removed }
+  /api/calendars/{id}/sync:
+    post:
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: Calendar sync metadata with plain-language error if unavailable }
+  /api/week:
+    get:
+      parameters: [{ name: from, in: query, schema: { type: string, format: date } }]
+      responses:
+        '200': { description: Seven-day load, overlaps and day details }
+  /api/applications:
+    get:
+      responses:
+        '200': { description: Student application tracker with deadline provenance and checklist progress }
+  /api/applications/{id}:
+    patch:
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: Tracker updated }
+  /api/applications/{id}/prep:
+    post:
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: Prep proposal awaiting approval }
+        '422': { description: Missing deadline or no free prep time }
+
   /api/auth/session:
     get:
       security: []

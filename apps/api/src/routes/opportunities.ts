@@ -1,6 +1,8 @@
 import { FastifyInstance } from 'fastify';
 import { prisma, j } from '../lib/db.js';
 import { requireStudent, HttpError } from '../lib/auth.js';
+import { z } from 'zod';
+import { saveApplication } from '../lib/applications.js';
 import { audit } from '../lib/audit.js';
 import { loadContext } from '../lib/context.js';
 import { createProposal, serializeProposal } from '../lib/proposals.js';
@@ -30,8 +32,9 @@ export default async function routes(app: FastifyInstance) {
   });
 
   app.post('/api/opportunities/:id/status', async req => {
-    const s = await requireStudent(req), { id } = req.params as { id: string }, { status } = req.body as { status: 'saved' | 'dismissed' | 'none' };
+    const s = await requireStudent(req), { id } = req.params as { id: string }, { status } = z.object({ status: z.enum(['saved', 'dismissed', 'none']) }).parse(req.body);
     if (status === 'none') await prisma.savedOpportunity.deleteMany({ where: { studentId: s.id, opportunityId: id } });
+    else if (status === 'saved') { await saveApplication(prisma, s.id, id); await prisma.savedOpportunity.updateMany({ where: { studentId: s.id, opportunityId: id, status: 'dismissed' }, data: { status: 'interested' } }); }
     else await prisma.savedOpportunity.upsert({ where: { studentId_opportunityId: { studentId: s.id, opportunityId: id } }, update: { status }, create: { studentId: s.id, opportunityId: id, status } });
     await audit(s.id, 'student', status === 'saved' ? 'Saved opportunity' : status === 'dismissed' ? 'Dismissed opportunity' : 'Cleared opportunity', id);
     return { ok: true };

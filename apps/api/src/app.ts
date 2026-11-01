@@ -8,6 +8,10 @@ import multipart from '@fastify/multipart';
 import { ZodError } from 'zod';
 import { env } from './lib/env.js';
 import { HttpError } from './lib/auth.js';
+import notifications from './routes/notifications.js';
+import calendars from './routes/calendars.js';
+import applications from './routes/applications.js';
+
 import accounts from './routes/accounts.js';
 import students from './routes/students.js';
 import events from './routes/events.js';
@@ -46,6 +50,6 @@ export async function buildApp() {
       return reply.sendFile('index.html');
     });
   }
-  for (const r of [accounts, students, events, today, opportunities, proposals, growth, ai, news]) await app.register(r);
+  for (const r of [accounts, notifications, calendars, applications, students, events, today, opportunities, proposals, growth, ai, news]) await app.register(r);
   return app;
 }

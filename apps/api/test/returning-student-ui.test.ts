@@ -16,6 +16,7 @@ vi.mock('../../web/src/pages/Buddy', () => ({ default: () => null }));
 vi.mock('../../web/src/pages/Grow', () => ({ default: () => null }));
 vi.mock('../../web/src/pages/You', () => ({ default: () => null }));
 import App from '../../web/src/App';
+import Onboarding from '../../web/src/pages/Onboarding';
 import { ApiError } from '../../web/src/lib/api';
 const student = { id: 'existing-student', name: 'Sam', hasSignIn: true, settings: { theme: 'dusk' } };
 let renderer: ReactTestRenderer;
@@ -99,4 +100,32 @@ it('asks for an invitation only when a new visitor chooses to create a profile',
   expect(text()).toContain('Your invitation to Pathway'); expect(text()).not.toContain('Get started');
   await act(async () => { await renderer.root.findByType('form').props.onSubmit({ preventDefault() {} }); });
   expect(text()).toContain('Get started');
+});
+
+it('keeps calendar onboarding and private phrase setup in the same completed profile flow', async () => {
+  const done = vi.fn();
+  state.api.mockImplementation(async path => path === '/api/students' ? { ...student, recoveryCode: 'save-once' } : { ok: true });
+  await act(async () => { renderer = create(createElement(Onboarding, { onDone: done })); });
+  const next = async () => act(async () => { renderer.root.findAllByType('button').find(b => b.props.className === 'btn fill lg')!.props.onClick(); });
+  await next(); await next(); // Welcome, privacy → name
+  await act(async () => { renderer.root.findByProps({ 'aria-label': 'First name' }).props.onChange({ target: { value: 'Sam' } }); });
+  await next(); await next(); await next(); await next(); // Name, interests, goal, study window → calendar
+  expect(text()).toContain('Add your calendar?');
+  await act(async () => { renderer.root.findByProps({ id: 'onboard-calendar' }).props.onChange({ target: { value: 'https://example.org/private.ics' } }); });
+  await next();
+  expect(text()).toContain('Keep your journey with you');
+  await act(async () => {
+    for (const id of ['private-phrase', 'confirm-phrase']) renderer.root.findByProps({ id }).props.onChange({ target: { value: 'forest comet river bicycle' } });
+  });
+  await next();
+  expect(state.api.mock.calls.find(([path]) => path === '/api/students')?.[1].body.credentials).toEqual({ phrase: 'forest comet river bicycle', confirmPhrase: 'forest comet river bicycle' });
+  expect(state.api.mock.calls.find(([path]) => path === '/api/calendars')?.[1].body.url).toBe('https://example.org/private.ics');
+  expect(done).toHaveBeenCalledWith(expect.objectContaining({ id: student.id, recoveryCode: 'save-once' }));
+});
+it('preserves a notification target through phrase sign-in', async () => {
+  window.location = { search: '?tab=explore' } as Location;
+  state.api.mockImplementation(async path => path === '/api/auth/session' ? { student: null } : path === '/api/auth/login' ? student : { accessRequired: true });
+  await mount();
+  await act(async () => { await renderer.root.findByType('form').props.onSubmit({ preventDefault() {} }); });
+  expect(renderer.root.findAllByProps({ role: 'tab' }).find(t => t.findByType('span').children.join('') === 'Explore')?.props['aria-selected']).toBe(true);
 });
