@@ -2,12 +2,12 @@ import type {WorkflowStep} from '../workflows/privacy.js';
 import { env } from '../lib/env.js';
 import type { FailureInfo } from './failures.js';
 import {extractionSettings} from '../agent/llm/extraction.js';
-const modelId=(value:string|undefined)=>value&&value.length<=160&&/^[a-zA-Z0-9][a-zA-Z0-9_.:/-]*$/.test(value)&&!/^(sk-|rk-|sess-|https?:|postgres)/i.test(value)?value:null;
+export const safeModelId=(value:string|undefined)=>value&&value.length<=160&&/^[a-zA-Z0-9][a-zA-Z0-9_.:/-]*$/.test(value)&&!/^(sk-|rk-|sess-|https?:|postgres)/i.test(value)?value:null;
 export function discoveryModels(){
   const extraction=extractionSettings(),provider=process.env.SEARCH_PROVIDER;
   const searchProvider=provider==='openai'||provider==='anthropic'?provider:'none';
   const searchModel=process.env.SEARCH_MODEL||(searchProvider==='openai'?'gpt-4.1-mini':searchProvider==='anthropic'?process.env.ANTHROPIC_MODEL||'claude-sonnet-5-5':undefined);
-  return {search:{provider:searchProvider,model:modelId(searchModel)},extraction:{provider:extraction.provider,model:modelId(extraction.model)}};
+  return {search:{provider:searchProvider,model:safeModelId(searchModel)},extraction:{provider:extraction.provider,model:safeModelId(extraction.model)}};
 }
 export function setting(name: string, fallback: number, max = 1000) {
   const v = process.env[name];
@@ -32,6 +32,7 @@ export type Usage = {
   estimatedCost: number;
 };
 export class RunBudget {
+  candidates={found:0,filtered:0,queued:0};
   readonly models=discoveryModels();
   readonly workflow: WorkflowStep[] = [];
   readonly failures: FailureInfo[] = [];

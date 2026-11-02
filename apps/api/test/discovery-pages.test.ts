@@ -3,7 +3,7 @@ import {EventEmitter} from 'node:events';
 import {gzipSync} from 'node:zlib';
 const remote=vi.hoisted(()=>({lookup:vi.fn(),get:vi.fn()}));
 vi.mock('node:dns/promises',()=>({lookup:remote.lookup}));vi.mock('node:https',()=>({get:remote.get}));
-import {fetchOfficialPage} from '../src/discovery/pages.js';import {RunBudget} from '../src/discovery/config.js';
+import {fetchOfficialPage,readable} from '../src/discovery/pages.js';import {RunBudget} from '../src/discovery/config.js';
 const text='An official program offers a detailed activity for students with published rules and eligibility. '.repeat(3);
 function response(status:number,body:string|Buffer,headers:Record<string,string>={}) {return (url:any,options:any,cb:any)=>{const req=new EventEmitter() as any;req.destroy=(error:Error)=>{req.emit('error',error);req.emit('close');};queueMicrotask(()=>{const res=new EventEmitter() as any;res.statusCode=status;res.headers=headers;res.resume=()=>{};cb(res);res.emit('data',Buffer.isBuffer(body)?body:Buffer.from(body));res.emit('end');req.emit('close');});return req;};}
 beforeEach(()=>{remote.lookup.mockReset().mockResolvedValue([{address:'93.184.216.34',family:4}]);remote.get.mockReset();});
@@ -23,4 +23,29 @@ it('accepts only canonical www redirects and repeats destination DNS and robots 
 });
 it('reports HTTP bot blocks safely without retrying another address',async()=>{
  remote.lookup.mockResolvedValue([{address:'93.184.216.34',family:4},{address:'2606:4700:4700::1111',family:6}]);remote.get.mockImplementationOnce(response(404,'')).mockImplementationOnce(response(403,'private provider error'));await expect(fetchOfficialPage('https://example.edu/program',new RunBudget())).rejects.toMatchObject({info:{stage:'fetch',code:'http_error',httpStatus:403,sourceHost:'example.edu'}});expect(remote.get).toHaveBeenCalledTimes(2);
+});
+it('accepts a real HTML document served with a generic binary type and normalizes the header',async()=>{
+ remote.get.mockImplementationOnce(response(404,'')).mockImplementationOnce(response(200,`<!doctype html><html><body><main>${text}</main></body></html>`,{'content-type':'Application/Octet-Stream; charset=UTF-8'}));
+ expect((await fetchOfficialPage('https://example.edu/program',new RunBudget())).text).toBe(text.trim());
+});
+it.each(['application/pdf','application/json','application/octet-stream'])('rejects non-HTML %s with a safe source type',async type=>{
+ const body=type==='application/pdf'?'%PDF-1.7 document':type==='application/json'?JSON.stringify({program:text}):'not an HTML document';
+ remote.get.mockImplementationOnce(response(404,'')).mockImplementationOnce(response(200,body,{'content-type':type}));
+ await expect(fetchOfficialPage('https://example.edu/program',new RunBudget())).rejects.toMatchObject({info:{stage:'fetch',code:'unsupported_content',mediaType:type}});
+});
+it('rejects binary signatures even when the server declares HTML',async()=>{
+ remote.get.mockImplementationOnce(response(404,'')).mockImplementationOnce(response(200,'%PDF-1.7 '+text,{'content-type':'text/html'}));
+ await expect(fetchOfficialPage('https://example.edu/program',new RunBudget())).rejects.toMatchObject({info:{code:'unsupported_content',mediaType:'application/pdf'}});
+});
+it('distinguishes a broken compressed response from an unsupported document format',async()=>{
+ remote.get.mockImplementationOnce(response(404,'')).mockImplementationOnce(response(200,'not gzip',{'content-encoding':'gzip','content-type':'text/html'}));
+ await expect(fetchOfficialPage('https://example.edu/program',new RunBudget())).rejects.toMatchObject({info:{code:'content_decoding_failed',contentEncoding:'gzip'}});
+});
+it('keeps the decompressed size bound and reports oversized output accurately',async()=>{
+ remote.get.mockImplementationOnce(response(404,'')).mockImplementationOnce(response(200,gzipSync('a'.repeat(1024*1024+1)),{'content-encoding':'gzip','content-type':'text/html'}));
+ await expect(fetchOfficialPage('https://example.edu/program',new RunBudget())).rejects.toMatchObject({info:{code:'page_too_large'}});
+});
+it('collects supporting HTML links before removing navigation and excludes downloads before the link cap',()=>{
+ const page=readable(`<nav><a href="/rules.pdf">Download</a><a href="/fees.docx">Fees document</a><a href="/eligibility">Eligibility</a><a href="/faq">FAQ</a><a href="/apply">Apply</a></nav><main>${text}</main>`,'https://example.edu/program');
+ expect(page.links).toEqual(['https://example.edu/eligibility','https://example.edu/faq','https://example.edu/apply']);expect(page.text).toBe(text.trim());
 });

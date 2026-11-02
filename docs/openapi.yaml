@@ -56,6 +56,61 @@ components:
           enum: [ai_consent_required, discovery_disabled, ai_unavailable, search_not_configured, extraction_not_configured, embedding_not_configured, vector_not_configured, pinecone_authorization_failed, pinecone_index_not_found, index_metric_mismatch, index_dimension_mismatch, vector_unavailable]
         message: { type: string }
         settings: { type: array, items: { type: string } }
+    DiscoveryStepCounts:
+      type: object
+      properties:
+        completed: { type: integer, minimum: 0 }
+        failed: { type: integer, minimum: 0 }
+    DiscoveryDiagnostics:
+      type: object
+      description: Read-only summary of the signed-in student's current request bindings, including historical runs. No provider calls, raw output, source URLs or credentials. Null candidate counts mean they were not recorded.
+      properties:
+        runs: { type: integer, minimum: 0 }
+        searchAttempts: { type: integer, minimum: 0 }
+        httpAttempts: { type: integer, minimum: 0, description: Includes robots requests, redirects and supporting pages }
+        candidates:
+          type: [object, 'null']
+          properties:
+            found: { type: integer, minimum: 0 }
+            filtered: { type: integer, minimum: 0 }
+            queued: { type: integer, minimum: 0 }
+        steps:
+          type: object
+          properties:
+            search: { $ref: '#/components/schemas/DiscoveryStepCounts' }
+            fetch: { $ref: '#/components/schemas/DiscoveryStepCounts' }
+            extract: { $ref: '#/components/schemas/DiscoveryStepCounts' }
+            verify: { $ref: '#/components/schemas/DiscoveryStepCounts' }
+            save: { $ref: '#/components/schemas/DiscoveryStepCounts' }
+            index: { $ref: '#/components/schemas/DiscoveryStepCounts' }
+        programsSaved: { type: integer, minimum: 0, description: Unique recorded catalog IDs, including existing programs updated by the run }
+        failures:
+          type: array
+          items:
+            type: object
+            properties:
+              stage: { enum: [search, robots, fetch, extract, verify, store, index] }
+              code: { type: string, description: Controlled failure code }
+              count: { type: integer, minimum: 1 }
+              mediaType: { enum: [application/pdf, application/json, application/octet-stream, application/zip, office_document, image, audio, video, other] }
+              contentEncoding: { enum: [gzip, br, deflate, identity, other] }
+              finishReason: { enum: [length, content_filter, empty, refusal] }
+              httpStatus: { type: integer, minimum: 400, maximum: 599 }
+              errorType: { enum: [TypeError, ReferenceError, Error] }
+              location: { type: string, description: Allowlisted application file and line only }
+              issues:
+                type: array
+                maxItems: 8
+                items: { type: object, properties: { field: { type: string }, code: { type: string } } }
+        models:
+          type: array
+          description: Requested provider/model snapshots when recorded; never inferred for older runs
+          items: { type: object, properties: { search: { $ref: '#/components/schemas/DiscoveryModel' }, extraction: { $ref: '#/components/schemas/DiscoveryModel' } } }
+    DiscoveryModel:
+      type: object
+      properties:
+        provider: { enum: [openai, anthropic, ollama, none] }
+        model: { type: [string, 'null'] }
     DiscoveryStatus:
       type: object
       properties:
@@ -64,6 +119,7 @@ components:
         finding: { type: boolean }
         limited: { type: boolean, description: Current shared cap blocks new work; already queued work remains finding }
         monthlyAllowance: { $ref: '#/components/schemas/MonthlySearchAllowance' }
+        diagnostics: { $ref: '#/components/schemas/DiscoveryDiagnostics' }
         error: { type: [string, 'null'] }
         lastCheckedAt: { type: [string, 'null'], format: date-time }
         search: { $ref: '#/components/schemas/SearchProgress' }
@@ -97,6 +153,7 @@ components:
         finding: { type: boolean }
         limited: { type: boolean, description: Current shared cap blocks new work; already queued work remains finding }
         monthlyAllowance: { $ref: '#/components/schemas/MonthlySearchAllowance' }
+        diagnostics: { $ref: '#/components/schemas/DiscoveryDiagnostics' }
         error: { type: [string, 'null'] }
         lastCheckedAt: { type: [string, 'null'], format: date-time }
         search: { $ref: '#/components/schemas/SearchProgress' }

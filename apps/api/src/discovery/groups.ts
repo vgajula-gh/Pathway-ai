@@ -21,7 +21,7 @@ export function discoveryQuery(
   bucket: 'free' | 'paid',
   year: number,
 ) {
-  return `high school ${group.topic} programs grades ${group.gradeBand} ${group.region === 'virtual' ? 'online virtual' : group.region} ${bucket === 'free' ? 'free no participation fee' : 'programs fees financial aid'} ${year} official eligibility application`;
+  return `high school ${group.topic} programs grades ${group.gradeBand} ${group.region === 'virtual' ? 'online virtual' : group.region} ${bucket === 'free' ? 'free no participation fee' : 'programs fees financial aid'} ${year} ${year+1} currently accepting applications upcoming opportunities official HTML program pages eligibility application`;
 }
 export const identity = (domain: string, name: string) =>
   `${domain.replace(/^www\./, '').toLowerCase()}|${normalizeTopic(name)}`;

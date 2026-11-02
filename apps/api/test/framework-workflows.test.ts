@@ -155,6 +155,28 @@ it('continues to another candidate after a source failure and never logs input t
   expect(JSON.stringify(steps)).not.toContain('private error text');
   expect(steps).toContainEqual({ node: 'skip_candidate', status: 'skipped' });
 });
+it('filters document links before the candidate cap so readable results from the second bucket remain usable',async()=>{
+  const deps=nodes(),budget=new RunBudget();
+  vi.mocked(deps.search.search).mockResolvedValueOnce({urls:Array.from({length:10},(_,i)=>`https://example.edu/rules-${i}.PDF`),tokens:0})
+    .mockResolvedValueOnce({urls:[page.sourceUrl],tokens:0});
+  const result=await createDiscoveryGraph(deps,budget).invoke({group,buckets:['free','paid']});
+  expect(result.saved).toEqual(['program']);expect(deps.fetch).toHaveBeenCalledOnce();expect(deps.fetch).toHaveBeenCalledWith(page.sourceUrl,budget);
+  expect(budget.candidates).toEqual({found:11,filtered:10,queued:1});expect(budget.failures).toHaveLength(10);expect(budget.failures[0]).toMatchObject({code:'unsupported_content',mediaType:'application/pdf'});
+});
+it('alternates eligible free and paid source lists within the existing run caps',async()=>{
+  const deps=nodes(),budget=new RunBudget();
+  vi.mocked(deps.search.search).mockResolvedValueOnce({urls:Array.from({length:10},(_,i)=>`https://example.edu/free-${i}`),tokens:0})
+    .mockResolvedValueOnce({urls:Array.from({length:10},(_,i)=>`https://example.edu/paid-${i}`),tokens:0});
+  await createDiscoveryGraph(deps,budget).invoke({group,buckets:['free','paid']},workflowConfig('balanced-sources'));
+  expect(vi.mocked(deps.fetch).mock.calls.map(([url])=>url)).toEqual(['https://example.edu/free-0','https://example.edu/paid-0','https://example.edu/free-1','https://example.edu/paid-1','https://example.edu/free-2']);
+  expect(budget.usage.searches).toBe(2);expect(budget.extractionCalls).toBe(5);expect(budget.candidates.queued).toBe(10);
+});
+it('never sends filtered document candidates to a fetch or AI extraction call',async()=>{
+  const deps=nodes(),budget=new RunBudget();
+  vi.mocked(deps.search.search).mockResolvedValue({urls:['https://example.edu/rules.pdf','https://example.edu/fees.docx','http://example.edu/program'],tokens:0});
+  const result=await createDiscoveryGraph(deps,budget).invoke({group,buckets:['free']});
+  expect(result.saved).toEqual([]);expect(deps.fetch).not.toHaveBeenCalled();expect(deps.extract).not.toHaveBeenCalled();expect(budget.candidates).toEqual({found:3,filtered:3,queued:0});
+});
 it('splits LangChain Documents with stable word boundaries and preserves source metadata', async () => {
   const text = Array.from({ length: 1001 }, (_, i) => `word${i}`).join(' '),
     docs = await splitOfficialPages([{ ...page, text }]);
