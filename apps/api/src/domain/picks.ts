@@ -1,3 +1,4 @@
+import {normalizeTopic} from '../discovery/groups.js';
 import { Opp, scoreOpportunity } from './scoring.js';
 import { StudentContext } from './types.js';
 export type Bucket = 'free' | 'paid';
@@ -53,7 +54,8 @@ export function selectPicks(
   const selected: { opportunityId: string; bucket: Bucket; rank: number; isStretch: boolean }[] = [];
   const used = new Set<string>(),
     types = new Set<string>(),
-    efforts = new Set<string>();
+    efforts = new Set<string>(),
+    interests = new Set<string>();
   for (const bucket of ['free', 'paid'] as const)
     for (let rank = 0; rank < counts[bucket]; rank++) {
       const choice = candidates
@@ -62,7 +64,8 @@ export function selectPicks(
           const quality = (c: typeof a) =>
             c.score +
             (!types.has(typeKey(c.o.opportunityType||c.o.category)) ? 0.12 : 0) +
-            (!efforts.has(c.o.commitment.split(':')[0]) ? 0.04 : 0);
+            (!efforts.has(c.o.commitment.split(':')[0]) ? 0.04 : 0) +
+            (c.fit.matched.some(i=>!interests.has(normalizeTopic(i)))?0.12:0);
           const urgency=(c:typeof a)=>{const days=c.o.deadline?Math.round((Date.parse(c.o.deadline)-Date.parse(today))/86400000):Infinity;return days<7?-0.06:Number.isFinite(days)?0.05/(1+days/30):0;};
           return (quality(b)+urgency(b)) - (quality(a)+urgency(a)) || (a.o.deadline||'9999').localeCompare(b.o.deadline||'9999') || a.o.id.localeCompare(b.o.id);
         })[0];
@@ -71,6 +74,7 @@ export function selectPicks(
       used.add(choice.o.id);
       types.add(typeKey(choice.o.opportunityType||choice.o.category));
       efforts.add(choice.o.commitment.split(':')[0]);
+      choice.fit.matched.forEach(i=>interests.add(normalizeTopic(i)));
     }
   const stretch = candidates
     .filter((c) => !c.o.feeFlag && !c.fit.matched.length && !c.fit.goalHit && c.fit.eligibility.status === 'eligible')

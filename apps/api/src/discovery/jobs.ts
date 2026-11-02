@@ -13,7 +13,7 @@ import { fetchOfficialPage, Page } from './pages.js';
 import { extract } from './extraction.js';
 import { verifyOpportunity } from '../domain/opportunity-verification.js';
 import { failureInfo, failureMessage, FailureStage, DiscoveryFailure } from './failures.js';
-import { settleSearchRequests } from './requests.js';
+import { settleSearchRequests,neededGroupBuckets } from './requests.js';
 export {withJobLock} from '../lib/job-lock.js';
 import {withJobLock} from '../lib/job-lock.js';
 export async function reserveRun(groupKey: string, kind: 'discovery' | 'recheck' | 'knowledge', now = new Date()) {
@@ -203,13 +203,20 @@ async function discoverNext(groupKeys?: string[], foreground = false,deadlineAt=
     where: {
       ...(groupKeys ? { key: { in: groupKeys } } : {}),
       OR: [
-        { status: { in: ['queued_manual', 'limited_manual'] } },
+        // Unfunded work resumes through a live request, preserving its student allowance.
+        { status: 'queued_manual' },
         { status: { in: ['queued', 'limited'] }, OR: [{ lastDiscoveredAt: null }, { lastDiscoveredAt: { lte: new Date(Date.now() - 30 * 86400000) } }] },
       ],
     },
     orderBy: { requestedAt: 'asc' },
   });
   if (!group) return 0;
+  const buckets=await neededGroupBuckets(group.key);
+  if(!buckets.length) {
+    await prisma.discoveryGroup.update({where:{key:group.key},data:{status:'idle',pendingBuckets:'[]',error:''}});
+    await settleSearchRequests();
+    return 0;
+  }
   const run = await reserveRun(group.key, 'discovery');
   if (!run) {
     await prisma.discoveryGroup.update({ where: { key: group.key }, data: {
@@ -227,7 +234,7 @@ async function discoverNext(groupKeys?: string[], foreground = false,deadlineAt=
   await prisma.discoveryGroup.update({ where: { key: group.key }, data: { status: 'running', lastDiscoveredAt: new Date(), error: '' } });
   await budget.onStep();
   try {
-    budget.savedIds = await discover(group, j<('free' | 'paid')[]>(group.pendingBuckets, []), budget, {
+    budget.savedIds = await discover(group, buckets, budget, {
       search: (await import('./search/index.js')).getSearch()!, fetch: fetchOfficialPage, extract, ingest:async(id,budget)=>{
         if(!await initializeKnowledge())throw new DiscoveryFailure({stage:'index',code:'index_unavailable'});
         await ingestKnowledge(id,budget);
@@ -252,7 +259,7 @@ export async function runStudentDiscovery(studentId: string) {
   const student = await prisma.student.findUniqueOrThrow({ where: { id: studentId } });
   if (!student.aiConsent) return { skipped: true as const };
   const request=await prisma.opportunitySearchRequest.findFirst({where:{studentId,status:{in:['queued','running']}},orderBy:{createdAt:'desc'}});
-  const keys=request?j<{key:string}[]>(request.groupBindings,[]).map(g=>g.key):[];
+  const keys=request?j<{key:string;cached?:boolean}[]>(request.groupBindings,[]).filter(g=>!g.cached).map(g=>g.key):[];
   return withJobLock('opportunity-jobs', async () => {
     await recoverInterrupted();
     const discovered=keys.length&&discoveryConfigured()?await discoverNext(keys,true):0;

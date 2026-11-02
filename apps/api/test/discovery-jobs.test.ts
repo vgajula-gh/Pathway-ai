@@ -1,6 +1,6 @@
 import {beforeAll,beforeEach,afterAll,it,expect,vi} from 'vitest';
 import {PrismaClient} from '@prisma/client';import {mkdtempSync,writeFileSync,rmSync} from 'node:fs';import {tmpdir} from 'node:os';import {join} from 'node:path';import {execFile} from 'node:child_process';import {promisify} from 'node:util';
-const remote=vi.hoisted(()=>({discover:vi.fn(async()=>[]),reconcile:vi.fn(async()=>0)}));
+const remote=vi.hoisted(()=>({discover:vi.fn(async(..._args:unknown[]):Promise<string[]>=>[]),reconcile:vi.fn(async()=>0)}));
 vi.mock('../src/knowledge/preparation.js',()=>({prepareKnowledgeBatch:async()=>0,knowledgeStates:async()=>({})}));
 vi.mock('../src/knowledge/runtime.js',()=>({initializeKnowledge:async()=>({}),knowledgeUnavailable:()=>null}));
 vi.mock('../src/discovery/pipeline.js',async()=>({...await vi.importActual('../src/discovery/pipeline.js'),discover:remote.discover}));
@@ -83,9 +83,9 @@ it('does not debit a failed search, keeps global paid attempts counted and permi
  expect((await db.discoveryUsage.findFirstOrThrow()).runs).toBe(1);await queueDiscovery(studentId);expect(await db.opportunitySearchRequest.count()).toBe(1);
  await enqueueSearch(studentId,'manual');expect(await db.opportunitySearchRequest.count()).toBe(2);
 });
-it('reuses a full active catalog on first use while an explicit manual search still queues the web',async()=>{
+it('reuses a full active catalog on both first use and explicit Search again without web work',async()=>{
  for(let i=0;i<3;i++)await db.opportunity.create({data:{id:'free'+i,name:'Free '+i,organizer:'Org',source:'discovery',isSample:false,verificationStatus:'verified',verifiedAt:new Date(),sourceCheckedAt:new Date(),category:'Program',url:'https://example.edu',gradeMin:9,gradeMax:12,format:'Virtual',cost:'Free',costType:'free',costVerifiedAt:new Date(),commitment:'Low',skills:'[]',tags:'["robotics"]',deadline:'2030-12-01',evidence:JSON.stringify({deadline:{sourceUrl:'https://example.edu',quote:'Apply by 2030-12-01'}})}});
- const {enqueueSearch}=await import('../src/discovery/requests.js');expect(await enqueueSearch(studentId,'initial')).toMatchObject({usedSharedCatalog:true});expect(await db.discoveryGroup.count()).toBe(0);expect(await db.discoveryRun.count()).toBe(0);expect(await db.studentPick.count()).toBe(6);expect((await refreshStatus(studentId)).remaining).toBe(1);expect(await enqueueSearch(studentId,'manual')).toMatchObject({requested:true});expect(JSON.parse((await db.discoveryGroup.findFirstOrThrow()).pendingBuckets)).toEqual(['free','paid']);expect(await db.discoveryRun.count()).toBe(0);
+ const {enqueueSearch}=await import('../src/discovery/requests.js');expect(await enqueueSearch(studentId,'initial')).toMatchObject({usedSharedCatalog:true});expect(await db.discoveryGroup.count()).toBe(0);expect(await db.discoveryRun.count()).toBe(0);expect(await db.studentPick.count()).toBe(6);expect((await refreshStatus(studentId)).remaining).toBe(1);expect(await enqueueSearch(studentId,'manual')).toMatchObject({usedSharedCatalog:true,requested:false});expect(await db.discoveryGroup.count()).toBe(0);expect(await db.discoveryRun.count()).toBe(0);expect((await refreshStatus(studentId)).remaining).toBe(1);
 });
 it('does not queue a first-use search without interests or beyond the global monthly cap',async()=>{
  await db.student.update({where:{id:studentId},data:{interests:'[]'}});await queueDiscovery(studentId);expect(await db.opportunitySearchRequest.count()).toBe(0);
@@ -95,4 +95,147 @@ it('does not queue a first-use search without interests or beyond the global mon
 it('requires the explicit interest-change bonus action instead of automatically paying for every profile edit',async()=>{
  await queueDiscovery(studentId);await runJobs();await db.student.update({where:{id:studentId},data:{interests:'["art"]'}});await noteInterestChange(studentId,['robotics'],['art']);await queueDiscovery(studentId);expect(await db.opportunitySearchRequest.count()).toBe(1);expect((await refreshStatus(studentId)).remaining).toBe(2);
  const {enqueueSearch}=await import('../src/discovery/requests.js');await enqueueSearch(studentId,'manual');expect(await db.opportunitySearchRequest.count()).toBe(2);
+});
+
+it('rechecks raised discovery limits and resumes an unfunded initial search without erasing its history or spending on status reads',async()=>{
+ const {searchState}=await import('../src/discovery/requests.js');
+ vi.stubEnv('DISCOVERY_MONTHLY_BUDGET','0');await queueDiscovery(studentId);
+ const original=await db.opportunitySearchRequest.findFirstOrThrow();
+ expect(await searchState(studentId)).toMatchObject({limited:true,finding:false,monthlyAllowance:{reasons:['discovery_monthly_limit']}});
+ expect((await refreshStatus(studentId)).remaining).toBe(1);
+ vi.stubEnv('DISCOVERY_MONTHLY_BUDGET','2');
+ expect(await searchState(studentId)).toMatchObject({limited:false,finding:false,search:{phase:'idle'}});
+ expect(await db.discoveryRun.count()).toBe(0);expect(await db.aIUsage.count()).toBe(0);
+ await Promise.all([queueDiscovery(studentId),queueDiscovery(studentId)]);
+ expect(await db.opportunitySearchRequest.count()).toBe(2);
+ expect((await db.opportunitySearchRequest.findUniqueOrThrow({where:{id:original.id}})).status).toBe('limited');
+ expect(await searchState(studentId)).toMatchObject({finding:true,limited:false});
+ await runJobs();expect(remote.discover).toHaveBeenCalledTimes(1);expect((await refreshStatus(studentId)).remaining).toBe(1);
+});
+it('distinguishes both shared monthly caps and only recovers when every reached cap has room',async()=>{
+ const {searchState}=await import('../src/discovery/requests.js');
+ vi.stubEnv('DISCOVERY_MONTHLY_BUDGET','0');vi.stubEnv('AI_MONTHLY_LIMIT','0');await queueDiscovery(studentId);
+ expect((await searchState(studentId)).monthlyAllowance.reasons).toEqual(['discovery_monthly_limit','ai_monthly_limit']);
+ vi.stubEnv('DISCOVERY_MONTHLY_BUDGET','30');await queueDiscovery(studentId);
+ expect(await searchState(studentId)).toMatchObject({limited:true,monthlyAllowance:{reasons:['ai_monthly_limit']}});
+ expect(await db.opportunitySearchRequest.count()).toBe(1);
+ vi.stubEnv('AI_MONTHLY_LIMIT','1');await queueDiscovery(studentId);
+ expect(await searchState(studentId)).toMatchObject({finding:true,limited:false,monthlyAllowance:{reasons:[]}});
+ expect(await db.aIUsage.count()).toBe(0);
+});
+it('resumes blocked manual intent with the manual allowance intact until success, rather than spending in the background without a tracked request',async()=>{
+ const {enqueueSearch,searchState}=await import('../src/discovery/requests.js');
+ await enqueueSearch(studentId,'manual');vi.stubEnv('DISCOVERY_MONTHLY_BUDGET','0');await runJobs();
+ expect(await searchState(studentId)).toMatchObject({limited:true,finding:false});
+ expect((await db.opportunitySearchRequest.findFirstOrThrow()).manualSlot).toBe('base');
+ vi.stubEnv('DISCOVERY_MONTHLY_BUDGET','1');await runJobs();expect(remote.discover).not.toHaveBeenCalled();
+ await queueDiscovery(studentId);
+ const pending=await db.opportunitySearchRequest.findFirstOrThrow({where:{status:'queued'}});
+ expect(pending).toMatchObject({kind:'manual',manualSlot:'base'});expect((await refreshStatus(studentId)).remaining).toBe(1);
+ await runJobs();expect(remote.discover).toHaveBeenCalledTimes(1);expect((await refreshStatus(studentId)).remaining).toBe(0);
+ expect((await db.discoveryUsage.findFirstOrThrow()).runs).toBe(1);
+});
+it('never replays a paid provider failure automatically after the owner raises a cap',async()=>{
+ const {enqueueSearch,searchState}=await import('../src/discovery/requests.js');
+ vi.stubEnv('DISCOVERY_MONTHLY_BUDGET','1');remote.discover.mockRejectedValueOnce(new Error('provider failed'));
+ await enqueueSearch(studentId,'manual');await runJobs();expect((await db.opportunitySearchRequest.findFirstOrThrow()).status).toBe('failed');
+ expect((await searchState(studentId)).limited).toBe(true);
+ vi.stubEnv('DISCOVERY_MONTHLY_BUDGET','30');await queueDiscovery(studentId);await runJobs();
+ expect(await searchState(studentId)).toMatchObject({limited:false,finding:false,search:{phase:'failed'}});
+ expect(await db.opportunitySearchRequest.count()).toBe(1);expect(remote.discover).toHaveBeenCalledTimes(1);
+ expect((await db.discoveryUsage.findFirstOrThrow()).runs).toBe(1);
+});
+it('reports the UTC calendar-month reset separately from the student rolling refresh cycle',async()=>{
+ const {monthlySearchAllowance}=await import('../src/discovery/monthly-allowance.js');
+ vi.stubEnv('DISCOVERY_MONTHLY_BUDGET','1');await db.discoveryUsage.create({data:{month:'2026-12',runs:1}});
+ expect(await monthlySearchAllowance(db,new Date('2026-12-31T23:59:59Z'))).toEqual({limited:true,reasons:['discovery_monthly_limit'],resetsAt:'2027-01-01T00:00:00.000Z'});
+ expect(await monthlySearchAllowance(db,new Date('2027-01-01T00:00:00Z'))).toEqual({limited:false,reasons:[],resetsAt:'2027-02-01T00:00:00.000Z'});
+ expect(await db.discoveryUsage.count()).toBe(1);
+});
+
+it('recovers through the real list/status endpoints after a reached cap is raised to 30 and preserves paid counters',async()=>{
+ const month=new Date().toISOString().slice(0,7);
+ await db.discoveryUsage.create({data:{month,runs:10}});await db.aIUsage.create({data:{key:'month:'+month,count:10}});
+ vi.stubEnv('DISCOVERY_MONTHLY_BUDGET','10');await queueDiscovery(studentId);
+ const app=await buildApp();app.log.level='silent';const headers={'x-student-id':studentId};
+ try{
+  expect((await app.inject({url:'/api/discovery/status',headers})).json()).toMatchObject({enabled:true,limited:true,refresh:{remaining:1}});
+  vi.stubEnv('DISCOVERY_MONTHLY_BUDGET','5');await queueDiscovery(studentId);expect(await db.opportunitySearchRequest.count()).toBe(1);
+  expect((await app.inject({url:'/api/discovery/status',headers})).json().limited).toBe(true);
+  vi.stubEnv('DISCOVERY_MONTHLY_BUDGET','30');
+  expect((await app.inject({url:'/api/discovery/status',headers})).json()).toMatchObject({enabled:true,limited:false,monthlyAllowance:{limited:false,reasons:[]}});
+  const response=await app.inject({url:'/api/opportunities',headers});expect(response.statusCode).toBe(200);expect(response.json()).toMatchObject({finding:false,limited:false});
+  expect((await app.inject({method:'POST',url:'/api/opportunities/refresh',headers})).json()).toMatchObject({finding:true,limited:false});
+  expect((await db.discoveryUsage.findUniqueOrThrow({where:{month}})).runs).toBe(10);expect((await db.aIUsage.findUniqueOrThrow({where:{key:'month:'+month}})).count).toBe(10);
+  await runJobs();expect((await db.discoveryUsage.findUniqueOrThrow({where:{month}})).runs).toBe(11);expect((await db.aIUsage.findUniqueOrThrow({where:{key:'month:'+month}})).count).toBe(11);
+ }finally{await app.close();}
+});
+it('reuses a shared catalog that filled while a manual search was blocked, without debiting the manual allowance',async()=>{
+ const {enqueueSearch}=await import('../src/discovery/requests.js');
+ await enqueueSearch(studentId,'manual');vi.stubEnv('DISCOVERY_MONTHLY_BUDGET','0');await runJobs();
+ for(let i=0;i<3;i++)await db.opportunity.create({data:{id:'new-free'+i,name:'New free '+i,organizer:'Org',source:'discovery',isSample:false,verificationStatus:'verified',verifiedAt:new Date(),sourceCheckedAt:new Date(),category:'Program',url:'https://example.edu',gradeMin:9,gradeMax:12,format:'Virtual',cost:'Free',costType:'free',costVerifiedAt:new Date(),commitment:'Low',skills:'[]',tags:'["robotics"]',deadline:'2030-12-01',evidence:JSON.stringify({deadline:{sourceUrl:'https://example.edu',quote:'Apply by 2030-12-01'}})}});
+ vi.stubEnv('DISCOVERY_MONTHLY_BUDGET','30');expect(await queueDiscovery(studentId)).toMatchObject({requested:false,usedSharedCatalog:true});
+ await runJobs();expect(remote.discover).not.toHaveBeenCalled();expect((await refreshStatus(studentId)).remaining).toBe(1);expect(await db.discoveryRun.count()).toBe(0);
+});
+
+async function fillFree(topic='robotics') {
+ const template=await db.opportunity.findUniqueOrThrow({where:{id:'paid0'}});
+ for(let i=0;i<3;i++)await db.opportunity.create({data:{...template,id:'free'+i,name:'Free '+i,cost:'Free',costType:'free',costVerifiedAt:new Date(),tags:JSON.stringify([topic])}});
+}
+it('keeps first visits read-only and searches only Student A’s missing interest, then lets Student B reuse six shared picks with AI and caps off',async()=>{
+ await db.opportunity.updateMany({data:{tags:'["art"]'}});await fillFree('art');
+ await db.student.update({where:{id:studentId},data:{interests:'["art","robotics"]'}});
+ const app=await buildApp();app.log.level='silent';const headers={'x-student-id':studentId};
+ try{
+  const first=(await app.inject({url:'/api/opportunities',headers})).json();
+  expect(first).toMatchObject({picks:[],finding:false,catalog:{complete:false,missingInterests:['robotics']}});
+  await runJobs();expect(await db.opportunitySearchRequest.count()).toBe(0);expect(await db.discoveryRun.count()).toBe(0);expect(remote.discover).not.toHaveBeenCalled();
+  const started=await app.inject({method:'POST',url:'/api/opportunities/refresh',headers});expect(started.statusCode).toBe(202);expect(started.json()).toMatchObject({requested:true,finding:true});
+  expect((await db.discoveryGroup.findMany()).map(g=>g.topic)).toEqual(['robotics']);
+  expect((await app.inject({url:'/api/opportunities',headers})).json().picks).toHaveLength(6);
+  remote.discover.mockImplementationOnce(async()=>{
+   const template=await db.opportunity.findUniqueOrThrow({where:{id:'paid0'}});
+   const found=[];
+   for(const bucket of ['free','paid']){const id='robotics-'+bucket;await db.opportunity.create({data:{...template,id,name:id,tags:'["robotics"]',costType:bucket,cost:bucket==='free'?'Free':'$30',costVerifiedAt:new Date()}});found.push(id);}
+   return found;
+  });
+  expect((await app.inject({method:'POST',url:'/api/discovery/run',headers})).statusCode).toBe(200);
+  expect(remote.discover).toHaveBeenCalledTimes(1);expect(remote.discover.mock.calls[0][0]).toMatchObject({topic:'robotics'});expect(remote.discover.mock.calls[0][1]).toEqual(['free','paid']);
+  const a=(await app.inject({url:'/api/opportunities',headers})).json();expect(a.picks.filter((p:any)=>p.bucket==='free')).toHaveLength(3);expect(a.picks.filter((p:any)=>p.bucket==='paid')).toHaveLength(3);expect(a.picks.some((p:any)=>p.tags.includes('robotics'))).toBe(true);
+  const b=await db.student.create({data:{name:'Student B',grade:10,interests:'["art","robotics"]',region:'NC',aiConsent:false}}),bHeaders={'x-student-id':b.id};
+  vi.stubEnv('DISCOVERY_ENABLED','false');vi.stubEnv('AI_MONTHLY_LIMIT','0');vi.stubEnv('DISCOVERY_MONTHLY_BUDGET','0');vi.stubEnv('AI_DISABLED','true');env.aiDisabled=true;
+  await useManualRefresh(b.id);
+  for(let n=0;n<2;n++){
+   const reuse=await app.inject({method:'POST',url:'/api/opportunities/refresh',headers:bHeaders});expect(reuse.statusCode).toBe(202);expect(reuse.json()).toMatchObject({usedSharedCatalog:true,requested:false,finding:false,catalog:{complete:true}});
+   expect((await app.inject({url:'/api/opportunities',headers:bHeaders})).json().picks).toHaveLength(6);
+  }
+  expect((await refreshStatus(b.id)).remaining).toBe(0);expect(remote.discover).toHaveBeenCalledTimes(1);expect(await db.discoveryRun.count()).toBe(1);expect((await db.discoveryUsage.findFirstOrThrow()).runs).toBe(1);expect((await db.aIUsage.findFirstOrThrow()).count).toBe(1);
+  expect(await db.aIUsage.count({where:{key:{startsWith:'day:'}}})).toBe(0);
+ }finally{await app.close();}
+});
+it('rechecks a queued gap before funding it and settles a newly complete shared library without a manual debit',async()=>{
+ const {enqueueSearch,searchState}=await import('../src/discovery/requests.js');
+ await enqueueSearch(studentId,'manual');await fillFree();await runJobs();
+ expect(remote.discover).not.toHaveBeenCalled();expect(await db.discoveryRun.count()).toBe(0);expect((await db.discoveryUsage.findFirst())?.runs||0).toBe(0);expect(await db.aIUsage.count()).toBe(0);expect((await refreshStatus(studentId)).remaining).toBe(1);
+ expect(await searchState(studentId)).toMatchObject({finding:false,search:{phase:'cached',found:6}});
+});
+it('keeps expired, closed and unverified records from preventing a necessary missing-bucket search',async()=>{
+ await fillFree();await db.opportunity.update({where:{id:'free0'},data:{applicationStatus:'closed'}});await db.opportunity.update({where:{id:'free1'},data:{sourceCheckedAt:new Date(Date.now()-31*86400000)}});await db.opportunity.update({where:{id:'free2'},data:{verificationStatus:'unverified'}});
+ const {enqueueSearch}=await import('../src/discovery/requests.js');
+ expect(await enqueueSearch(studentId,'initial')).toMatchObject({requested:true,catalog:{complete:false,free:0}});
+ expect(JSON.parse((await db.discoveryGroup.findFirstOrThrow()).pendingBuckets)).toEqual(['free']);
+});
+it('cancels unfunded queued work when consent is withdrawn or the student changes interests',async()=>{
+ const {enqueueSearch}=await import('../src/discovery/requests.js');
+ for(const update of [{aiConsent:false},{interests:'["art"]'}]) {
+  await db.student.update({where:{id:studentId},data:{aiConsent:true,interests:'["robotics"]'}});
+  await enqueueSearch(studentId,'manual');await db.student.update({where:{id:studentId},data:update});await runJobs();
+ }
+ expect(remote.discover).not.toHaveBeenCalled();expect(await db.discoveryRun.count()).toBe(0);expect(await db.opportunitySearchRequest.count({where:{status:'cancelled'}})).toBe(2);expect((await refreshStatus(studentId)).remaining).toBe(1);
+});
+it('reports current cached results when an older cached request predates a newer limited attempt',async()=>{
+ const {enqueueSearch,searchState}=await import('../src/discovery/requests.js');
+ await fillFree();await enqueueSearch(studentId,'initial',new Date(Date.now()-2000));
+ await db.opportunitySearchRequest.create({data:{studentId,kind:'manual',signature:'robotics|9-10|NC',status:'limited',createdAt:new Date(Date.now()-1000),finishedAt:new Date()}});
+ await enqueueSearch(studentId,'manual');expect(await searchState(studentId)).toMatchObject({finding:false,search:{phase:'cached',found:6}});
 });

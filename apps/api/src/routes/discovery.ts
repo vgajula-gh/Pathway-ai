@@ -14,10 +14,7 @@ export default async function routes(app: FastifyInstance) {
     z.object({})
       .strict()
       .parse(req.body || {});
-    const availability = await discoveryAvailability(s.aiConsent);
-    if (!availability.enabled)
-      throw new HttpError(s.aiConsent?503:403, availability.unavailable!.message);
-    const result=await enqueueSearch(s.id,'manual');
+    const result=await enqueueSearch(s.id,'initial',new Date(),{explicit:true});
     return reply.code(202).send({...result,...await discoveryStatus(s.id)});
   });
   app.post('/api/discovery/run',async req=>{

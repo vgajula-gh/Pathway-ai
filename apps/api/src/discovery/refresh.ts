@@ -2,15 +2,8 @@ import { Prisma } from '@prisma/client';
 import { prisma, j } from '../lib/db.js';
 import { HttpError } from '../lib/errors.js';
 import { currentCycle, interestSignature, refreshAllowance } from '../domain/refresh.js';
-import { setting, discoveryConfigured } from './config.js';
-import { interestGroups } from './groups.js';
-import { loadContext } from '../lib/context.js';
-import { toOpp, personalPicks } from '../lib/picks.js';
-import { scoreOpportunity } from '../domain/scoring.js';
-import { bucketFor } from '../domain/picks.js';
-import { env } from '../lib/env.js';
-import { activeOpportunity } from '../domain/opportunity-active.js';
-import { wallNow, dkey } from '../domain/time.js';
+import { setting } from './config.js';
+import { personalPicks } from '../lib/picks.js';
 export const refreshDays = () => setting('REFRESH_INTERVAL_DAYS', 30, 365) || 30;
 export async function transaction<T>(fn: (tx: Prisma.TransactionClient) => Promise<T>) {
   for (let attempt = 0; ; attempt++)
@@ -98,32 +91,7 @@ export async function noteInterestChange(
   });
 }
 export async function shortBuckets(studentId: string) {
-  const { ctx, events, rules } = await loadContext(studentId);
-  const { dayCapacity } = await import('../domain/schedule.js');
-  const { addDays, sod } = await import('../domain/time.js');
-  let free = 0;
-  for (let d = 0; d < 7; d++) free += dayCapacity(events, rules, addDays(sod(new Date()), d)).available;
-  const [opps, saved, feedback] = await Promise.all([
-    prisma.opportunity.findMany({ where: env.demoMode ? {} : { isSample: false, source: { not: 'seed' } } }),
-    prisma.savedOpportunity.findMany({ where: { studentId } }),
-    prisma.opportunityFeedback.findMany({ where: { studentId } }),
-  ]);
-  const excluded = new Set([...saved.map((s) => s.opportunityId), ...feedback.map((s) => s.opportunityId)]);
-  const good = opps.map(toOpp).filter((o) => {
-    const fit = scoreOpportunity(o, ctx, free);
-    return (
-      !excluded.has(o.id) && (env.demoMode&&o.isSample||activeOpportunity(o,dkey(wallNow(ctx.timezone||'UTC')),new Date())) &&
-      !['expired', 'stale'].includes(o.verificationStatus) &&
-      !fit.excluded &&
-      fit.score >= 0.38 &&
-      (fit.matched.length > 0 || ctx.interests.length === 0)
-    );
-  });
-  return (['free', 'paid'] as const).filter(
-    (bucket) =>
-      good.filter((o) => bucketFor(o) === bucket).length <
-      setting(bucket === 'free' ? 'FREE_PICKS' : 'PAID_PICKS', 3, 10),
-  );
+  return (await (await import('./catalog.js')).catalogCoverage(studentId)).shortBuckets;
 }
 export async function queueDiscovery(studentId: string, now = new Date()) {
   const { enqueueSearch } = await import('./requests.js');
@@ -137,6 +105,7 @@ export async function discoveryStatus(studentId: string) {
 export async function automaticRefreshBatch(now = new Date()) {
   const students = await prisma.student.findMany({
     where: {
+      opportunitySearches: { some: { status: { in: ['cached','complete','empty'] } } },
       pickState: { autoRefreshedAt: { lte: new Date(+now - refreshDays() * 86400000) } },
     },
     orderBy: { createdAt: 'asc' },

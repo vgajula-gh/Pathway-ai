@@ -21,6 +21,8 @@ beforeEach(async()=>{
 afterAll(async()=>{env.accessCodes=originalCodes;vi.unstubAllEnvs();await db.$disconnect();rmSync(dir,{recursive:true,force:true});});
 it('persists personal buckets, refills only the removed bucket, records feedback and preserves Interested',async()=>{
  const app=await buildApp();app.log.level='silent';try{
+ const first=await app.inject({url:'/api/opportunities',headers:headers()});expect(first.statusCode).toBe(200);expect(first.json().picks).toEqual([]);expect(await db.opportunitySearchRequest.count()).toBe(0);
+ expect((await app.inject({method:'POST',url:'/api/opportunities/refresh',headers:headers()})).json()).toMatchObject({usedSharedCatalog:true,requested:false});
  let res=await app.inject({url:'/api/opportunities',headers:headers()});expect(res.statusCode).toBe(200);let picks=res.json().picks;
  expect(picks.filter((p:any)=>p.bucket==='free')).toHaveLength(3);expect(picks.filter((p:any)=>p.bucket==='paid')).toHaveLength(3);
  const paid=picks.filter((p:any)=>p.bucket==='paid').map((p:any)=>p.id).sort(), chosen=picks.find((p:any)=>p.bucket==='free').id;

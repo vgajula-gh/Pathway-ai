@@ -166,12 +166,12 @@ Each invocation is bounded and shares a persistent lock/heartbeat with server ti
 ### Confirm search, ingestion and answers
 
 1. Create a **new test profile** with interests, region and AI consent. Do not use Clear data on a real student profile to test a fresh start.
-2. Open Explore. It should show searching skeletons or recent shared verified picks. Interested stays hidden until something is saved. Failed source/provider searches show a real error and Try again; they do not consume the student’s manual allowance.
+2. Open Explore and choose **Search for opportunities**. Both this button and Search again check the shared library first, then search only missing interests or Free/Paid gaps. Opening Explore alone does not queue a web search. Existing picks stay visible during a search. Interested stays hidden until something is saved. Failed source/provider searches show a real error and Try again; they do not consume the student’s manual allowance.
 3. Check Free/Paid cards: organizer/type, future competition deadline, Verified date, honest cost, fit reason, official link. It is valid to find fewer than three, or none, when official pages do not support active/eligible details. The app does not invent replacements.
 4. Mark one Interested; its source-backed requirements/deadline appear in the tracker, and a same-bucket catalog replacement costs no AI. Not for me asks why.
 5. Watch Preparing details change to Ask about this program. In Pinecone, select **opportunities** and wait briefly for record statistics to update. A shared program is stored once, so another student’s search can reuse records without increasing the count.
 6. Ask a requirements question and a deadline/cost question. Each factual excerpt has an official link/check date; structured facts are from SQL. Ask about my opportunities should group programs. Checklist changes appear as a proposal; approve only after reviewing.
-7. Search again is limited to one completed manual search per rolling month plus one interest-change bonus. Automatic shared catalog reuse and saving/dismissing do not debit it. Search again explicitly searches the web even if the shortlist is full. Paid provider failures do count toward the overall monthly attempt caps.
+7. New web work after the initial search is limited to one completed manual search per rolling month plus one interest-change bonus. Both search buttons reuse a complete active library without web work or allowance debit, including when AI is off or caps are reached. Saving/dismissing also costs no AI. Confirm that Student B can reuse Student A’s discoveries. Paid provider failures do count toward the overall monthly attempt caps.
 
 If there are **zero source pages/chunks**, zero Pinecone records is expected: fix official-page verification first. Ask Replit Agent to inspect safe `DiscoveryRun.usage.failures` fields (`stage`, `code`, public `sourceHost`, `httpStatus`) and the public URL that failed. Robots restrictions, 403 bot blocks, redirects requiring review, missing evidence and JavaScript-only pages are distinct failures. Do not bypass the source’s robots/access rules or delete student data. Source reads use public HTTPS, DNS pinning, canonical www/apex redirects, decompression, time/size limits and controlled errors.
 
@@ -199,7 +199,7 @@ The idempotent script removes unused public sample listings/pages/chunks/vectors
 
 - [ ] New onboarding offers no sample semester and creates no sample events/opportunities.
 - [ ] Today order is day at a glance → next best step → spark; empty states and seven-day Due soon work.
-- [ ] First Explore visit auto-starts search or uses a recent verified shared catalog; no fake loading titles.
+- [ ] First Explore visit offers Search for opportunities; neither page entry nor status reads queue web search. Both buttons reuse a complete shared library and search only gaps; no fake loading titles.
 - [ ] Up to three Free/three Paid, active only, future competition deadlines, Verified dates and honest unknown costs.
 - [ ] Interested appears only after saving; checklist/deadline are cited; bucket refills without AI.
 - [ ] Not for me asks a reason and refills its bucket without AI.
@@ -213,3 +213,13 @@ The idempotent script removes unused public sample listings/pages/chunks/vectors
 Cost assumptions, caps and provider-source links: [sourcing and cost guide](docs/08-OPPORTUNITY-AND-NEWS-SOURCING.md). Real provider quality, live official-site access, Pinecone ingestion and phone layout must be checked after publishing; local tests use mock providers and temporary databases.
 
 Foreground work handles a search group or a standalone program preparation per call, keeping slow providers within the web request window. Timer/cron work shares a three-minute run deadline, checked before funding another stage; a final in-flight provider call can finish after that deadline. Paid nodes are never automatically replayed.
+
+## Planning a ten-student pilot and changing caps
+
+The app has no fixed student-profile count. Replit capacity depends on the hosting plan and concurrent usage; the pilot is not a load-test guarantee. ACCESS_CODES is a comma-separated invitation allowlist, not a seat count. Give ten testers ten distinct random codes so each profile records its invitation and access can be revoked separately. One code can register multiple profiles. Students create their own private sign-in phrase for returning on any device; they do not receive SIGN_IN_SECRET or service API keys.
+
+A DISCOVERY_MONTHLY_BUDGET of 30 allows thirty shared topic-group discovery attempts, including failed paid attempts. One student search can need up to five groups; ten students with entirely different five-interest profiles could need fifty runs just for their first searches. Starting with one or two interests and sharing the active catalog can reduce demand. Thirty runs can cover a modest pilot, but does not guarantee thirty full student searches.
+
+AI_MONTHLY_LIMIT is a separate shared cap for interactive requests plus discovery/recheck/preparation reservations. If it remains 1000, ten equally active students have about 100 interactive requests each per month before subtracting shared work. AI_DAILY_LIMIT=20 still caps each student’s daily interactive requests. A feature request can include multiple model calls; these limits are not dollar budgets.
+
+When raising a cap, change the production Secret and republish. The recovery update rechecks both caps against stored current-month usage. Choose Search again to resume previously unfunded work; opening Explore or reading status alone does not start it. It keeps usage records and manual intent; failed paid searches are not automatically replayed. Check `/api/discovery/status` while signed in: `monthlyAllowance.reasons` identifies which cap still blocks searches, and `resetsAt` identifies the shared UTC-month reset. The personal rolling-cycle next date is separate. If the app still reports a cap after this fix, have Replit Agent report the current DiscoveryUsage.runs / DISCOVERY_MONTHLY_BUDGET and AIUsage month count / AI_MONTHLY_LIMIT without printing credentials. This change needs no new schema changes or Secrets. It does not change your configured caps.
