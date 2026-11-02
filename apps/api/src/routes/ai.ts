@@ -57,5 +57,8 @@ export default async function routes(app: FastifyInstance) {
   });
 
   app.get('/api/resources', async () => RESOURCES);
-  app.get('/api/health', async () => ({ ok: true, aiEnabled: !!getLLM(), provider: env.aiDisabled ? null : env.provider }));
+  app.get('/api/health', async (_req, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    return { ok: true, aiEnabled: !!getLLM(), provider: env.aiDisabled ? null : env.provider };
+  });
 }

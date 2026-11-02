@@ -54,3 +54,9 @@ Opportunity Gap Finder · Opportunity Creator (design your own project/club) · 
 - Read replies aloud is separately selected, reads new replies only, and has a stop control. Unchecking it, disabling Voice, and leaving Buddy cancel playback.
 - Permission denial and speech errors show helpful messages; no audio capture, uploads, or storage.
 - Automated browser API mocks cover recognition, draft updates, opt-in, errors, cleanup, and settings persistence. Manual supported-browser microphone and speaker checks are needed for actual audio hardware.
+
+## Discovery readiness regression
+
+- Explore keeps its opportunity search control visible when setup is incomplete, student AI consent is off, discovery is running, or the manual allowance is spent. Disabled controls have an accessible explanation and catalog picks remain usable.
+- Authenticated discovery status and catalog responses identify setup blockers with controlled codes and setting names only. Pinecone authentication, missing index, wrong metric/dimension and transport failures must not expose raw provider messages or key values.
+- A failed refresh while unavailable consumes no manual allowance or AI quota. Consent-off status does not contact providers. Library readiness retries after a minute, can recover, and sends no paid AI requests. SQLite retains its memory store.

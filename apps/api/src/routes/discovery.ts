@@ -3,7 +3,7 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 import { requireStudent } from '../lib/auth.js';
 import { HttpError } from '../lib/errors.js';
-import { initializeKnowledge } from '../knowledge/runtime.js';
+import { discoveryAvailability } from '../discovery/availability.js';
 import { personalPicks } from '../lib/picks.js';
 import { discoveryStatus, queueDiscovery, useManualRefresh } from '../discovery/refresh.js';
 import { runJobs } from '../discovery/jobs.js';
@@ -14,17 +14,19 @@ export default async function routes(app: FastifyInstance) {
     z.object({})
       .strict()
       .parse(req.body || {});
-    if (!s.aiConsent || !(await initializeKnowledge()))
-      throw new HttpError(503, 'Showing catalog picks. Live discovery is not available right now.');
+    const availability = await discoveryAvailability(s.aiConsent);
+    if (!availability.enabled)
+      throw new HttpError(503, availability.unavailable!.message);
     await useManualRefresh(s.id);
     await personalPicks(s.id, true);
     await queueDiscovery(s.id);
     await audit(s.id, 'student', 'Refreshed personal opportunity picks');
     return discoveryStatus(s.id);
   });
-  app.get('/api/discovery/status', async (req) => {
+  app.get('/api/discovery/status', async (req, reply) => {
+    reply.header('Cache-Control', 'no-store');
     const s = await requireStudent(req);
-    return { enabled: s.aiConsent && !!(await initializeKnowledge()), ...(await discoveryStatus(s.id)) };
+    return { ...(await discoveryAvailability(s.aiConsent)), ...(await discoveryStatus(s.id)) };
   });
   app.post('/internal/jobs/run', async (req) => {
     const secret = process.env.JOBS_SECRET;

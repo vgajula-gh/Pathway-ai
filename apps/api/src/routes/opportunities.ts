@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import { discoveryStatus,queueDiscovery } from '../discovery/refresh.js';
-import { initializeKnowledge } from '../knowledge/runtime.js';
+import { discoveryAvailability } from '../discovery/availability.js';
 import { requirementsAction } from '../knowledge/requirements.js';
 import { personalPicks, toOpp } from '../lib/picks.js';
 import { prisma, j } from '../lib/db.js';
@@ -24,15 +24,16 @@ async function scored(studentId: string) {
 }
 
 export default async function routes(app: FastifyInstance) {
-  app.get('/api/opportunities', async req => {
+  app.get('/api/opportunities', async (req, reply) => {
+    reply.header('Cache-Control', 'no-store');
     const s = await requireStudent(req), list = await scored(s.id);
     const ok = list.filter(o => !o.fit.excluded && o.status !== 'dismissed').sort((a, b) => ((b.fit as any).score - (a.fit as any).score));
     const picks = await personalPicks(s.id);
-    const enabled=s.aiConsent&&!!await initializeKnowledge();
+    const availability=await discoveryAvailability(s.aiConsent), enabled=availability.enabled;
     if(enabled)await queueDiscovery(s.id);
     const discovery=await discoveryStatus(s.id);
     const chunks=enabled?await prisma.knowledgeChunk.findMany({where:{opportunityId:{in:picks.map(p=>p.id)}},select:{opportunityId:true}}):[];
-    return { ...discovery, discoveryEnabled:enabled, picks:picks.map(p=>({...p,canAsk:enabled&&s.aiConsent&&chunks.some(c=>c.opportunityId===p.id)})), recommended: ok, excluded: list.filter(o => o.fit.excluded).map(o => ({ id: o.id, name: o.name, reasons: o.fit.eligibility.reasons })), dismissed: list.filter(o => o.status === 'dismissed').length, sampleData: list.some(o => o.isSample) };
+    return { ...discovery, discoveryEnabled:enabled, unavailable:availability.unavailable, picks:picks.map(p=>({...p,canAsk:enabled&&s.aiConsent&&chunks.some(c=>c.opportunityId===p.id)})), recommended: ok, excluded: list.filter(o => o.fit.excluded).map(o => ({ id: o.id, name: o.name, reasons: o.fit.eligibility.reasons })), dismissed: list.filter(o => o.status === 'dismissed').length, sampleData: list.some(o => o.isSample) };
   });
 
   app.get('/api/opportunities/:id', async req => {

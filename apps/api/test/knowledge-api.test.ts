@@ -5,7 +5,7 @@ import {tmpdir} from 'node:os';import {join} from 'node:path';import {execFile} 
 const holder=vi.hoisted(()=>({runtime:null as any,llm:null as any}));
 const dir=mkdtempSync(join(tmpdir(),'pathway-knowledge-')),url=`file:${dir}/test.db`,db=new PrismaClient({datasourceUrl:url+'?connection_limit=1'});
 vi.mock('../src/lib/db.js',()=>({get prisma(){return db;},j:(v:string,f:unknown)=>{try{return v?JSON.parse(v):f;}catch{return f;}}}));
-vi.mock('../src/knowledge/runtime.js',()=>({initializeKnowledge:async()=>holder.runtime,pauseKnowledge:()=>{}}));
+vi.mock('../src/knowledge/runtime.js',()=>({initializeKnowledge:async()=>holder.runtime,knowledgeUnavailable:()=>({code:'vector_unavailable',message:'The program library cannot connect right now. Catalog picks still work.',settings:[]}),pauseKnowledge:()=>{}}));
 vi.mock('../src/agent/llm/index.js',async()=>({...await vi.importActual('../src/agent/llm/index.js'),getLLM:()=>holder.llm,requireLLM:()=>holder.llm}));
 import {memoryStore} from '../src/knowledge/adapters/memory.js';import {ingestKnowledge,searchKnowledge,reconcileVectors} from '../src/knowledge/service.js';import {RunBudget} from '../src/discovery/config.js';import {buildApp} from '../src/app.js';import {env} from '../src/lib/env.js';
 let studentId='';const originalCodes=env.accessCodes,headers=()=>({'x-student-id':studentId});
@@ -59,4 +59,24 @@ it('does not answer from an outdated snapshot while changed pages await embeddin
 it('keeps the friendly service-unavailable response when a LangGraph retrieval node fails',async()=>{
  holder.runtime.embedder.embed.mockRejectedValue(new Error('private provider error'));
  const app=await buildApp();app.log.level='silent';try{const r=await app.inject({method:'POST',url:'/api/buddy/messages',headers:headers(),payload:{text:'What is required?',opportunityId:'program'}});expect(r.statusCode).toBe(503);expect(r.json().error).toContain('questions are taking a break');expect(r.json().error).not.toContain('private provider error');expect(await db.agentAction.count()).toBe(0);}finally{await app.close();}
+});
+
+it('explains discovery unavailability on authenticated status and catalog responses without consuming a refresh',async()=>{
+ holder.runtime=null;const app=await buildApp();app.log.level='silent';try{
+ expect((await app.inject({url:'/api/discovery/status'})).statusCode).toBe(401);
+ const status=await app.inject({url:'/api/discovery/status',headers:headers()});expect(status.statusCode).toBe(200);expect(status.headers['cache-control']).toBe('no-store');expect(status.json()).toMatchObject({enabled:false,error:null,unavailable:{code:'vector_unavailable',settings:[]}});
+ expect((await app.inject({url:'/api/health'})).headers['cache-control']).toBe('no-store');
+ const catalog=await app.inject({url:'/api/opportunities',headers:headers()});expect(catalog.statusCode).toBe(200);expect(catalog.headers['cache-control']).toBe('no-store');expect(catalog.json()).toMatchObject({discoveryEnabled:false,unavailable:{code:'vector_unavailable'}});expect(catalog.json().picks).toBeInstanceOf(Array);
+ const refresh=await app.inject({method:'POST',url:'/api/opportunities/refresh',headers:headers()});expect(refresh.statusCode).toBe(503);expect(refresh.json().error).toContain('program library');
+ const after=(await app.inject({url:'/api/discovery/status',headers:headers()})).json();expect(after.refresh.remaining).toBe(status.json().refresh.remaining);expect(await db.aIUsage.count()).toBe(0);
+ }finally{await app.close();}
+});
+
+it('reports student consent separately and clears the setup issue when discovery is ready',async()=>{
+ const app=await buildApp();app.log.level='silent';try{
+ await db.student.update({where:{id:studentId},data:{aiConsent:false}});
+ expect((await app.inject({url:'/api/discovery/status',headers:headers()})).json()).toMatchObject({enabled:false,unavailable:{code:'ai_consent_required'}});
+ await db.student.update({where:{id:studentId},data:{aiConsent:true}});
+ expect((await app.inject({url:'/api/discovery/status',headers:headers()})).json()).toMatchObject({enabled:true,unavailable:null});
+ }finally{await app.close();}
 });
