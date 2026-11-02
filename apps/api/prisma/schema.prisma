@@ -20,6 +20,10 @@ model Student {
   accessCode  String?  // Tester code used at setup (never included in ordinary profile responses)
   grade       Int
   timezone    String   @default("America/New_York")
+  region      String   @default("") // US state abbreviation, virtual, or unspecified
+  pickState   PickRefreshState?
+  picks       StudentPick[]
+  feedback    OpportunityFeedback[]
   location    String   @default("")   // broad area only, e.g. "Raleigh area"
   interests   String   @default("[]") // JSON string[]
   skills      String   @default("[]") // JSON string[]
@@ -89,8 +93,8 @@ model Opportunity {
   organizer       String
   category        String
   url             String
-  gradeMin        Int
-  gradeMax        Int
+  gradeMin        Int?
+  gradeMax        Int?
   minAge          Int?
   format          String
   cost            String
@@ -101,12 +105,53 @@ model Opportunity {
   deadline        String?  // ISO date if verified, else null
   sourceCheckedAt DateTime? // null => not verified
   isSample        Boolean  @default(true)
+  lastRecheckedAt DateTime?
+  verificationStatus String @default("new_find")
+  verifiedAt      DateTime?
+  officialDomain  String @default("")
+  region          String @default("[]")
+  costType        String @default("unknown")
+  costAmount      String?
+  costVerifiedAt  DateTime?
+  financialAidNote String?
+  feeFlag         Boolean @default(false)
+  discoveredFor  String @default("[]")
+  source          String @default("seed")
+  evidence        String @default("{}")
+  requirements    String @default("[]")
+  chunks          KnowledgeChunk[]
+  pages           SourcePage[]
+  picks           StudentPick[]
+}
+
+model StudentPick {
+  studentId String
+  opportunityId String
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  opportunity Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  bucket String
+  rank Int
+  isStretch Boolean @default(false)
+  pickedAt DateTime @default(now())
+  refreshCycle String
+  @@id([studentId, opportunityId])
+}
+
+model OpportunityFeedback {
+  studentId String
+  opportunityId String
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  reason String
+  createdAt DateTime @default(now())
+  @@id([studentId, opportunityId])
 }
 
 model SavedOpportunity {
   studentId     String
   opportunityId String
   deadline      String? // Added by student, never a verified source deadline
+  citedDeadline String?
+  citations     String @default("{}")
   notes         String @default("")
   checklist     String @default("[]")
   status        String   @default("interested") // saved|dismissed|preparing|applied|done
@@ -192,6 +237,7 @@ model Conversation {
   id        String        @id @default(cuid())
   studentId String
   student   Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  opportunityId String?
   title     String        @default("Conversation")
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
@@ -299,4 +345,84 @@ model LoginAttempt {
   count Int @default(0)
   expiresAt DateTime
   @@index([expiresAt])
+}
+
+model SourcePage {
+  id String @id @default(cuid())
+  opportunityId String
+  opportunity Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  sourceUrl String
+  pageTitle String
+  text String
+  contentHash String
+  checkedAt DateTime @default(now())
+  @@unique([opportunityId, sourceUrl])
+}
+
+model DiscoveryGroup {
+  key String @id
+  topic String
+  gradeBand String
+  region String
+  pendingBuckets String @default("[]")
+  requestedAt DateTime?
+  lastDiscoveredAt DateTime?
+  status String @default("idle")
+  error String @default("")
+}
+
+model KnowledgeChunk {
+  id String @id
+  opportunityId String
+  opportunity Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  text String
+  sourceUrl String
+  pageTitle String
+  checkedAt DateTime
+  contentHash String
+  scope String @default("opportunity")
+  localEmbedding String @default("[]") // only the memory/SQLite adapter persists vectors here
+  embeddingModel String
+  @@index([opportunityId, sourceUrl])
+}
+
+model PickRefreshState {
+  studentId String @id
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  cycleStartedAt DateTime @default(now())
+  autoRefreshedAt DateTime @default(now())
+  manualUsed Int @default(0)
+  extraEarned Boolean @default(false)
+  extraUsed Boolean @default(false)
+  interestSignature String
+}
+
+model JobLease {
+  key String @id
+  owner String @default("")
+  expiresAt DateTime
+}
+
+model DiscoveryUsage {
+  month String @id
+  runs Int @default(0)
+  rechecks Int @default(0)
+  searches Int @default(0)
+  pages Int @default(0)
+  embeddings Int @default(0)
+  vectorUpserts Int @default(0)
+  tokens Int @default(0)
+  estimatedCost Float @default(0)
+}
+
+model DiscoveryRun {
+  id String @id @default(cuid())
+  groupKey String
+  kind String
+  status String @default("running")
+  usage String @default("{}")
+  error String @default("")
+  startedAt DateTime @default(now())
+  finishedAt DateTime?
+  @@index([startedAt])
 }

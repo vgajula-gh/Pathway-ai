@@ -44,6 +44,7 @@ const requestedTab = (): Tab => { const value = new URLSearchParams(window.locat
 export default function App() {
   const [me, setMe] = useState<Student | null | undefined>(undefined);
   const [tab, setTab] = useState<Tab>(requestedTab);
+  const [buddyScope,setBuddyScope]=useState<string|undefined>();
   const [buddySeed, setBuddySeed] = useState<string | null>(null);
   const [buddyKey, setBuddyKey] = useState(0);
   const [creating, setCreating] = useState(false), [restoring, setRestoring] = useState(false), [pending, setPending] = useState<SignInResult | null>(null), [loadError, setLoadError] = useState(''), [attempt, setAttempt] = useState(0);
@@ -68,7 +69,7 @@ export default function App() {
   useEffect(() => { document.body.dataset.tab = tab; window.scrollTo(0, 0); }, [tab]);
   useEffect(() => { applyTheme((me?.settings.theme || 'dusk') as Theme); }, [me?.settings.theme]);
   const onSignedOut = () => { setCreating(false); setRestoring(false); setMe(null); };
-  const openDashboard = (s: Student) => { session.set(s.id); setCreating(false); setRestoring(false); setTab(requestedTab()); setMe(s); };
+  const openDashboard = (s: Student) => { session.set(s.id); setCreating(false); setRestoring(false); setTab(creating ? 'explore' : requestedTab()); setMe(s); };
   const signedIn = (s: SignInResult) => { if (s.recoveryCode) setPending(s); else openDashboard(s); };
   if (pending?.recoveryCode) return <RecoveryCode code={pending.recoveryCode} onDone={() => { const { recoveryCode: _, ...profile } = pending; setPending(null); openDashboard(profile); }} />;
   if (loadError) return <main className="splash"><p role="alert">{loadError}</p><button className="btn" onClick={() => setAttempt(a => a + 1)}>Try again</button></main>;
@@ -78,7 +79,7 @@ export default function App() {
     if (restoring) return <InvitationGate onBack={() => setRestoring(false)}><RestoreProfile onDone={openDashboard} onBack={() => setRestoring(false)} /></InvitationGate>;
     return <SignIn onDone={signedIn} onCreate={() => setCreating(true)} onRestoreLocal={session.get() ? () => setRestoring(true) : undefined} />;
   }
-  const ask = (text: string) => { setBuddySeed(text); setTab('buddy'); };
+  const ask = (text: string, opportunityId?: string) => { setBuddyScope(opportunityId); setBuddySeed(text); setTab('buddy'); };
   const go = (t: Tab) => { if (t === 'buddy') setBuddyKey(k => k + 1); setTab(t); };
   const theme = (me.settings.theme || 'dusk') as Theme, th = THEMES.find(t => t[0] === theme)!;
   const cycleTheme = async () => { const t = nextTheme(theme); setMe({ ...me, settings: { ...me.settings, theme: t } }); toast(`Appearance: ${THEMES.find(x => x[0] === t)![1]}`); await api('/api/me', { method: 'PATCH', body: { settings: { theme: t } } }); };
@@ -92,7 +93,7 @@ export default function App() {
       <main>
         {tab === 'today' && <Today me={me} go={go} ask={ask} setMe={setMe} />}
         {tab === 'explore' && <Explore me={me} ask={ask} />}
-        {tab === 'buddy' && <Buddy key={buddyKey} me={me} seed={buddySeed} clearSeed={() => setBuddySeed(null)} />}
+        {tab === 'buddy' && <Buddy key={buddyKey} me={me} seed={buddySeed} opportunityId={buddyScope} clearSeed={() => {setBuddySeed(null);setBuddyScope(undefined);}} />}
         {tab === 'grow' && <Grow me={me} ask={ask} go={go} />}
         {tab === 'you' && <You me={me} setMe={setMe} onSignOut={onSignedOut} />}
       </main>

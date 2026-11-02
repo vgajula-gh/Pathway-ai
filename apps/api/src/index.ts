@@ -1,3 +1,5 @@
+import { runJobs } from './discovery/jobs.js';
+import { initializeKnowledge } from './knowledge/runtime.js';
 import { seedCatalog } from './lib/catalog.js';
 import { deliverDueNudges } from './lib/nudges.js';
 import { syncDueCalendars } from './lib/calendars.js';
@@ -15,7 +17,12 @@ app.addHook('onClose', async () => clearInterval(calendarTimer));
 const nudgeTimer = setInterval(() => { deliverDueNudges().catch(() => app.log.warn('Nudge scheduler unavailable')); }, 60000);
 nudgeTimer.unref();
 app.addHook('onClose', async () => clearInterval(nudgeTimer));
+const discoveryTimer=setInterval(()=>{void runJobs().catch(()=>app.log.warn('Opportunity background jobs are unavailable; catalog browsing still works'));},60000);
+discoveryTimer.unref();
+app.addHook('onClose',async()=>clearInterval(discoveryTimer));
 await app.listen({ port: env.port, host: '0.0.0.0' });
 void syncDueCalendars().catch(() => app.log.warn('Calendar background sync unavailable'));
 
 void deliverDueNudges().catch(() => app.log.warn('Nudge scheduler unavailable'));
+
+void initializeKnowledge().then(()=>runJobs()).catch(()=>app.log.warn('Opportunity discovery is unavailable; catalog browsing still works'));

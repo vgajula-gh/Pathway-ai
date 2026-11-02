@@ -12,6 +12,7 @@ export const ActionSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('remove_event'), eventId: z.string() }),
   z.object({ type: z.literal('add_goal'), ref: z.string().min(1), title: z.string().min(1).max(140), category: z.string().default('aspiration'), priority: z.enum(['high', 'medium', 'low']).default('medium'), targetDate: date, opportunityId: z.string().optional() }),
   z.object({ type: z.literal('add_milestone'), goalRef: z.string().min(1), title: z.string().min(1).max(140), purpose: z.string().default(''), effortMin: z.number().int().min(5).max(600).default(30), targetDate: date }),
+  z.object({ type: z.literal('add_application_requirements'), opportunityId:z.string(), checklist:z.array(z.object({title:z.string().min(1).max(240),sourceUrl:z.string().url()})).max(20), deadline:z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), referenceHash:z.string().regex(/^[a-f0-9]{64}$/) }),
   z.object({ type: z.literal('save_opportunity'), opportunityId: z.string() }),
   z.object({ type: z.literal('add_portfolio_entry'), title: z.string().min(1), entryType: z.string().default('project'), date: date, reflection: z.string().default(''), skills: z.array(z.string()).default([]) })
 ]);
@@ -36,6 +37,7 @@ export function describe(a: Action): string {
     case 'remove_event': return 'Remove an event';
     case 'add_goal': return `New goal: ${a.title}`;
     case 'add_milestone': return `Step: ${a.title} (${a.effortMin} min)`;
+    case 'add_application_requirements': return `Add ${a.checklist.length} official checklist steps${a.deadline ? ` and deadline ${a.deadline}` : ''}`;
     case 'save_opportunity': return 'Save opportunity';
     case 'add_portfolio_entry': return `Portfolio: ${a.title}`;
   }

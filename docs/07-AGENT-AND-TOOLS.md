@@ -10,10 +10,11 @@
 | check_plan | sessions[] | {ok[], problems[]} | must be used before proposing calendar blocks |
 | search_opportunities | query? | results with factors + verified flag; excluded with reasons | hard exclusions first |
 | get_learning_resources | topics[] | curated resources | only these URLs may be recommended |
+| search_knowledge | opportunityId, query (≤1000 chars) | up to five official passages with sourceUrl, pageTitle, checkedAt | vector filter and database scope checked; max three searches/turn |
 | propose_actions | summary, rationale, actions[] | proposalId, status | **only write path**; zod-validated; calendar revalidated |
 
 ## Action types
-`add_event` · `move_event` (non-recurring) · `remove_event` · `add_goal {ref}` · `add_milestone {goalRef}` · `save_opportunity` · `add_portfolio_entry`. Reminders = `add_event` with `eventType:"reminder"`, 15 minutes.
+`add_event` · `move_event` (non-recurring) · `remove_event` · `add_goal {ref}` · `add_milestone {goalRef}` · `save_opportunity` · `add_portfolio_entry` · `add_application_requirements {opportunityId, checklist, deadline?, referenceHash}`. Reminders = `add_event` with `eventType:"reminder"`, 15 minutes.
 
 ## Policies baked into the prompt
 Use tools for facts · never claim a change happened · protect downtime and leave breathing room · unknown deadlines stay unknown · explain why it fits + one next step · integrity in learning · no admissions predictions or invented achievements · ask one clarifying question when date/ownership/intent is ambiguous · under 150 words.
@@ -38,3 +39,14 @@ The HTTP boundary reserves persistent AI usage before Buddy, extraction, coach, 
 ## GPT-5 nano response budget
 
 Hosted `gpt-5-nano` (including dated snapshots) uses low reasoning effort and 4,096 completion tokens of additional headroom for each model call, because reasoning and visible output share the completion allowance. This is a maximum, not a fixed charge. Other models and Ollama keep their existing limits. Incomplete or empty responses return a friendly 502 rather than Buddy's generic empty-answer fallback; truncated tool calls are not executed. No automatic retry is added. Server diagnostics include only model, finish reason and reasoning-token count, never student text or credentials. Live provider quality/availability still needs deployment verification.
+
+
+## Program-scoped retrieval and checklist proposals
+
+Ask about this program passes a real opportunityId in the API request and persists it on the conversation. Its loop exposes only the read-only search tool; plain text cannot switch scope. An initial retrieval plus at most two further searches supports rephrasing, with three model rounds maximum. Public page text/history are untrusted data with no authority to execute actions. Eligibility/cost come from code, with unknown details labeled for confirmation.
+
+The final structured model output is `{claims:[{chunkId,quote}]}`. The verifier accepts only exact excerpts (10–600 characters) present in returned passages, up to 120 quoted words; unsupported IDs, paraphrases, added claims and invalid JSON are removed. Each displayed excerpt has a clickable source and check date. An empty supported answer says the official pages do not say and supplies the official link. This deliberately favors traceable excerpts over unsupported fluent answers.
+
+The explicit checklist button builds a deterministic source-backed proposal. Its action carries checklist titles/source URLs, optional deadline and an evidence hash. Creation and transactional execution both require that student's existing Interested application and unchanged source evidence. Approval merges new titles without resetting completed ones, stores citations and a separate cited deadline, and preserves student dates/notes. It reports actual VERIFIED/FAILED status and audits the outcome. It does not register or submit an application.
+
+Shared discovery and source re-check attempts also reserve one request against the existing **AI_MONTHLY_LIMIT** overall counter. They never consume a student's daily allowance. Their separate discovery/re-check run budgets are additional limits; an exhausted overall AI cap blocks new paid background attempts too.

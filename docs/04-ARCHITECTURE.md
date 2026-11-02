@@ -85,3 +85,35 @@ The current pilot uses one Fastify server to serve the compiled React app and `/
 ## Local AI testing
 
 `LLM_PROVIDER=ollama` reuses the OpenAI-compatible adapter at `OLLAMA_BASE_URL` (default `http://localhost:11434/v1`) with `OLLAMA_MODEL` (default `llama3.2:3b`). No auth header or API key is sent. Local calls allow fifteen minutes with automatic retries disabled; the development proxy and API connection allow twenty minutes in total for a multi-round tool conversation. Invalid tool arguments produce a tool error without execution. JSON-mode rejection or unreadable output gets one plain-text retry with defensive JSON parsing. Student consent and the approval/verification flow apply to every provider. Codespaces provisioning is optional through `USE_OLLAMA` (default on); the service binds to loopback.
+
+## Personal opportunity discovery and RAG
+
+Explore now has Interested (the existing application tracker) followed by Free and Paid picks. `domain/picks.ts` balances eligible catalog items without AI. Unknown costs belong to Paid with an explicit warning; only a separately checked official free-cost fact earns Free. A missing suitable item leaves an honest empty slot. Catalog refills preserve the remaining picks and cost no AI calls.
+
+```mermaid
+flowchart LR
+  G[Topic + grade band + broad region] --> J[Leased background job]
+  J --> S[Search adapter]
+  S --> F[Bounded official-page fetch + robots rules]
+  F --> X[Evidence-based extraction adapter]
+  X --> V[Deterministic verification]
+  V --> C[(Shared catalog + page snapshots)]
+  C --> K[500-word chunks + embedding adapter]
+  K --> P[Pinecone opportunities namespace]
+  K --> DB[(PostgreSQL chunk text + citations)]
+  B[Program-scoped Buddy] --> R[Filtered vector query + keyword rerank]
+  R --> P
+  R --> DB
+  R --> Q[Verbatim claim and citation validation]
+  Q --> B
+```
+
+The vector-store interface isolates Pinecone, optional pgvector, and the SQLite/local memory adapter. Pinecone is the recommended production store (and the production fallback when VECTOR_STORE is omitted); `.env.example` explicitly selects memory as the safe local default. Ordinary PostgreSQL migrations require no vector extension. The optional pgvector SQL creates a separate dimensioned vector table with an HNSW cosine index. In every mode, citation text comes from the app database, never vector metadata. Memory vectors are also serialized in KnowledgeChunk.localEmbedding to restore the index after restart; Pinecone/pgvector modes leave that field empty.
+
+Ingestion embeds bounded batches, writes a new vector generation, swaps the authoritative chunk rows transactionally, then deletes old vectors. This is recoverable cross-service work, not a distributed transaction. A monthly reconciliation removes vectors with no database chunk. The server checks index dimension and cosine metric before enabling questions; a mismatch or missing optional configuration disables discovery/questions while catalog features work. Provider outages are retried for readiness after a minute; no discovery/extraction SDK retry can silently multiply the bounded paid calls.
+
+Program questions use a dedicated read-only agent loop: initial retrieval plus at most two rephrases, at most three model rounds. Vector queries filter opportunityId, and SQL checks opportunityId, scope and the current source snapshot hash again. Changed pages cannot serve old chunks while re-embedding is pending. The final answer accepts only verbatim excerpts mapped to returned chunk IDs (up to 120 quoted words), with links and source-check dates. Unsupported output takes the no-answer path. Eligibility and cost remain code decisions. A checklist button creates an `add_application_requirements` proposal; approval revalidates its evidence hash in the transaction before merging steps, preserving completed work, notes and student dates.
+
+A minute timer and the owner-authenticated `/internal/jobs/run` share a persistent global lease and heartbeat. Each invocation refreshes up to 25 due students, processes one shared discovery group and one due source re-check, within monthly reservations and per-run limits. Interrupted groups keep their 30-day cooldown instead of silently paying again. Autoscale deployments need an external scheduled trigger for unattended discovery; a server timer alone cannot wake a sleeping deployment. See DEPLOY-REPLIT.md.
+
+Shared discovery and source re-check attempts also reserve one request against the existing **AI_MONTHLY_LIMIT** overall counter. They never consume a student's daily allowance. Their separate discovery/re-check run budgets are additional limits; an exhausted overall AI cap blocks new paid background attempts too.

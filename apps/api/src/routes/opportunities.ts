@@ -1,4 +1,8 @@
 import { FastifyInstance } from 'fastify';
+import { discoveryStatus,queueDiscovery } from '../discovery/refresh.js';
+import { initializeKnowledge } from '../knowledge/runtime.js';
+import { requirementsAction } from '../knowledge/requirements.js';
+import { personalPicks, toOpp } from '../lib/picks.js';
 import { prisma, j } from '../lib/db.js';
 import { requireStudent, HttpError } from '../lib/auth.js';
 import { z } from 'zod';
@@ -10,7 +14,7 @@ import { addDays, dkey, fmtLocal, parseLocal, sod } from '../domain/time.js';
 import { dayCapacity, freeSlots } from '../domain/schedule.js';
 import { scoreOpportunity } from '../domain/scoring.js';
 
-const toOpp = (o: any) => ({ ...o, skills: j(o.skills, []), tags: j(o.tags, []), checks: j(o.checks, []) });
+
 
 async function scored(studentId: string) {
   const { events, rules, ctx } = await loadContext(studentId);
@@ -23,7 +27,12 @@ export default async function routes(app: FastifyInstance) {
   app.get('/api/opportunities', async req => {
     const s = await requireStudent(req), list = await scored(s.id);
     const ok = list.filter(o => !o.fit.excluded && o.status !== 'dismissed').sort((a, b) => ((b.fit as any).score - (a.fit as any).score));
-    return { recommended: ok, excluded: list.filter(o => o.fit.excluded).map(o => ({ id: o.id, name: o.name, reasons: o.fit.eligibility.reasons })), dismissed: list.filter(o => o.status === 'dismissed').length, sampleData: list.some(o => o.isSample) };
+    const picks = await personalPicks(s.id);
+    const enabled=s.aiConsent&&!!await initializeKnowledge();
+    if(enabled)await queueDiscovery(s.id);
+    const discovery=await discoveryStatus(s.id);
+    const chunks=enabled?await prisma.knowledgeChunk.findMany({where:{opportunityId:{in:picks.map(p=>p.id)}},select:{opportunityId:true}}):[];
+    return { ...discovery, discoveryEnabled:enabled, picks:picks.map(p=>({...p,canAsk:enabled&&s.aiConsent&&chunks.some(c=>c.opportunityId===p.id)})), recommended: ok, excluded: list.filter(o => o.fit.excluded).map(o => ({ id: o.id, name: o.name, reasons: o.fit.eligibility.reasons })), dismissed: list.filter(o => o.status === 'dismissed').length, sampleData: list.some(o => o.isSample) };
   });
 
   app.get('/api/opportunities/:id', async req => {
@@ -32,13 +41,18 @@ export default async function routes(app: FastifyInstance) {
   });
 
   app.post('/api/opportunities/:id/status', async req => {
-    const s = await requireStudent(req), { id } = req.params as { id: string }, { status } = z.object({ status: z.enum(['saved', 'dismissed', 'none']) }).parse(req.body);
+    const s = await requireStudent(req), { id } = req.params as { id: string }, { status, reason } = z.object({ status: z.enum(['saved', 'dismissed', 'none']), reason: z.enum(['not my interest', 'too much time', 'too far', 'cost', 'other']).optional() }).parse(req.body);
+    if (!await prisma.opportunity.findUnique({where:{id}})) throw new HttpError(404,'Opportunity not found');
+    if (status === 'dismissed') await prisma.opportunityFeedback.upsert({ where: {studentId_opportunityId:{studentId:s.id,opportunityId:id}}, create:{studentId:s.id,opportunityId:id,reason:reason || 'other'}, update:{reason:reason || 'other'} });
+    else await prisma.opportunityFeedback.deleteMany({where:{studentId:s.id,opportunityId:id}});
     if (status === 'none') await prisma.savedOpportunity.deleteMany({ where: { studentId: s.id, opportunityId: id } });
     else if (status === 'saved') { await saveApplication(prisma, s.id, id); await prisma.savedOpportunity.updateMany({ where: { studentId: s.id, opportunityId: id, status: 'dismissed' }, data: { status: 'interested' } }); }
     else await prisma.savedOpportunity.upsert({ where: { studentId_opportunityId: { studentId: s.id, opportunityId: id } }, update: { status }, create: { studentId: s.id, opportunityId: id, status } });
     await audit(s.id, 'student', status === 'saved' ? 'Saved opportunity' : status === 'dismissed' ? 'Dismissed opportunity' : 'Cleared opportunity', id);
     return { ok: true };
   });
+
+  app.post('/api/opportunities/:id/requirements',async req=>{const s=await requireStudent(req),{id}=z.object({id:z.string().max(200)}).parse(req.params);const o=await prisma.opportunity.findUnique({where:{id}});if(!o)throw new HttpError(404,'Program not found');const action=requirementsAction(o);return serializeProposal(await createProposal(s.id,{summary:`Add official requirements for ${o.name}`.slice(0,200),rationale:'Review these source-backed checklist steps and deadline. Your notes and completed steps are preserved.',actions:[action]},'student',{dataUsed:[...action.checklist.map(c=>`${c.title} — ${c.sourceUrl}`)],effect:'Adds to your Interested checklist after approval. Nothing is submitted to the program.'}));});
 
   // Journey A: deterministic prep plan (no AI needed) → proposal awaiting approval.
   app.post('/api/opportunities/:id/prep', async req => {

@@ -14,7 +14,7 @@ Base URL `http://localhost:8787`. JSON in/out. Auth: HttpOnly account-session co
 | POST | /api/events/bulk | Save events the student confirmed from extraction |
 | PATCH / DELETE | /api/events/:id | Mark done / delete |
 | GET | /api/events/:id/ics | Calendar file (student-initiated download) |
-| GET | /api/opportunities | `{recommended[], excluded[], dismissed, sampleData}` with fit factors |
+| GET | /api/opportunities | Personal `picks[]` in Free/Paid buckets plus compatible ranked results and discovery status |
 | GET | /api/opportunities/:id | One opportunity with fit |
 | POST | /api/opportunities/:id/status | `{status: saved|dismissed|none}` |
 | POST | /api/opportunities/:id/prep | Create prep proposal (save + reminder + goal + steps) |
@@ -82,3 +82,18 @@ Sessions last 30 days with `HttpOnly; SameSite=Lax; Path=/` and `Secure` in prod
 
 ### Sign-in integration with notifications
 The browser sends its optional push endpoint with `/api/auth/logout` so the server can revoke this student's device subscription before ending the session. Changing/recovering a private phrase revokes all subscriptions and turns nudges off alongside invalidating old sessions. Students can opt in again on their trusted devices. Onboarding includes both an optional calendar step and required phrase confirmation; the recovery code is still shown once before the dashboard.
+
+## Personal Free/Paid discovery
+
+- `POST /api/students` and `PATCH /api/me` accept optional `region`: US state/DC abbreviation, `virtual`, or empty. Unknown address-like values are rejected. A meaningful normalized interest change earns at most one bonus manual refresh per rolling cycle.
+- `GET /api/opportunities` retains `recommended`, `excluded`, `dismissed`, `sampleData` for compatibility and adds `picks`, `discoveryEnabled`, `finding`, `limited`, safe `error`, `lastCheckedAt`, and `refresh: {available, remaining, nextAvailableAt}`. Each pick includes bucket, rank, isStretch, verification/cost metadata, costLabel and canAsk. Picks exclude Interested/dismissed/ineligible/stale/expired items. Free requires explicit official cost evidence and costVerifiedAt. Empty slots are permitted. Paid includes unknown costs. A free-only preference still computes Paid; the UI collapses it.
+- `POST /api/opportunities/:id/status` still accepts saved/dismissed/none; saved means Interested. Dismissal optionally includes reason: `not my interest`, `too much time`, `too far`, `cost`, `other`. The next list read refills only missing catalog slots. Direct student actions are audited; they do not invoke AI.
+- `POST /api/opportunities/refresh` accepts an empty body. Requires configured discovery and student AI consent, then reserves a persistent manual allowance, rebuilds catalog picks and queues only short-bucket group searches. Defaults: one refresh per 30 days plus at most one meaningful-interest-change bonus. A reached allowance returns friendly 429; missing optional configuration returns 503. Catalog replacements remain available.
+- `GET /api/discovery/status` returns `enabled`, queue/failure state and refresh availability. The web polls the opportunity list every six seconds only while a group is queued/running.
+- `POST /api/buddy/messages` accepts `{text, conversationId?, opportunityId?}`. Supplying opportunityId starts a scoped program conversation; later messages reuse its saved scope. The response and stored message metadata add citations `{number, chunkId, sourceUrl, pageTitle, checkedAt}`, opportunityId and eligibilityNote. Scoped tools cannot query another program or write student data. Unsupported claims yield the official-page no-answer message. Existing AI consent/daily/monthly request limits apply, including retrieval rounds within that feature request.
+- `POST /api/opportunities/:id/requirements` creates a source-backed proposal for an existing Interested application. Unknown requirements/current deadline → 422. Approval verifies the catalog evidence hash again and either merges checked requirements/citedDeadline with a VERIFIED result or fails with no partial writes. No application is submitted externally.
+- `POST /internal/jobs/run` accepts an empty body and `Authorization: Bearer <JOBS_SECRET>` (owner secret, at least 32 characters). Missing server configuration → 503; incorrect/missing bearer → 401. Returns `{skipped:true}` if another worker holds the lease, otherwise `{skipped:false,result:{expired,refreshed,discovered}}`. It uses no student invitation/session. Authorization headers are redacted. Do not call it from browser code or expose the secret as VITE_*.
+
+Automatic refresh never changes saved applications. Source dates are excluded per student's local day; global catalog expiry waits until the date has passed everywhere (UTC−12). Interested keeps its record and shows a passed-deadline notice using the student's local day. Discovery usage budgets are separate from interactive AI request quotas; setting AI_DISABLED=true disables both paid discovery and AI chat while deterministic refresh/expiry/catalog features work.
+
+Shared discovery and source re-check attempts also reserve one request against the existing **AI_MONTHLY_LIMIT** overall counter. They never consume a student's daily allowance. Their separate discovery/re-check run budgets are additional limits; an exhausted overall AI cap blocks new paid background attempts too.

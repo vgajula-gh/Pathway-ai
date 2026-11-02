@@ -8,6 +8,7 @@ import multipart from '@fastify/multipart';
 import { ZodError } from 'zod';
 import { env } from './lib/env.js';
 import { HttpError } from './lib/auth.js';
+import discovery from './routes/discovery.js';
 import notifications from './routes/notifications.js';
 import calendars from './routes/calendars.js';
 import applications from './routes/applications.js';
@@ -24,7 +25,7 @@ import news from './routes/news.js';
 
 export async function buildApp() {
   assertSignInSecret();
-  const app = Fastify({ trustProxy: process.env.NODE_ENV === 'production' ? (_address: string, hop: number) => hop < 1 : false, connectionTimeout: env.provider === 'ollama' ? 1_200_000 : 120_000, logger: { level: 'info', redact: ['req.headers["x-student-id"]', 'req.headers["x-access-code"]', 'req.headers.cookie', 'res.headers["set-cookie"]'] } });
+  const app = Fastify({ trustProxy: process.env.NODE_ENV === 'production' ? (_address: string, hop: number) => hop < 1 : false, connectionTimeout: env.provider === 'ollama' ? 1_200_000 : 120_000, logger: { level: 'info', redact: ['req.headers.authorization','req.headers["x-student-id"]', 'req.headers["x-access-code"]', 'req.headers.cookie', 'res.headers["set-cookie"]'] } });
   await app.register(cors, { origin: env.webOrigin, credentials: true, methods: ['GET', 'POST', 'PATCH', 'DELETE'] });
   await app.register(multipart, { limits: { fileSize: 8 * 1024 * 1024, files: 1 } });
   app.setErrorHandler((err, _req, reply) => {
@@ -50,6 +51,6 @@ export async function buildApp() {
       return reply.sendFile('index.html');
     });
   }
-  for (const r of [accounts, notifications, calendars, applications, students, events, today, opportunities, proposals, growth, ai, news]) await app.register(r);
+  for (const r of [discovery, accounts, notifications, calendars, applications, students, events, today, opportunities, proposals, growth, ai, news]) await app.register(r);
   return app;
 }

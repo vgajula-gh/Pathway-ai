@@ -7,11 +7,11 @@ export default function Applications({ refresh }: { refresh: string }) {
   const { data, error, reload } = useLoad(() => api<Application[]>('/api/applications'), [refresh]);
   const [editing, setEditing] = useState<Application | null>(null), [proposal, setProposal] = useState<Proposal | null>(null);
   const patch = async (a: Application, body: unknown) => { try { await api(`/api/applications/${a.opportunityId}`, { method: 'PATCH', body }); reload(); } catch (e) { toast((e as Error).message); } };
-  return <section className="sec" aria-label="My applications"><h2>My applications</h2>
+  return <section className="sec" aria-label="My applications"><h2>Interested</h2><p className="muted small">My applications · Interested → Preparing → Applied → Result</p>
     {error && <p role="alert">{error} <button className="link" onClick={reload}>Try again</button></p>}
-    {!data?.length && <p className="muted">Save an opportunity to keep its steps and deadline here.</p>}
+    {!data?.length && <p className="muted">Mark a program Interested to keep its steps and deadline here.</p>}
     {['interested', 'preparing', 'applied', 'result'].map(status => <div key={status}>{data?.some(a => a.status === status) && <h3 style={{ marginTop: 18, textTransform: 'capitalize' }}>{status}</h3>}{data?.filter(a => a.status === status).map(a => <article className="card" key={a.opportunityId} style={{ marginTop: 10 }}>
-      <h3>{a.name}</h3><p>{a.countdown?.label || 'Deadline unknown'}</p><p className="note">{a.deadline || 'No date yet'} · {a.deadlineSource}</p>
+      <h3>{a.name}</h3>{a.deadlinePassed && <p className="note">Deadline passed — your application stays here.</p>}<p>{a.countdown?.label || 'Deadline unknown'}</p><p className="note">{a.deadline || 'No date yet'} · {a.deadlineSource}</p>
       <p className="muted">{a.completed} of {a.checklist.length} steps</p><p>Next: {a.nextStep}</p>
       <label>Status <select value={a.status} onChange={e => patch(a, { status: e.target.value })}>{['interested', 'preparing', 'applied', 'result'].map(s => <option key={s}>{s}</option>)}</select></label>
       <div className="acts"><button className="btn fill" onClick={async () => { try { setProposal(await api<Proposal>(`/api/applications/${a.opportunityId}/prep`, { method: 'POST' })); } catch (e) { toast((e as Error).message); } }}>Plan my prep</button><button className="link" onClick={() => setEditing(a)}>Edit details and steps</button></div>
