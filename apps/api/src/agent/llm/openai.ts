@@ -1,6 +1,6 @@
 // OpenAI adapter (Chat Completions with function calling). Docs: https://platform.openai.com/docs
 import OpenAI from 'openai';
-import { HttpError } from '../../lib/auth.js';
+import { HttpError } from '../../lib/errors.js';
 import { LLM, RunToolsOptions, ImageInput, parseJSON } from './types.js';
 
 export function openaiLLM(apiKey: string, model: string, options: { baseURL?: string; local?: boolean; maxRetries?: number; timeout?: number } = {}): LLM {
