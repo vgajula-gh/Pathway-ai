@@ -5,7 +5,7 @@ import {tmpdir} from 'node:os';import {join} from 'node:path';import {execFile} 
 const holder=vi.hoisted(()=>({runtime:null as any,llm:null as any}));
 const dir=mkdtempSync(join(tmpdir(),'pathway-knowledge-')),url=`file:${dir}/test.db`,db=new PrismaClient({datasourceUrl:url+'?connection_limit=1'});
 vi.mock('../src/lib/db.js',()=>({get prisma(){return db;},j:(v:string,f:unknown)=>{try{return v?JSON.parse(v):f;}catch{return f;}}}));
-vi.mock('../src/knowledge/runtime.js',()=>({initializeKnowledge:async()=>holder.runtime}));
+vi.mock('../src/knowledge/runtime.js',()=>({initializeKnowledge:async()=>holder.runtime,pauseKnowledge:()=>{}}));
 vi.mock('../src/agent/llm/index.js',async()=>({...await vi.importActual('../src/agent/llm/index.js'),getLLM:()=>holder.llm,requireLLM:()=>holder.llm}));
 import {memoryStore} from '../src/knowledge/adapters/memory.js';import {ingestKnowledge,searchKnowledge,reconcileVectors} from '../src/knowledge/service.js';import {RunBudget} from '../src/discovery/config.js';import {buildApp} from '../src/app.js';import {env} from '../src/lib/env.js';
 let studentId='';const originalCodes=env.accessCodes,headers=()=>({'x-student-id':studentId});
@@ -38,11 +38,20 @@ it('answers scoped Buddy questions with source citations, limits retrieval and r
 it('creates a source-backed checklist proposal and applies only after approval, preserving student notes and completed steps',async()=>{
  const app=await buildApp();app.log.level='silent';try{
  await app.inject({method:'POST',url:'/api/opportunities/program/status',headers:headers(),payload:{status:'saved'}});
- await db.savedOpportunity.updateMany({data:{notes:'My private notes',deadline:'2030-01-05',checklist:'[{"title":"My completed step","done":true}]'}});
+ await db.savedOpportunity.updateMany({data:{citedDeadline:null,notes:'My private notes',deadline:'2030-01-05',checklist:'[{"title":"My completed step","done":true}]'}});
  const r=await app.inject({method:'POST',url:'/api/opportunities/program/requirements',headers:headers()});expect(r.statusCode).toBe(200);expect(r.json().status).toBe('AWAITING_APPROVAL');expect((await db.savedOpportunity.findFirstOrThrow()).citedDeadline).toBeNull();
  const approved=await app.inject({method:'POST',url:`/api/proposals/${r.json().id}/approve`,headers:headers()});expect(approved.json().status).toBe('VERIFIED');const saved=await db.savedOpportunity.findFirstOrThrow();expect(saved).toMatchObject({notes:'My private notes',deadline:'2030-01-05',citedDeadline:'2030-01-10'});expect(JSON.parse(saved.checklist)).toContainEqual({title:'My completed step',done:true});expect(JSON.parse(saved.checklist)).toContainEqual({title:'Submit a project outline.',done:false});
  }finally{await app.close();}
 });
 it('fails and rolls back a checklist proposal if source facts change before approval',async()=>{
- const app=await buildApp();app.log.level='silent';try{await app.inject({method:'POST',url:'/api/opportunities/program/status',headers:headers(),payload:{status:'saved'}});const r=await app.inject({method:'POST',url:'/api/opportunities/program/requirements',headers:headers()});await db.opportunity.update({where:{id:'program'},data:{requirements:'[]'}});const approved=await app.inject({method:'POST',url:`/api/proposals/${r.json().id}/approve`,headers:headers()});expect(approved.json().status).toBe('FAILED');expect((await db.savedOpportunity.findFirstOrThrow()).citedDeadline).toBeNull();}finally{await app.close();}
+ const app=await buildApp();app.log.level='silent';try{await app.inject({method:'POST',url:'/api/opportunities/program/status',headers:headers(),payload:{status:'saved'}});await db.savedOpportunity.updateMany({data:{citedDeadline:null}});const r=await app.inject({method:'POST',url:'/api/opportunities/program/requirements',headers:headers()});await db.opportunity.update({where:{id:'program'},data:{requirements:'[]'}});const approved=await app.inject({method:'POST',url:`/api/proposals/${r.json().id}/approve`,headers:headers()});expect(approved.json().status).toBe('FAILED');expect((await db.savedOpportunity.findFirstOrThrow()).citedDeadline).toBeNull();}finally{await app.close();}
+});
+it('pins the official deadline when Interested so a later catalog update cannot silently change the application',async()=>{
+ const app=await buildApp();app.log.level='silent';try{await app.inject({method:'POST',url:'/api/opportunities/program/status',headers:headers(),payload:{status:'saved'}});await db.opportunity.update({where:{id:'program'},data:{deadline:'2031-01-10'}});expect((await app.inject({url:'/api/applications',headers:headers()})).json()[0].deadline).toBe('2030-01-10');}finally{await app.close();}
+});
+
+it('does not answer from an outdated snapshot while changed pages await embedding, and retires removed-page vectors',async()=>{
+ await ingestKnowledge('program',new RunBudget());expect(await searchKnowledge('program','requirements')).toHaveLength(1);
+ await db.sourcePage.updateMany({data:{contentHash:'pending',text:'A changed official page with different requirements.'}});expect(await searchKnowledge('program','requirements')).toEqual([]);
+ await db.sourcePage.deleteMany();await ingestKnowledge('program',new RunBudget());expect(await db.knowledgeChunk.count()).toBe(0);expect((await holder.runtime.store.list()).ids).toEqual([]);
 });

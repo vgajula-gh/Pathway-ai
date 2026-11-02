@@ -1,19 +1,20 @@
 import Applications from '../components/Applications';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import { Opportunity, Proposal, Student } from '../lib/types';
 import { CEMO, FIT_LABEL } from '../lib/format';
 import { Sheet, Typing, toast, useLoad } from '../components/ui';
 import ProposalReview from '../components/ProposalReview';
 
-type List = { discoveryEnabled: boolean; picks: Opportunity[]; recommended: Opportunity[]; excluded: { id: string; name: string; reasons: string[] }[]; dismissed: number; sampleData: boolean };
+type List = { error: string | null; finding: boolean; limited: boolean; refresh: {available:boolean;remaining:number;nextAvailableAt:string}; discoveryEnabled: boolean; picks: Opportunity[]; recommended: Opportunity[]; excluded: { id: string; name: string; reasons: string[] }[]; dismissed: number; sampleData: boolean };
 
 export default function Explore({ me, ask }: { me: Student; ask: (t: string, opportunityId?: string) => void }) {
   const { data, reload } = useLoad(() => api<List>('/api/opportunities'), []);
   const [dismiss, setDismiss] = useState<Opportunity | null>(null);
   const [open, setOpen] = useState<Opportunity | null>(null), [review, setReview] = useState<Proposal | null>(null), [cmp, setCmp] = useState<string[]>([]), [showCmp, setShowCmp] = useState(false);
+  useEffect(()=>{if(!data?.finding)return;const timer=setInterval(()=>reload(),6000);return ()=>clearInterval(timer);},[data?.finding]);
   if (!data) return <div className="splash"><Typing /></div>;
-  const status = async (id: string, s: 'saved' | 'dismissed' | 'none', reason?: string) => { await api(`/api/opportunities/${id}/status`, { body: { status: s, reason } }); toast(s === 'saved' ? 'Added to Interested' : s === 'dismissed' ? 'Hidden' : 'Removed'); reload(); };
+  const status = async (id: string, s: 'saved' | 'dismissed' | 'none', reason?: string) => { try {await api(`/api/opportunities/${id}/status`, { body: { status: s, reason } }); toast(s === 'saved' ? 'Added to Interested' : s === 'dismissed' ? 'Hidden' : 'Removed'); reload();return true;}catch(e){toast((e as Error).message);return false;} };
   const prep = async (id: string) => { try { setReview(await api<Proposal>(`/api/opportunities/${id}/prep`, { method: 'POST' })); setOpen(null); } catch (e) { toast((e as Error).message); } };
   const compared = data.recommended.filter(o => cmp.includes(o.id));
   return (
@@ -22,6 +23,7 @@ export default function Explore({ me, ask }: { me: Student; ask: (t: string, opp
       <div className="top"><p className="date">Discover · Opportunities</p></div>
       <h1 className="display">Picked for you</h1>
       <p className="muted" style={{ marginTop: 8 }}>Checked against your grade, time and interests, with the reasons shown.</p>
+      {data.discoveryEnabled && <div className="card" style={{marginTop:16}}>{data.finding ? <p role="status">Finding more programs for you… usually takes a minute.</p> : <><button className="btn" disabled={!data.refresh.available} onClick={async()=>{try{await api('/api/opportunities/refresh',{method:'POST'});reload();toast('Your catalog picks have been refreshed.');}catch(e){toast((e as Error).message);}}}>Find new opportunities</button>{!data.refresh.available && <p className="note">Next refresh available on {new Date(data.refresh.nextAvailableAt).toLocaleDateString()}</p>}</>}{data.error && <p className="note">{data.error}</p>}{data.limited && <p className="note">Live discovery has reached its allowance. You can still explore, save and replace catalog picks.</p>}</div>}
       {!data.discoveryEnabled && <p className="note">Showing catalog picks. Live discovery and program questions are not available right now.</p>}
       <div className="sec" style={{ marginTop: 18 }}>{(['free', 'paid'] as const).map(bucket => <details key={bucket} className="fold" open={bucket === 'free' || me.budget !== 'free'}><summary>{bucket === 'free' ? 'Free' : me.budget === 'free' ? 'Show paid options' : 'Paid'} ({data.picks.filter(o=>o.bucket===bucket).length})</summary>{!data.picks.some(o=>o.bucket===bucket) && <p className="note">No suitable {bucket} options in the catalog yet. We’ll show them here when available.</p>}{data.picks.filter(o=>o.bucket===bucket).map(o => (
         <div className="opp" key={o.id}>
@@ -35,7 +37,7 @@ export default function Explore({ me, ask }: { me: Student; ask: (t: string, opp
       {data.sampleData && <p className="note">Sample data: a curated starter set, not verified for this year. Confirm dates and deadlines on each official site.</p>}
       {cmp.length >= 2 && <div className="cmpbar"><button className="btn fill" onClick={() => setShowCmp(true)}>Compare {cmp.length}</button></div>}
 
-      {dismiss && <Sheet title="Not for me" onClose={()=>setDismiss(null)}><p className="sub">What didn’t fit? This helps us choose next time.</p><div className="rows">{['not my interest','too much time','too far','cost','other'].map(reason=><button className="r" key={reason} onClick={async()=>{await status(dismiss.id,'dismissed',reason);setDismiss(null);}}>{reason}</button>)}</div></Sheet>}
+      {dismiss && <Sheet title="Not for me" onClose={()=>setDismiss(null)}><p className="sub">What didn’t fit? This helps us choose next time.</p><div className="rows">{['not my interest','too much time','too far','cost','other'].map(reason=><button className="r" key={reason} onClick={async()=>{if(await status(dismiss.id,'dismissed',reason))setDismiss(null);}}>{reason}</button>)}</div></Sheet>}
       {open && <Sheet onClose={() => setOpen(null)}>
         <div style={{ textAlign: 'center', padding: '4px 0 14px' }}><p style={{ fontSize: 40 }}>{CEMO[open.category] || '✨'}</p><h2 className="serif" style={{ fontSize: 27, marginTop: 6 }}>{open.name}</h2><p className="muted small">{open.organizer}</p><p style={{ marginTop: 10 }}><span className={`fit ${open.fit.fit}`}>{FIT_LABEL[open.fit.fit!]}</span></p></div>
         <div className="card"><p className="label">WHY IT FITS</p><p className="lead" style={{ fontSize: 18, marginTop: 6 }}>{open.fit.why}</p></div>

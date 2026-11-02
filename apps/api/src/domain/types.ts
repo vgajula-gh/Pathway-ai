@@ -12,5 +12,5 @@ export interface AvailabilityRules {
   studyStart: string; studyEnd: string; maxStudyMin: number; downtimeStart: string; downtimeEnd: string;
 }
 export interface StudentContext {
-  region?: string; grade: number; interests: string[]; skills: string[]; budget: string; format: string; goals: string[];
+  timezone?: string; region?: string; grade: number; interests: string[]; skills: string[]; budget: string; format: string; goals: string[];
 }

@@ -16,6 +16,6 @@ export interface Conversation { id: string; title: string; updatedAt: string; me
 
 export interface AIHealth { ok: boolean; aiEnabled: boolean; provider: 'anthropic' | 'openai' | 'ollama' | null }
 
-export interface Application { opportunityId: string; name: string; status: string; deadline: string | null; deadlineSource: string; notes: string; checklist: {title: string; done: boolean}[]; countdown: {days: number; label: string} | null; completed: number; nextStep: string }
+export interface Application { deadlinePassed?: boolean; opportunityId: string; name: string; status: string; deadline: string | null; deadlineSource: string; notes: string; checklist: {title: string; done: boolean}[]; countdown: {days: number; label: string} | null; completed: number; nextStep: string }
 
 export type SignInResult = Student & { recoveryCode?: string };

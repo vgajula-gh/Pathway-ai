@@ -21,6 +21,7 @@ model Student {
   grade       Int
   timezone    String   @default("America/New_York")
   region      String   @default("") // US state abbreviation, virtual, or unspecified
+  pickState   PickRefreshState?
   picks       StudentPick[]
   feedback    OpportunityFeedback[]
   location    String   @default("")   // broad area only, e.g. "Raleigh area"
@@ -104,6 +105,7 @@ model Opportunity {
   deadline        String?  // ISO date if verified, else null
   sourceCheckedAt DateTime? // null => not verified
   isSample        Boolean  @default(true)
+  lastRecheckedAt DateTime?
   verificationStatus String @default("new_find")
   verifiedAt      DateTime?
   officialDomain  String @default("")
@@ -362,6 +364,8 @@ model DiscoveryGroup {
   topic String
   gradeBand String
   region String
+  pendingBuckets String @default("[]")
+  requestedAt DateTime?
   lastDiscoveredAt DateTime?
   status String @default("idle")
   error String @default("")
@@ -380,4 +384,45 @@ model KnowledgeChunk {
   localEmbedding String @default("[]") // only the memory/SQLite adapter persists vectors here
   embeddingModel String
   @@index([opportunityId, sourceUrl])
+}
+
+model PickRefreshState {
+  studentId String @id
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  cycleStartedAt DateTime @default(now())
+  autoRefreshedAt DateTime @default(now())
+  manualUsed Int @default(0)
+  extraEarned Boolean @default(false)
+  extraUsed Boolean @default(false)
+  interestSignature String
+}
+
+model JobLease {
+  key String @id
+  owner String @default("")
+  expiresAt DateTime
+}
+
+model DiscoveryUsage {
+  month String @id
+  runs Int @default(0)
+  rechecks Int @default(0)
+  searches Int @default(0)
+  pages Int @default(0)
+  embeddings Int @default(0)
+  vectorUpserts Int @default(0)
+  tokens Int @default(0)
+  estimatedCost Float @default(0)
+}
+
+model DiscoveryRun {
+  id String @id @default(cuid())
+  groupKey String
+  kind String
+  status String @default("running")
+  usage String @default("{}")
+  error String @default("")
+  startedAt DateTime @default(now())
+  finishedAt DateTime?
+  @@index([startedAt])
 }

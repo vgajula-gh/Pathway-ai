@@ -19,3 +19,6 @@ it('refills the same bucket without inventing picks; fee-flag items never stretc
 it('does not treat an unknown grade requirement as confirmed eligibility',()=>{
  const picks=selectPicks([opp('x',{gradeMin:null,gradeMax:null,tags:['art']})],student,600,new Set()); expect(picks[0].isStretch).toBe(false);
 });
+it('uses the student local day so an opportunity does not expire early at UTC midnight',async()=>{
+ const {vi}=await import('vitest');const {eligibility}=await import('../src/domain/scoring.js');vi.useFakeTimers();vi.setSystemTime(new Date('2029-11-02T00:30:00Z'));try{const o=opp('today',{deadline:'2029-11-01'});expect(eligibility(o,{...student,timezone:'America/New_York'}).reasons).not.toContain('The deadline has passed');expect(eligibility(o,{...student,timezone:'UTC'}).reasons).toContain('The deadline has passed');}finally{vi.useRealTimers();}
+});

@@ -69,7 +69,7 @@ export default function App() {
   useEffect(() => { document.body.dataset.tab = tab; window.scrollTo(0, 0); }, [tab]);
   useEffect(() => { applyTheme((me?.settings.theme || 'dusk') as Theme); }, [me?.settings.theme]);
   const onSignedOut = () => { setCreating(false); setRestoring(false); setMe(null); };
-  const openDashboard = (s: Student) => { session.set(s.id); setCreating(false); setRestoring(false); setTab(requestedTab()); setMe(s); };
+  const openDashboard = (s: Student) => { session.set(s.id); setCreating(false); setRestoring(false); setTab(creating ? 'explore' : requestedTab()); setMe(s); };
   const signedIn = (s: SignInResult) => { if (s.recoveryCode) setPending(s); else openDashboard(s); };
   if (pending?.recoveryCode) return <RecoveryCode code={pending.recoveryCode} onDone={() => { const { recoveryCode: _, ...profile } = pending; setPending(null); openDashboard(profile); }} />;
   if (loadError) return <main className="splash"><p role="alert">{loadError}</p><button className="btn" onClick={() => setAttempt(a => a + 1)}>Try again</button></main>;
@@ -93,7 +93,7 @@ export default function App() {
       <main>
         {tab === 'today' && <Today me={me} go={go} ask={ask} setMe={setMe} />}
         {tab === 'explore' && <Explore me={me} ask={ask} />}
-        {tab === 'buddy' && <Buddy key={buddyKey} me={me} seed={buddySeed} opportunityId={buddyScope} clearSeed={() => setBuddySeed(null)} />}
+        {tab === 'buddy' && <Buddy key={buddyKey} me={me} seed={buddySeed} opportunityId={buddyScope} clearSeed={() => {setBuddySeed(null);setBuddyScope(undefined);}} />}
         {tab === 'grow' && <Grow me={me} ask={ask} go={go} />}
         {tab === 'you' && <You me={me} setMe={setMe} onSignOut={onSignedOut} />}
       </main>

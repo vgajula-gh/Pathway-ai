@@ -25,6 +25,7 @@ export default function You({ me, setMe, onSignOut }: { me: Student; setMe: (s: 
       <div style={{ display: 'flex', gap: 16, alignItems: 'center', marginTop: 10 }}><div className="avatar" style={{ width: 64, height: 64, fontSize: 26 }}>{me.name[0]?.toUpperCase()}</div><div><h1 className="display" style={{ margin: 0 }}>{me.name}</h1><p className="muted">{me.grade}th grade</p></div></div>
       <div className="sec"><div className="rows">
         <Row t="Interests" s={me.interests.join(', ') || 'Not set'} p={prov('interests')} />
+        <Row t="Region" s={me.region === 'virtual' ? 'Virtual only' : me.region || 'Not shared'} />
         <Row t="Skills" s={me.skills.join(', ') || 'Not set yet'} p={prov('skills')} />
         <Row t="Availability" s={a ? `Study ${a.studyStart}–${a.studyEnd}, up to ${a.maxStudyMin} min a day. Downtime ${a.downtimeStart}–${a.downtimeEnd}.` : 'Not set'} p={prov('availability')} />
       </div><p className="note">Pathway only uses what you tell it. It doesn’t guess sensitive things about you.</p></div>
