@@ -276,6 +276,13 @@ details.fold summary::-webkit-details-marker{display:none}
 @media (min-width:560px){.navpills{justify-content:center}}
 @media (max-width:430px){.navpill svg{display:none}.navpill{padding:8px 12px;font-size:14px}.navpills{gap:2px;justify-content:space-between}}
 /* ===== Warm Today ===== */
+.today-header{display:flex;align-items:center;justify-content:space-between;gap:12px;border-left:3px solid var(--peri);padding:8px 0 8px 12px;margin-top:12px}
+.today-header.morning{border-color:var(--peach)}.today-header.evening{border-color:var(--rose)}.today-header.night{border-color:var(--teal)}
+.today-header h1{font-family:var(--sans);font-size:16px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.today-header time{font-size:12px;color:var(--text2);white-space:nowrap}
+.today-glance{margin-top:20px}.timeline-heading{margin-top:20px}.timeline-heading h3{font-size:15px}
+.today-actions{flex-wrap:wrap;margin-top:10px}.today-actions button{min-height:44px}
+.due-soon{margin-top:12px}.due-soon h3{font-size:16px}.due-soon p{margin:8px 0;font-size:14px}
 .sky{position:relative;overflow:hidden;border-radius:28px;padding:26px 22px 22px;margin-top:18px;color:#1D1430}
 .sky.morning{background:linear-gradient(150deg,#FFE3C2 0%,#FFC1B4 45%,#F6A8C8 100%)}
 .sky.afternoon{background:linear-gradient(150deg,#CFE6FF 0%,#B9C8FF 50%,#D8C2FF 100%)}
