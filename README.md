@@ -69,3 +69,10 @@ Explore starts with Interested (the existing application tracker), then up to th
 Optional background discovery shares official-source findings across topic/grade/region groups. PostgreSQL stores public text and citations; Pinecone stores vectors in the opportunities namespace, with memory/cosine for SQLite and optional pgvector. Ask about this program opens a scoped Buddy conversation with source excerpts and check dates. Adding official requirements creates an approval proposal and preserves student notes, dates and completed steps.
 
 Discovery is off by default and fails back to catalog mode when optional configuration is absent. Monthly means rolling 30 days: one manual refresh plus at most one interest-change bonus. Shared discovery/re-check budgets apply alongside the overall AI monthly cap; background attempts do not use student daily allowances. Follow the **Personal opportunity discovery** section of [DEPLOY-REPLIT.md](DEPLOY-REPLIT.md) for Pinecone settings, Replit Secrets, scheduling, costs and the published-site checklist. Autoscale needs a scheduled HTTP trigger for unattended opportunity jobs.
+
+
+### LangGraph and LangChain workflows
+
+Personal opportunity discovery and program-scoped Buddy run on **LangGraph.js**, with **LangChain.js** Documents, word-preserving text splitting, a program-bound retriever and prompt/LLM runnable chain. Existing provider adapters, evidence verification, budgets, Pinecone index and approval service stay in place. No additional API key or database migration is needed; hosted tracing is disabled.
+
+Run `npm run demo:workflows` to demonstrate the real compiled graph routing with labeled offline fixtures and no paid calls. Run `npm run demo:workflows -- --mermaid` for generated diagrams. The [workflow walkthrough](docs/13-LANGGRAPH-LANGCHAIN.md) explains the code, safeguards and the boundary between graph orchestration and durable Prisma approvals.

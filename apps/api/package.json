@@ -11,7 +11,8 @@
     "test": "prisma generate --schema prisma/schema.prisma && vitest run",
     "db:push": "node --env-file=../../.env ../../node_modules/prisma/build/index.js db push",
     "db:seed": "tsx --env-file=../../.env prisma/seed.ts",
-    "db:demo": "tsx --env-file=../../.env prisma/demo.ts"
+    "db:demo": "tsx --env-file=../../.env prisma/demo.ts",
+    "demo:workflows": "tsx src/workflows/demo.ts"
   },
   "prisma": {
     "schema": "prisma/schema.prisma"
@@ -21,11 +22,15 @@
     "@fastify/cors": "^10.0.0",
     "@fastify/multipart": "^9.0.0",
     "@fastify/static": "^8.0.0",
+    "@langchain/core": "^1.3.2",
+    "@langchain/langgraph": "^1.6.0",
+    "@langchain/textsplitters": "^1.0.2",
     "@pinecone-database/pinecone": "^9.1.0",
     "@prisma/client": "^6.0.0",
     "cheerio": "^1.2.0",
     "fastify": "^5.0.0",
     "ipaddr.js": "^2.5.0",
+    "langsmith": "^0.11.7",
     "node-ical": "^0.26.1",
     "openai": "^5.0.0",
     "robots-parser": "^3.0.1",

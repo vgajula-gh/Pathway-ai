@@ -373,6 +373,19 @@ paths:
                   conversationId: { type: string }
                   opportunityId: { type: string }
                   eligibilityNote: { type: string }
+                  workflow:
+                    type: object
+                    properties:
+                      engine: { const: langgraph }
+                      steps:
+                        type: array
+                        items:
+                          type: object
+                          required: [node, status]
+                          properties:
+                            node: { type: string }
+                            status: { enum: [completed, skipped, failed] }
+                            reason: { enum: [run_limit, source_unavailable, unconfirmed_facts, storage_unavailable, index_unavailable, provider_unavailable] }
                   citations: { type: array, items: { $ref: '#/components/schemas/KnowledgeCitation' } }
         '403': { description: Student AI consent off }
         '429': { description: Student daily or overall monthly AI request limit reached }

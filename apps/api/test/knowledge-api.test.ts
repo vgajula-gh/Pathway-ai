@@ -30,9 +30,9 @@ it('rejects wrong-opportunity records returned by a faulty vector service',async
  await ingestKnowledge('program',new RunBudget());const c=await db.knowledgeChunk.findFirstOrThrow();holder.runtime.store.query=async()=>[{id:c.id,score:1}];expect(await searchKnowledge('someone-else','requirements')).toEqual([]);
 });
 it('answers scoped Buddy questions with source citations, limits retrieval and rejects fabricated claims',async()=>{
- await ingestKnowledge('program',new RunBudget());const c=await db.knowledgeChunk.findFirstOrThrow();holder.llm.runTools.mockImplementation(async(opts:any)=>{for(let i=0;i<5;i++)await opts.exec('search_knowledge',{opportunityId:'program',query:'requirements'});return JSON.stringify({claims:[{chunkId:c.id,quote:'Applications require a teacher recommendation.'},{chunkId:c.id,quote:'Acceptance is guaranteed.'}]});});
+ await ingestKnowledge('program',new RunBudget());const c=await db.knowledgeChunk.findFirstOrThrow();let round=0;holder.llm.json.mockImplementation(async()=>({claims:[{chunkId:c.id,quote:'Applications require a teacher recommendation.'},{chunkId:c.id,quote:'Acceptance is guaranteed.'}],nextQuery:`requirements search ${++round}`}));
  const app=await buildApp();app.log.level='silent';try{const r=await app.inject({method:'POST',url:'/api/buddy/messages',headers:headers(),payload:{text:'What is required?',opportunityId:'program'}});expect(r.statusCode).toBe(200);expect(r.json().reply).toContain('teacher recommendation');expect(r.json().reply).not.toContain('guaranteed');expect(r.json().citations[0]).toMatchObject({sourceUrl:'https://example.edu/rules',pageTitle:'Rules'});expect(holder.runtime.embedder.embed.mock.calls.length).toBe(4);expect(await db.agentAction.count()).toBe(0);
- holder.llm.runTools.mockResolvedValue('{"claims":[]}');const next=await app.inject({method:'POST',url:'/api/buddy/messages',headers:headers(),payload:{text:'Is lunch provided?',conversationId:r.json().conversationId}});expect(next.json().reply).toContain('official pages don’t say');
+ holder.llm.json.mockResolvedValue({claims:[],nextQuery:null});const next=await app.inject({method:'POST',url:'/api/buddy/messages',headers:headers(),payload:{text:'Is lunch provided?',conversationId:r.json().conversationId}});expect(next.json().reply).toContain('official pages don’t say');
  }finally{await app.close();}
 });
 it('creates a source-backed checklist proposal and applies only after approval, preserving student notes and completed steps',async()=>{
@@ -54,4 +54,9 @@ it('does not answer from an outdated snapshot while changed pages await embeddin
  await ingestKnowledge('program',new RunBudget());expect(await searchKnowledge('program','requirements')).toHaveLength(1);
  await db.sourcePage.updateMany({data:{contentHash:'pending',text:'A changed official page with different requirements.'}});expect(await searchKnowledge('program','requirements')).toEqual([]);
  await db.sourcePage.deleteMany();await ingestKnowledge('program',new RunBudget());expect(await db.knowledgeChunk.count()).toBe(0);expect((await holder.runtime.store.list()).ids).toEqual([]);
+});
+
+it('keeps the friendly service-unavailable response when a LangGraph retrieval node fails',async()=>{
+ holder.runtime.embedder.embed.mockRejectedValue(new Error('private provider error'));
+ const app=await buildApp();app.log.level='silent';try{const r=await app.inject({method:'POST',url:'/api/buddy/messages',headers:headers(),payload:{text:'What is required?',opportunityId:'program'}});expect(r.statusCode).toBe(503);expect(r.json().error).toContain('questions are taking a break');expect(r.json().error).not.toContain('private provider error');expect(await db.agentAction.count()).toBe(0);}finally{await app.close();}
 });

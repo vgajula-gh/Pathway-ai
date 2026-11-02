@@ -1,0 +1,169 @@
+import { StateGraph, Annotation, START, END } from '@langchain/langgraph';
+import type { Page } from './pages.js';
+import type { Extracted } from './extraction.js';
+import type { Group } from './pipeline.js';
+import type { SearchProvider } from './search/index.js';
+import { CAPS, RunBudget } from './config.js';
+import { discoveryQuery } from './groups.js';
+import type { verifyOpportunity } from '../domain/opportunity-verification.js';
+import { noObserver, StepObserver } from '../workflows/privacy.js';
+
+export type VerifiedOpportunity = ReturnType<typeof verifyOpportunity>;
+export type DiscoveryNodes = {
+  search: SearchProvider;
+  fetch: (url: string, budget: RunBudget) => Promise<Page>;
+  extract: (pages: Page[]) => Promise<Extracted>;
+  verify: (facts: Extracted, pages: Page[]) => VerifiedOpportunity;
+  save: (data: VerifiedOpportunity, pages: Page[], group: Group) => Promise<string>;
+  ingest?: (id: string, budget: RunBudget) => Promise<void>;
+};
+const value = <T>(initial: () => T) => Annotation<T>({ reducer: (_old, update) => update, default: initial });
+const State = Annotation.Root({
+  group: Annotation<Group>(),
+  buckets: Annotation<('free' | 'paid')[]>(),
+  urls: value<string[]>(() => []),
+  cursor: value(() => 0),
+  currentUrl: value(() => ''),
+  pages: value<Page[]>(() => []),
+  facts: value<Extracted | null>(() => null),
+  verified: value<VerifiedOpportunity | null>(() => null),
+  savedId: value<string | null>(() => null),
+  saved: value<string[]>(() => []),
+  failed: value(() => false),
+});
+type Snapshot = typeof State.State;
+type Update = typeof State.Update;
+
+export function createDiscoveryGraph(
+  nodes: DiscoveryNodes,
+  budget: RunBudget,
+  observe: StepObserver = noObserver,
+) {
+  const guarded =
+    (node: string, run: (s: Snapshot) => Promise<Update> | Update) =>
+    async (s: Snapshot): Promise<Update> => {
+      try {
+        const update = await run(s);
+        observe({ node, status: 'completed' });
+        return update;
+      } catch (error) {
+        const reason: NonNullable<import('../workflows/privacy.js').WorkflowStep['reason']> = /limit/i.test(
+          (error as Error)?.message || '',
+        )
+          ? 'run_limit'
+          : node === 'fetch_official_pages'
+            ? 'source_unavailable'
+            : node === 'store_catalog'
+              ? 'storage_unavailable'
+              : node === 'ingest_knowledge'
+                ? 'index_unavailable'
+                : 'unconfirmed_facts';
+        observe({ node, status: 'failed', reason });
+        return { failed: true };
+      }
+    };
+  const next = (s: Snapshot) =>
+    s.cursor < s.urls.length &&
+    budget.extractionCalls < CAPS.extractionCalls &&
+    budget.usage.pages < CAPS.pages &&
+    Date.now() <= budget.deadlineAt
+      ? 'select_candidate'
+      : END;
+  return new StateGraph(State)
+    .addNode('search_candidates', async (s) => {
+      const urls = new Set<string>();
+      try {
+        for (const bucket of [...new Set(s.buckets)].slice(0, 2)) {
+          budget.take('searches');
+          const result = await nodes.search.search(
+            discoveryQuery(s.group, bucket, new Date().getUTCFullYear()),
+          );
+          budget.usage.tokens += result.tokens;
+          result.urls.slice(0, CAPS.candidates).forEach((url) => urls.add(url));
+        }
+        observe({ node: 'search_candidates', status: 'completed' });
+        return { urls: [...urls].slice(0, CAPS.candidates) };
+      } catch (error) {
+        observe({ node: 'search_candidates', status: 'failed' });
+        throw error;
+      }
+    })
+    .addNode('select_candidate', (s) => ({
+      currentUrl: s.urls[s.cursor],
+      cursor: s.cursor + 1,
+      pages: [],
+      facts: null,
+      verified: null,
+      savedId: null,
+      failed: false,
+    }))
+    .addNode(
+      'fetch_official_pages',
+      guarded('fetch_official_pages', async (s) => {
+        const main = await nodes.fetch(s.currentUrl, budget),
+          pages = [main];
+        for (const url of main.links.slice(0, 3))
+          try {
+            pages.push(await nodes.fetch(url, budget));
+          } catch {
+            /* Unknown supporting facts remain unknown. */
+          }
+        return { pages };
+      }),
+    )
+    .addNode(
+      'extract_facts',
+      guarded('extract_facts', async (s) => {
+        budget.check();
+        budget.extractionCalls++;
+        budget.usage.tokens += Math.ceil(s.pages.reduce((n, p) => n + p.text.length, 0) / 3) + 6500;
+        return { facts: await nodes.extract(s.pages) };
+      }),
+    )
+    .addNode(
+      'verify_facts',
+      guarded('verify_facts', (s) => ({ verified: nodes.verify(s.facts!, s.pages) })),
+    )
+    .addNode(
+      'store_catalog',
+      guarded('store_catalog', async (s) => ({ savedId: await nodes.save(s.verified!, s.pages, s.group) })),
+    )
+    .addNode(
+      'ingest_knowledge',
+      guarded('ingest_knowledge', async (s) => {
+        if (nodes.ingest) await nodes.ingest(s.savedId!, budget);
+        return {};
+      }),
+    )
+    .addNode('record_saved', (s) => ({ saved: [...s.saved, s.savedId!] }))
+    .addNode('skip_candidate', () => {
+      observe({ node: 'skip_candidate', status: 'skipped' });
+      return {};
+    })
+    .addEdge(START, 'search_candidates')
+    .addConditionalEdges('search_candidates', next, ['select_candidate', END])
+    .addEdge('select_candidate', 'fetch_official_pages')
+    .addConditionalEdges('fetch_official_pages', (s) => (s.failed ? 'skip_candidate' : 'extract_facts'), [
+      'skip_candidate',
+      'extract_facts',
+    ])
+    .addConditionalEdges('extract_facts', (s) => (s.failed ? 'skip_candidate' : 'verify_facts'), [
+      'skip_candidate',
+      'verify_facts',
+    ])
+    .addConditionalEdges('verify_facts', (s) => (s.failed ? 'skip_candidate' : 'store_catalog'), [
+      'skip_candidate',
+      'store_catalog',
+    ])
+    .addConditionalEdges('store_catalog', (s) => (s.failed ? 'skip_candidate' : 'ingest_knowledge'), [
+      'skip_candidate',
+      'ingest_knowledge',
+    ])
+    .addConditionalEdges('ingest_knowledge', (s) => (s.failed ? 'skip_candidate' : 'record_saved'), [
+      'skip_candidate',
+      'record_saved',
+    ])
+    .addConditionalEdges('record_saved', next, ['select_candidate', END])
+    .addConditionalEdges('skip_candidate', next, ['select_candidate', END])
+    .compile({ name: 'pathway_opportunity_discovery' });
+}

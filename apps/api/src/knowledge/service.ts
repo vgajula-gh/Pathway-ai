@@ -1,15 +1,23 @@
 import { createHash } from 'node:crypto';
 import { prisma } from '../lib/db.js';
 import { RunBudget } from '../discovery/config.js';
-import { chunkText, keywordScore } from '../domain/knowledge.js';
+import { splitOfficialPages } from './documents.js';
+import { ProgramRetriever, passageFromDocument } from './retriever.js';
+import { privateWorkflow, workflowConfig } from '../workflows/privacy.js';
 import { initializeKnowledge, KnowledgeRuntime } from './runtime.js';
 import { validVector, Passage, embeddingIdentity } from './contracts.js';
 export async function ingestKnowledge(opportunityId: string, budget: RunBudget, runtime?: KnowledgeRuntime) {
   const rt = runtime || (await initializeKnowledge());
   if (!rt) return;
   const pages = await prisma.sourcePage.findMany({ where: { opportunityId } });
-  const obsolete=await prisma.knowledgeChunk.findMany({where:{opportunityId,sourceUrl:{notIn:pages.map(p=>p.sourceUrl)}},select:{id:true}});
-  if(obsolete.length){await prisma.knowledgeChunk.deleteMany({where:{id:{in:obsolete.map(c=>c.id)}}});await rt.store.delete(obsolete.map(c=>c.id));}
+  const obsolete = await prisma.knowledgeChunk.findMany({
+    where: { opportunityId, sourceUrl: { notIn: pages.map((p) => p.sourceUrl) } },
+    select: { id: true },
+  });
+  if (obsolete.length) {
+    await prisma.knowledgeChunk.deleteMany({ where: { id: { in: obsolete.map((c) => c.id) } } });
+    await rt.store.delete(obsolete.map((c) => c.id));
+  }
   for (const page of pages) {
     const old = await prisma.knowledgeChunk.findMany({ where: { opportunityId, sourceUrl: page.sourceUrl } });
     if (
@@ -24,7 +32,9 @@ export async function ingestKnowledge(opportunityId: string, budget: RunBudget, 
       });
       continue;
     }
-    const texts = chunkText(page.text).slice(0, 20),
+    const texts = (await splitOfficialPages([{ ...page, links: [] }]))
+        .slice(0, 20)
+        .map((doc) => doc.pageContent),
       vectors: number[][] = [];
     for (let i = 0; i < texts.length; i += 20) {
       budget.take('embeddings');
@@ -98,26 +108,9 @@ export async function searchKnowledge(
 ): Promise<Passage[]> {
   const rt = runtime || (await initializeKnowledge());
   if (!rt) return [];
-  const [vector] = await rt.embedder.embed([query.slice(0, 1000)], 'query');
-  if (!validVector(vector, rt.embedder.dimension)) return [];
-  const matches = await rt.store.query(vector, opportunityId, 10);
-  // Recheck ownership/scope in PostgreSQL even if vector metadata is wrong or stale.
-  const chunks = await prisma.knowledgeChunk.findMany({
-    where: {
-      id: { in: matches.map((m) => m.id) },
-      opportunityId,
-      scope: 'opportunity',
-      embeddingModel: embeddingIdentity(rt.embedder),
-    },
-  });
-  const snapshots=await prisma.sourcePage.findMany({where:{opportunityId},select:{sourceUrl:true,contentHash:true}});
-  return chunks
-    .filter(c=>snapshots.some(p=>p.sourceUrl===c.sourceUrl&&p.contentHash===c.contentHash))
-    .map((c) => ({
-      c,
-      score: 0.6 * (matches.find((m) => m.id === c.id)?.score || 0) + 0.4 * keywordScore(c.text, query),
-    }))
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 5)
-    .map((x) => x.c);
+  return privateWorkflow(async () =>
+    (
+      await new ProgramRetriever(opportunityId, rt).invoke(query, workflowConfig('retrieve-official-program'))
+    ).map(passageFromDocument),
+  );
 }

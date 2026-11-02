@@ -1,0 +1,67 @@
+import { BaseRetriever } from '@langchain/core/retrievers';
+import { Document } from '@langchain/core/documents';
+import { prisma } from '../lib/db.js';
+import { keywordScore } from '../domain/knowledge.js';
+import { embeddingIdentity, validVector, Passage } from './contracts.js';
+import type { KnowledgeRuntime } from './runtime.js';
+
+type SourceMetadata = { opportunityId: string; sourceUrl: string; pageTitle: string; checkedAt: string };
+export class ProgramRetriever extends BaseRetriever<SourceMetadata> {
+  lc_namespace = ['pathway', 'retrievers', 'official_program'];
+  constructor(
+    private readonly opportunityId: string,
+    private readonly runtime: KnowledgeRuntime,
+  ) {
+    super({ verbose: false });
+  }
+  async _getRelevantDocuments(query: string): Promise<Document<SourceMetadata>[]> {
+    const rt = this.runtime;
+    const [vector] = await rt.embedder.embed([query.slice(0, 1000)], 'query');
+    if (!vector || !validVector(vector, rt.embedder.dimension)) return [];
+    // Scope is bound by the server, never provided by the model's query.
+    const matches = await rt.store.query(vector, this.opportunityId, 10);
+    const [chunks, snapshots] = await Promise.all([
+      prisma.knowledgeChunk.findMany({
+        where: {
+          id: { in: matches.map((m) => m.id) },
+          opportunityId: this.opportunityId,
+          scope: 'opportunity',
+          embeddingModel: embeddingIdentity(rt.embedder),
+        },
+      }),
+      prisma.sourcePage.findMany({
+        where: { opportunityId: this.opportunityId },
+        select: { sourceUrl: true, contentHash: true },
+      }),
+    ]);
+    return chunks
+      .filter((c) => snapshots.some((p) => p.sourceUrl === c.sourceUrl && p.contentHash === c.contentHash))
+      .map((c) => ({
+        c,
+        score: 0.6 * (matches.find((m) => m.id === c.id)?.score || 0) + 0.4 * keywordScore(c.text, query),
+      }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 5)
+      .map(
+        ({ c }) =>
+          new Document({
+            id: c.id,
+            pageContent: c.text,
+            metadata: {
+              opportunityId: c.opportunityId,
+              sourceUrl: c.sourceUrl,
+              pageTitle: c.pageTitle,
+              checkedAt: c.checkedAt.toISOString(),
+            },
+          }),
+      );
+  }
+}
+export const passageFromDocument = (doc: Document<SourceMetadata>): Passage => ({
+  id: doc.id!,
+  opportunityId: doc.metadata.opportunityId,
+  text: doc.pageContent,
+  sourceUrl: doc.metadata.sourceUrl,
+  pageTitle: doc.metadata.pageTitle,
+  checkedAt: new Date(doc.metadata.checkedAt),
+});

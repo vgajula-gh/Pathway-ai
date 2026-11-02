@@ -1,3 +1,4 @@
+import type {WorkflowStep} from '../workflows/privacy.js';
 import { env } from '../lib/env.js';
 export function setting(name: string, fallback: number, max = 1000) {
   const v = process.env[name];
@@ -22,6 +23,7 @@ export type Usage = {
   estimatedCost: number;
 };
 export class RunBudget {
+  readonly workflow: WorkflowStep[] = [];
   usage: Usage = {
     runs: 1,
     searches: 0,
