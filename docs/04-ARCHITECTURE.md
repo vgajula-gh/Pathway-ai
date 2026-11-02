@@ -94,7 +94,7 @@ The current pilot uses one Fastify server to serve the compiled React app and `/
 
 ```mermaid
 flowchart LR
-  E[Explore first visit / explicit Search again] --> Q[SQL request + shared public interest group]
+  E[Explicit Search / Search again] --> Q[SQL request + shared public interest group]
   Q --> C{Enough recent active catalog items?}
   C -->|yes| P[Deterministic StudentPick selection]
   C -->|no| G[Leased LangGraph: search / fetch / extract / verify]
@@ -112,7 +112,7 @@ flowchart LR
 
 Production sample seeding is off unless DEMO_MODE=true. Active-only rules live in domain/opportunity-active.ts, eligibility in scoring.ts and cost/ranking in picks.ts. SQLite remains the local default, with memory/cosine vectors. Explicit VECTOR_STORE=pinecone uses the official SDK; pgvector is optional. The default store is memory in every environment; set pinecone explicitly for durable production vectors.
 
-OpportunitySearchRequest durably tracks a student search without embedding private data. Group bindings point to public topic/grade-band/region work. Base/bonus manual slots are reserved, then charged once only after complete/empty settlement. Failed, interrupted, limited or cancelled requests are not charged. Global paid attempt reservations remain counted on failure. First use is automatic; later interest edits expose the explicit bonus action. A full recent shared catalog on first use needs no paid search or manual debit. The explicit manual action always queues new web search, even with full current picks.
+OpportunitySearchRequest durably tracks a student search without embedding private data. Group bindings point to public topic/grade-band/region work; an optional cached flag records a queued group that no longer needs paid work. Base/bonus manual slots are reserved, then charged once only after complete/empty settlement. Failed, interrupted, limited or cancelled requests are not charged. Global paid attempt reservations remain counted on failure. Both first search and Search again are explicit and catalog-first. A complete recent active catalog covers each selected interest and the combined three Free/three Paid target without paid work or manual debit, even with AI off or quotas reached. Only absent interests are queued; if all interests are covered but a bucket is short, queue the least-covered topics for that bucket. The worker rechecks gaps before reserving funds, since another student may have filled them. Monthly refresh applies only to students with a completed prior search. Later interest edits expose the explicit bonus action. Current shared usage is read independently of historical limited request status, so raising a cap recovers the control without erasing counters.
 
 Timers, authenticated request-bound work and owner cron share a renewable database lease. Each invocation processes at most one group, one public-program preparation and one source recheck. Request-bound work uses only the signed-in student’s persisted group bindings and current program membership. PostgreSQL serializable write-conflict retries include bounded backoff; these retry database transactions, never paid graph nodes. Autoscale may sleep; use cron for unattended progress.
 

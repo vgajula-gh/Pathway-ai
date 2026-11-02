@@ -1,4 +1,5 @@
 // Loads everything the deterministic engine needs for one student.
+import type { Prisma } from '@prisma/client';
 import { prisma, j } from './db.js';
 import { env } from './env.js';
 import { AvailabilityRules, CalEvent, StudentContext } from '../domain/types.js';
@@ -9,11 +10,11 @@ export function toCalEvent(e: { id: string; title: string; type: string; start: 
   return { id: e.id, title: e.title, type: e.type, start: e.start, end: e.end, location: e.location, recurDays: j<number[]>(e.recurDays, []), recurUntil: e.recurUntil, source: e.source, done: e.done, readOnly: e.readOnly };
 }
 
-export async function loadContext(studentId: string) {
+export async function loadContext(studentId: string, db: Pick<Prisma.TransactionClient,'student'|'event'|'goal'> = prisma) {
   const [student, events, goals] = await Promise.all([
-    prisma.student.findUniqueOrThrow({ where: { id: studentId }, include: { availability: true } }),
-    prisma.event.findMany({ where: { studentId, ...(env.demoMode ? {} : { source: { not: 'sample' } }) } }),
-    prisma.goal.findMany({ where: { studentId }, include: { milestones: true } })
+    db.student.findUniqueOrThrow({ where: { id: studentId }, include: { availability: true } }),
+    db.event.findMany({ where: { studentId, ...(env.demoMode ? {} : { source: { not: 'sample' } }) } }),
+    db.goal.findMany({ where: { studentId }, include: { milestones: true } })
   ]);
   const a = student.availability;
   const rules: AvailabilityRules = a ? { studyStart: a.studyStart, studyEnd: a.studyEnd, maxStudyMin: a.maxStudyMin, downtimeStart: a.downtimeStart, downtimeEnd: a.downtimeEnd } : DEFAULT_RULES;

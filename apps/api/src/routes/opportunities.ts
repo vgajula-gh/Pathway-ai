@@ -1,8 +1,9 @@
 import { FastifyInstance } from 'fastify';
-import { discoveryStatus,queueDiscovery } from '../discovery/refresh.js';
+import { discoveryStatus } from '../discovery/refresh.js';
 import { discoveryAvailability } from '../discovery/availability.js';
 import {knowledgeScope,studentOpportunityIds} from '../knowledge/scope.js';
 import {knowledgeStates} from '../knowledge/preparation.js';
+import {catalogCoverage,publicCatalogCoverage} from '../discovery/catalog.js';
 import { requirementsAction } from '../knowledge/requirements.js';
 import { personalPicks, toOpp } from '../lib/picks.js';
 import { prisma, j } from '../lib/db.js';
@@ -34,14 +35,14 @@ export default async function routes(app: FastifyInstance) {
     reply.header('Cache-Control', 'no-store');
     const s = await requireStudent(req), list = await scored(s.id);
     const ok = list.filter(o => !o.fit.excluded && o.status !== 'dismissed').sort((a, b) => ((b.fit as any).score - (a.fit as any).score));
-    const picks = await personalPicks(s.id);
+    const [hasSearch,hasPicks,coverage]=await Promise.all([prisma.opportunitySearchRequest.count({where:{studentId:s.id}}),prisma.studentPick.count({where:{studentId:s.id}}),catalogCoverage(s.id)]);
+    const picks = hasSearch||hasPicks?await personalPicks(s.id):[];
     const availability=await discoveryAvailability(s.aiConsent), enabled=availability.enabled;
-    if(enabled)await queueDiscovery(s.id);
     const discovery=await discoveryStatus(s.id);
     const runtime=s.aiConsent?await initializeKnowledge():null;
     const states=await knowledgeStates(await studentOpportunityIds(s.id),runtime);
     const interestedCount=await prisma.savedOpportunity.count({where:{studentId:s.id,status:{not:'dismissed'}}});
-    return { ...discovery, discoveryEnabled:enabled, unavailable:availability.unavailable, knowledgeUnavailable:runtime?null:knowledgeUnavailable(), preparing:Object.values(states).includes('preparing'), interestedCount, knowledgeStates:states,canAskAll:Object.values(states).includes('ready'),
+    return { ...discovery, catalog:publicCatalogCoverage(coverage), discoveryEnabled:enabled, unavailable:availability.unavailable, knowledgeUnavailable:runtime?null:knowledgeUnavailable(), preparing:Object.values(states).includes('preparing'), interestedCount, knowledgeStates:states,canAskAll:Object.values(states).includes('ready'),
       picks:picks.map(p=>({...p,canAsk:states[p.id]==='ready',knowledgeStatus:states[p.id]})),
       recommended: ok, excluded: list.filter(o => o.fit.excluded).map(o => ({ id: o.id, name: o.name, reasons: o.fit.eligibility.reasons })), dismissed: list.filter(o => o.status === 'dismissed').length, sampleData: list.some(o => o.isSample) };
   });

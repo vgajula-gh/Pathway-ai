@@ -29,6 +29,23 @@ components:
         detail: { type: [string, 'null'] }
         startedAt: { type: [string, 'null'], format: date-time }
         finishedAt: { type: [string, 'null'], format: date-time }
+    MonthlySearchAllowance:
+      type: object
+      required: [limited, reasons, resetsAt]
+      description: Read-only current shared allowance, independent of the last request and the student rolling-cycle allowance. No provider call or counter reset.
+      properties:
+        limited: { type: boolean }
+        reasons: { type: array, uniqueItems: true, items: { enum: [discovery_monthly_limit, ai_monthly_limit] } }
+        resetsAt: { type: string, format: date-time, description: Next UTC calendar-month boundary }
+    CatalogCoverage:
+      type: object
+      required: [complete, free, paid, missingInterests]
+      description: Current active eligible good matches, excluding saved/dismissed items. Complete means every selected interest is covered and the combined Free/Paid targets are met; reuse requires no paid allowance.
+      properties:
+        complete: { type: boolean }
+        free: { type: integer, minimum: 0 }
+        paid: { type: integer, minimum: 0 }
+        missingInterests: { type: array, items: { type: string } }
     DiscoveryUnavailable:
       type: [object, 'null']
       description: Safe readiness explanation; contains setting names only, never values or raw provider errors
@@ -45,7 +62,8 @@ components:
         enabled: { type: boolean }
         unavailable: { $ref: '#/components/schemas/DiscoveryUnavailable' }
         finding: { type: boolean }
-        limited: { type: boolean }
+        limited: { type: boolean, description: Current shared cap blocks new work; already queued work remains finding }
+        monthlyAllowance: { $ref: '#/components/schemas/MonthlySearchAllowance' }
         error: { type: [string, 'null'] }
         lastCheckedAt: { type: [string, 'null'], format: date-time }
         search: { $ref: '#/components/schemas/SearchProgress' }
@@ -63,6 +81,7 @@ components:
     OpportunityList:
       type: object
       properties:
+        catalog: { $ref: '#/components/schemas/CatalogCoverage' }
         picks: { type: array, items: { $ref: '#/components/schemas/Opportunity' } }
         recommended: { type: array, items: { $ref: '#/components/schemas/Opportunity' } }
         excluded: { type: array, items: { type: object } }
@@ -76,7 +95,8 @@ components:
         discoveryEnabled: { type: boolean }
         unavailable: { $ref: '#/components/schemas/DiscoveryUnavailable' }
         finding: { type: boolean }
-        limited: { type: boolean }
+        limited: { type: boolean, description: Current shared cap blocks new work; already queued work remains finding }
+        monthlyAllowance: { $ref: '#/components/schemas/MonthlySearchAllowance' }
         error: { type: [string, 'null'] }
         lastCheckedAt: { type: [string, 'null'], format: date-time }
         search: { $ref: '#/components/schemas/SearchProgress' }
@@ -355,18 +375,18 @@ paths:
     post: { summary: Create prep proposal, responses: { '200': { description: Proposal, content: { application/json: { schema: { $ref: '#/components/schemas/Proposal' } } } } } }
   /api/opportunities/refresh:
     post:
-      summary: Queue an explicit new web search within the successful-search allowance
-      description: Failed/limited/cancelled searches do not consume the manual allowance. Global paid attempts remain counted. Same pending requests coalesce; a full current shortlist does not skip explicit web search.
+      summary: Check the shared catalog and queue only missing opportunities
+      description: Both initial Search and Search again reuse a full active catalog without web work or manual debit, including with AI off or caps reached. Otherwise queue only missing interests or bucket gaps, at most five topic groups per request. Coverage checks all selected interests. Failed/limited/cancelled searches do not consume the manual allowance. Global paid attempts remain counted. Same pending requests coalesce; queued gaps are rechecked before funding.
       requestBody:
         content:
           application/json:
             schema: { type: object, additionalProperties: false }
       responses:
-        '202': { description: Request queued or coalesced; requestId/requested plus current discovery/search/refresh status }
-        '403': { description: Student AI consent off }
+        '202': { description: Queued, coalesced, initially limited or completed from catalog; requestId/requested/usedSharedCatalog/catalog plus current discovery/search/refresh status }
+        '403': { description: Student AI consent off and web work needed }
         '422': { description: Add interests first or invalid input }
         '429': { description: Successful manual allowance or overall monthly attempt cap reached }
-        '503': { description: Search configuration unavailable }
+        '503': { description: Web search needed but configuration unavailable }
   /api/discovery/run:
     post:
       summary: Process bounded work for the signed-in student’s persisted groups and current program set

@@ -7,13 +7,13 @@ export const normalizeTopic = (v: string) =>
     .replace(/[^\p{L}\p{N}]+/gu, ' ')
     .trim()
     .slice(0, 60);
-export function interestGroups(student: Pick<StudentContext, 'interests' | 'grade' | 'region'>) {
+export function interestGroups(student: Pick<StudentContext, 'interests' | 'grade' | 'region'>, limit = 5) {
   const band = student.grade <= 10 ? '9-10' : '11-12',
     region = student.region || 'US';
   // One group per topic, not per student's unique combination of interests.
   return [...new Set(student.interests.map(normalizeTopic).filter(Boolean))]
     .sort()
-    .slice(0, 5)
+    .slice(0, limit)
     .map((topic) => ({ key: `${topic}|${band}|${region}`, topic, gradeBand: band, region }));
 }
 export function discoveryQuery(

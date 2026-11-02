@@ -1,5 +1,6 @@
 // Transparent opportunity eligibility + fit. Hard exclusions win over weighted ranking.
 // Never present the numeric score to students as objective truth; show factors instead.
+import {normalizeTopic} from '../discovery/groups.js';
 import {dkey,wallNow} from './time.js';
 import { StudentContext } from './types.js';
 
@@ -26,7 +27,7 @@ export const WEIGHTS = { interest: 0.3, goal: 0.2, schedule: 0.15, cost: 0.15, r
 export function scoreOpportunity(o: Opp, s: StudentContext, weekFreeMin: number) {
   const e = eligibility(o, s);
   if (e.status === 'not_eligible') return { id: o.id, excluded: true as const, eligibility: e };
-  const matched = s.interests.filter(n => o.tags.some(t => t.toLowerCase().includes(n.toLowerCase()) || n.toLowerCase().includes(t.toLowerCase())));
+  const matched = s.interests.filter(n => o.tags.some(t => {const tag=normalizeTopic(t),interest=normalizeTopic(n);return !!tag&&!!interest&&(tag.includes(interest)||interest.includes(tag));}));
   const goalText = s.goals.join(' ').toLowerCase();
   const goalHit = o.tags.some(t => goalText.includes(t)) || o.skills.some(k => goalText.includes(k.toLowerCase().split(' ')[0]));
   const effort = /^High/i.test(o.commitment) ? 3 : /^Medium/i.test(o.commitment) ? 2 : 1;

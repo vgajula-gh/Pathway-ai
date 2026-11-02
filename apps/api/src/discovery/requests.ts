@@ -1,99 +1,142 @@
 import { prisma,j } from '../lib/db.js';
 import { HttpError } from '../lib/errors.js';
-import { limit } from '../lib/ai-limits.js';
+import {monthlySearchAllowance,monthlyLimitMessage} from './monthly-allowance.js';
 import { personalPicks } from '../lib/picks.js';
 import { interestGroups } from './groups.js';
 import { discoveryConfigured,setting } from './config.js';
-import { transaction,stateIn,refreshDays,shortBuckets } from './refresh.js';
+import {catalogCoverage,publicCatalogCoverage} from './catalog.js';
+import { transaction,stateIn,refreshDays } from './refresh.js';
 import { failureMessage,FailureInfo } from './failures.js';
 
-type Binding={key:string;since:string};
+type Binding={key:string;since:string;cached?:boolean};
 const pending=['queued','running'];
 const groupPending=['queued','queued_manual','running'];
 const snapshot=(value:string)=>j<{phase?:string;savedIds?:string[];failures?:FailureInfo[]}>(value,{});
-export async function enqueueSearch(studentId:string,kind:'initial'|'manual'|'monthly',now=new Date()) {
-  if(!discoveryConfigured()) {
-    if(kind==='manual')throw new HttpError(503,"Opportunity search isn't available right now.");
-    return {requested:false};
-  }
+type EnqueueResult = { requested: boolean; requestId?: string; usedSharedCatalog?: boolean; catalog?: ReturnType<typeof publicCatalogCoverage> };
+export async function enqueueSearch(studentId:string,kind:'initial'|'manual'|'monthly',now=new Date(),options:{explicit?:boolean}={}) {
+  const explicit=options.explicit||kind==='manual';
   await settleSearchRequests(studentId);
-  const short=await shortBuckets(studentId),cached=kind!=='manual'&&!short.length;
-  const cachedPicks=cached?await personalPicks(studentId):[];
-  return transaction(async tx=>{
+  const result=await transaction<EnqueueResult>(async tx=>{
     const student=await tx.student.update({where:{id:studentId},data:{updatedAt:now}});
-    if(!student.aiConsent) {
-      if(kind==='manual')throw new HttpError(403,'Turn on AI help in You → Privacy to search.');
-      return {requested:false};
-    }
-    const groups=interestGroups({grade:student.grade,interests:j(student.interests,[]),region:student.region});
+    const groups=interestGroups({grade:student.grade,interests:j(student.interests,[]),region:student.region},20);
     if(!groups.length) {
+      if(explicit)throw new HttpError(422,'Add an interest before searching for opportunities.');
       await tx.opportunitySearchRequest.updateMany({where:{studentId,status:{in:pending}},data:{status:'cancelled',finishedAt:now}});
-      if(kind==='manual')throw new HttpError(422,'Add an interest before searching for opportunities.');
       return {requested:false};
     }
+    const coverage=await catalogCoverage(studentId,now,tx),catalog=publicCatalogCoverage(coverage);
     const signature=groups.map(g=>g.key).join('||');
     const active=await tx.opportunitySearchRequest.findFirst({where:{studentId,status:{in:pending}},orderBy:{createdAt:'desc'}});
-    if(active&&active.signature===signature)return {requested:false,requestId:active.id};
+    if(active&&active.signature===signature&&!coverage.complete)return {requested:false,requestId:active.id,catalog};
     if(active)await tx.opportunitySearchRequest.update({where:{id:active.id},data:{status:'cancelled',finishedAt:now}});
-    if(kind==='initial'&&!cached) {
-      const recent=await tx.opportunitySearchRequest.findFirst({where:{studentId,createdAt:{gte:new Date(+now-refreshDays()*86400000)}},orderBy:{createdAt:'desc'}});
-      if(recent&&recent.signature!==signature&&!(recent.status==='limited'&&recent.createdAt.toISOString().slice(0,7)!==now.toISOString().slice(0,7)))return {requested:false};
+    // Library reads are free even when AI is off, the shared cap is reached, or a manual slot is spent.
+    if(coverage.complete) {
+      const latest=await tx.opportunitySearchRequest.findFirst({where:{studentId},orderBy:{createdAt:'desc'}});
+      const old=latest?.status==='cached'&&latest.signature===signature&&+latest.createdAt>=+now-86400000?latest:null;
+      const request=old||await tx.opportunitySearchRequest.create({data:{studentId,kind,signature,status:'cached',createdAt:now,finishedAt:now}});
+      return {requested:false,requestId:request.id,usedSharedCatalog:true,catalog};
     }
-    const previous=kind!=='manual'?await tx.opportunitySearchRequest.findFirst({where:{studentId,signature,createdAt:{gte:new Date(+now-refreshDays()*86400000)}},orderBy:{createdAt:'desc'}}):null;
-    if(previous&&!(previous.status==='limited'&&previous.createdAt.toISOString().slice(0,7)!==now.toISOString().slice(0,7)))return {requested:false};
+    if(!student.aiConsent) {
+      if(explicit)throw new HttpError(403,'Turn on AI help in You → Privacy to search the web.');
+      return {requested:false,catalog};
+    }
+    if(!discoveryConfigured()) {
+      if(explicit)throw new HttpError(503,"Opportunity web search isn't available right now. Existing programs are still available.");
+      return {requested:false,catalog};
+    }
+    const monthly=await monthlySearchAllowance(tx,now);
+    const previous=await tx.opportunitySearchRequest.findFirst({where:{studentId,signature,createdAt:{gte:new Date(+now-refreshDays()*86400000)}},orderBy:{createdAt:'desc'}});
+    const resuming=previous?.status==='limited'&&!monthly.limited;
+    if(!explicit) {
+      if(kind==='initial') {
+        const recent=await tx.opportunitySearchRequest.findFirst({where:{studentId,createdAt:{gte:new Date(+now-refreshDays()*86400000)}},orderBy:{createdAt:'desc'}});
+        if(recent&&recent.signature!==signature&&!(recent.status==='limited'&&recent.kind!=='manual'&&!monthly.limited))return {requested:false,catalog};
+      }
+      if(previous&&!resuming)return {requested:false,catalog};
+    }
+    // Decide under the student lock; concurrent clicks cannot both claim an initial search.
+    const completed=explicit&&kind==='initial'?await tx.opportunitySearchRequest.findFirst({where:{studentId,status:{in:['cached','complete','empty']}},select:{id:true}}):null;
+    const requestKind=(resuming&&previous.kind==='manual')||completed?'manual':kind;
     const state=await stateIn(tx,studentId,now);
-    if(cached) {
-      const existing=await tx.opportunitySearchRequest.findFirst({where:{studentId,signature,status:'cached',createdAt:{gte:new Date(+now-86400000)}}});
-      if(existing)return {requested:false,requestId:existing.id};
-      const request=await tx.opportunitySearchRequest.create({data:{studentId,kind,signature,status:'cached',resultIds:JSON.stringify(cachedPicks.map(p=>p.id)),createdAt:now,finishedAt:now}});
-      return {requested:false,requestId:request.id,usedSharedCatalog:true};
-    }
     let manualSlot:string|null=null;
-    if(kind==='manual') {
+    if(requestKind==='manual') {
       const max=setting('MANUAL_REFRESHES_PER_MONTH',1,10);
       manualSlot=state.manualUsed<max?'base':state.extraEarned&&!state.extraUsed?'bonus':null;
-      if(!manualSlot)throw new HttpError(429,'Next search available on '+new Date(+state.cycleStartedAt+refreshDays()*86400000).toISOString().slice(0,10)+'.');
+      if(!manualSlot){
+        if(!explicit)return {requested:false,catalog};
+        throw new HttpError(429,'Next web search available on '+new Date(+state.cycleStartedAt+refreshDays()*86400000).toISOString().slice(0,10)+'. Shared library results still work.');
+      }
     }
-    const month=now.toISOString().slice(0,7),usage=await tx.discoveryUsage.findUnique({where:{month}}),overall=await tx.aIUsage.findUnique({where:{key:'month:'+month}});
-    const limited=(usage?.runs||0)>=setting('DISCOVERY_MONTHLY_BUDGET',10,10000)||(overall?.count||0)>=limit(process.env.AI_MONTHLY_LIMIT,1000);
-    if(limited) {
-      if(kind==='manual')throw new HttpError(429,"Opportunity search isn't available right now. The shared monthly allowance has been reached.");
-      await tx.opportunitySearchRequest.create({data:{studentId,kind,signature,status:'limited',createdAt:now,finishedAt:now,error:'The shared monthly search allowance has been reached.'}});
-      return {requested:false};
+    if(monthly.limited) {
+      if(requestKind==='manual')throw new HttpError(429,monthlyLimitMessage(monthly));
+      await tx.opportunitySearchRequest.create({data:{studentId,kind,signature,status:'limited',createdAt:now,finishedAt:now,error:monthlyLimitMessage(monthly)}});
+      return {requested:false,catalog};
     }
     const bindings:Binding[]=[];
-    for(const group of groups) {
+    for(const {group,buckets} of coverage.groups) {
       const old=await tx.discoveryGroup.findUnique({where:{key:group.key}});
       if(old&&groupPending.includes(old.status)) {
+        // Before a shared run starts, combine only the still-missing buckets requested by its consumers.
+        if(old.status!=='running')await tx.discoveryGroup.update({where:{key:group.key},data:{pendingBuckets:JSON.stringify([...new Set([...j<string[]>(old.pendingBuckets,[]),...buckets])])}});
         bindings.push({key:group.key,since:(old.requestedAt||old.lastDiscoveredAt||now).toISOString()});
         continue;
       }
-      await tx.discoveryGroup.upsert({where:{key:group.key},create:{...group,status:'queued_manual',pendingBuckets:JSON.stringify(short.length?short:['free','paid']),requestedAt:now},
-        update:{status:'queued_manual',pendingBuckets:JSON.stringify(short.length?short:['free','paid']),requestedAt:now,error:''}});
+      await tx.discoveryGroup.upsert({where:{key:group.key},create:{...group,status:'queued_manual',pendingBuckets:JSON.stringify(buckets),requestedAt:now},
+        update:{status:'queued_manual',pendingBuckets:JSON.stringify(buckets),requestedAt:now,error:''}});
       bindings.push({key:group.key,since:now.toISOString()});
     }
-    const request=await tx.opportunitySearchRequest.create({data:{studentId,kind,signature,groupBindings:JSON.stringify(bindings),manualSlot,cycleStartedAt:state.cycleStartedAt,createdAt:now}});
-    await tx.auditEvent.create({data:{studentId,actor:'student',event:kind==='manual'?'Requested opportunity search':'Started opportunity discovery',record:request.id}});
-    return {requested:true,requestId:request.id};
+    const request=await tx.opportunitySearchRequest.create({data:{studentId,kind:requestKind,signature,groupBindings:JSON.stringify(bindings),manualSlot,cycleStartedAt:state.cycleStartedAt,createdAt:now}});
+    await tx.auditEvent.create({data:{studentId,actor:'student',event:requestKind==='manual'?'Requested opportunity search':'Started opportunity discovery',record:request.id}});
+    return {requested:true,requestId:request.id,catalog};
   });
+  if(result.requested||result.usedSharedCatalog) {
+    const picks=await personalPicks(studentId,!!result.usedSharedCatalog);
+    if(result.usedSharedCatalog&&result.requestId)await prisma.opportunitySearchRequest.updateMany({where:{id:result.requestId,studentId,status:'cached'},data:{resultIds:JSON.stringify(picks.map(p=>p.id)),finishedAt:now}});
+  }
+  return result;
 }
 
 async function boundRuns(bindings:Binding[]) {
-  return Promise.all(bindings.map(binding=>prisma.discoveryRun.findFirst({where:{groupKey:binding.key,kind:'discovery',startedAt:{gte:new Date(binding.since)}},orderBy:{startedAt:'asc'}})));
+  return Promise.all(bindings.map(binding=>binding.cached?null:prisma.discoveryRun.findFirst({where:{groupKey:binding.key,kind:'discovery',startedAt:{gte:new Date(binding.since)}},orderBy:{startedAt:'asc'}})));
+}
+
+/** Another student's run may have filled this gap since it was queued. Check before spending. */
+export async function neededGroupBuckets(key:string) {
+  const requests=await prisma.opportunitySearchRequest.findMany({where:{status:{in:pending}}});
+  const buckets=new Set<'free'|'paid'>();
+  for(const request of requests) {
+    const bindings=j<Binding[]>(request.groupBindings,[]);
+    const binding=bindings.find(b=>b.key===key&&!b.cached);
+    if(!binding)continue;
+    const student=await prisma.student.findUnique({where:{id:request.studentId}});
+    const signature=student?interestGroups({grade:student.grade,interests:j(student.interests,[]),region:student.region},20).map(g=>g.key).join('||'):null;
+    if(!student?.aiConsent||signature!==request.signature) {
+      await prisma.opportunitySearchRequest.updateMany({where:{id:request.id,status:{in:pending}},data:{status:'cancelled',finishedAt:new Date()}});
+      continue;
+    }
+    const coverage=await catalogCoverage(request.studentId);
+    const needed=coverage.groups.find(g=>g.group.key===key);
+    if(needed)needed.buckets.forEach(b=>buckets.add(b));
+    else {
+      binding.cached=true;
+      await prisma.opportunitySearchRequest.updateMany({where:{id:request.id,status:{in:pending}},data:{groupBindings:JSON.stringify(bindings)}});
+    }
+  }
+  return [...buckets];
 }
 export async function settleSearchRequests(studentId?:string) {
   const requests=await prisma.opportunitySearchRequest.findMany({where:{...(studentId?{studentId}:{}),status:{in:pending}},orderBy:{createdAt:'asc'},take:100});
   for(const request of requests) {
-    const bindings=j<Binding[]>(request.groupBindings,[]),runs=await boundRuns(bindings);
+    const bindings=j<Binding[]>(request.groupBindings,[]).filter(b=>!b.cached),runs=await boundRuns(bindings);
     const groups=await prisma.discoveryGroup.findMany({where:{key:{in:bindings.map(b=>b.key)}}});
     if(runs.some(r=>r?.status==='running')||runs.some((r,i)=>!r&&groups.some(g=>g.key===bindings[i].key&&groupPending.includes(g.status))))continue;
     const complete=runs.filter((r):r is NonNullable<typeof r>=>!!r);
-    const ids=[...new Set(complete.flatMap(r=>snapshot(r.usage).savedIds||[]))];
+    let ids=[...new Set(complete.flatMap(r=>snapshot(r.usage).savedIds||[]))];
     const failures=complete.flatMap(r=>snapshot(r.usage).failures||[]);
     const failed=complete.length<bindings.length||complete.some(r=>r.status!=='complete')||!ids.length&&failures.some(f=>!['deadline_passed','missing_evidence'].includes(f.code));
     const limited=groups.some(g=>['limited','limited_manual'].includes(g.status));
-    let status=ids.length?'complete':limited?'limited':failed?'failed':'empty';
-    if(status==='complete'||status==='empty')try{await personalPicks(request.studentId,true);}catch{status='failed';}
+    let status=!bindings.length?'cached':ids.length?'complete':limited?'limited':failed?'failed':'empty';
+    if(['cached','complete','empty'].includes(status))try{ids=(await personalPicks(request.studentId,true)).map(p=>p.id);}catch{status='failed';}
     await transaction(async tx=>{
       const owner=await tx.student.findUnique({where:{id:request.studentId}});
       if(!owner)return;
@@ -114,13 +157,18 @@ export async function settleSearchRequests(studentId?:string) {
 
 export async function searchState(studentId:string) {
   await settleSearchRequests(studentId);
-  const request=await prisma.opportunitySearchRequest.findFirst({where:{studentId},orderBy:{createdAt:'desc'}});
-  if(!request)return {finding:false,limited:false,error:null,resultIds:[] as string[],search:{phase:'idle',found:0,detail:null,startedAt:null,finishedAt:null}};
+  const [request,monthlyAllowance]=await Promise.all([
+    prisma.opportunitySearchRequest.findFirst({where:{studentId},orderBy:{createdAt:'desc'}}),
+    monthlySearchAllowance(prisma),
+  ]);
+  if(!request)return {finding:false,limited:monthlyAllowance.limited,monthlyAllowance,error:null,resultIds:[] as string[],search:{phase:monthlyAllowance.limited?'limited':'idle',found:0,detail:monthlyAllowance.limited?monthlyLimitMessage(monthlyAllowance):null,startedAt:null,finishedAt:null}};
   const bindings=j<Binding[]>(request.groupBindings,[]),runs=await boundRuns(bindings);
   const running=runs.find(r=>r?.status==='running'),value=running?snapshot(running.usage):null;
   const allowed=['searching','reading_sources','checking_facts','indexing'];
-  const phase=pending.includes(request.status)?running&&allowed.includes(value?.phase||'')?value!.phase!:'queued':request.status;
+  const finding=pending.includes(request.status),limited=!finding&&monthlyAllowance.limited;
+  const phase=finding?running&&allowed.includes(value?.phase||'')?value!.phase!:'queued':limited?'limited':request.status==='limited'?'idle':request.status;
   const ids=j<string[]>(request.resultIds,[]);
-  return {finding:pending.includes(request.status),limited:request.status==='limited',error:request.status==='failed'?request.error:null,resultIds:ids,
-    search:{phase,found:ids.length,detail:request.error||null,startedAt:request.createdAt.toISOString(),finishedAt:request.finishedAt?.toISOString()||null}};
+  const detail=limited?monthlyLimitMessage(monthlyAllowance):request.status==='limited'?'Search allowance is available again.':request.error||null;
+  return {finding,limited,monthlyAllowance,error:request.status==='failed'?request.error:null,resultIds:ids,
+    search:{phase,found:ids.length,detail,startedAt:request.createdAt.toISOString(),finishedAt:request.finishedAt?.toISOString()||null}};
 }

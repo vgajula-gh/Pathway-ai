@@ -6,7 +6,7 @@ vi.mock('../../web/src/components/ui',()=>({useLoad:()=>({data:state.data,reload
 import Explore from '../../web/src/pages/Explore';
 let renderer:ReactTestRenderer;
 const opportunity=(id:string,bucket:string)=>({id,name:id,bucket,costLabel:bucket==='free'?'Free':'Cost not confirmed — check the official site',category:'Program',fit:{fit:'good',factors:[],eligibility:{checks:[]}},canAsk:false});
-beforeEach(()=>{state.api.mockReset();state.reload.mockReset();state.api.mockResolvedValue({ok:true});state.data={picks:[opportunity('free-one','free'),opportunity('paid-one','paid')],recommended:[],excluded:[],discoveryEnabled:false,sampleData:false,interestedCount:0,refresh:{available:true,remaining:1,nextAvailableAt:'2030-01-01T00:00:00.000Z'},finding:false};});
+beforeEach(()=>{state.api.mockReset();state.reload.mockReset();state.api.mockResolvedValue({ok:true});state.data={picks:[opportunity('free-one','free'),opportunity('paid-one','paid')],recommended:[],excluded:[],discoveryEnabled:false,sampleData:false,interestedCount:0,refresh:{available:true,remaining:1,nextAvailableAt:'2030-01-01T00:00:00.000Z'},finding:false,search:{phase:'complete',found:2,detail:null,startedAt:'2026-11-02T12:00:00Z'}};});
 afterEach(()=>{if(renderer)act(()=>renderer.unmount());});
 it('keeps the Paid bucket computed but collapsed for a free-only student, with honest unknown-cost labels',async()=>{
  await act(async()=>{renderer=create(createElement(Explore,{me:{budget:'free',interests:['Robotics']} as any,ask:vi.fn()}));});const buckets=renderer.root.findAllByType('details');expect(buckets[0].props.open).toBe(true);expect(buckets[1].props.open).toBe(false);expect(JSON.stringify(renderer.toJSON())).toContain('Show paid options');expect(JSON.stringify(renderer.toJSON())).toContain('Cost not confirmed');
@@ -54,4 +54,39 @@ it('shows honest empty, no-interest and partial bucket states without sample tit
 });
 it('provides a real retry after failed search and skeletons during search',async()=>{
  state.data={...state.data,discoveryEnabled:true,error:'Official pages could not be read.'};const props={me:{budget:'any',interests:['Art']} as any,ask:vi.fn()};await act(async()=>{renderer=create(createElement(Explore,props));});expect(renderer.root.findAllByType('button').some(b=>b.children.join('')==='Try again')).toBe(true);expect(JSON.stringify(renderer.toJSON())).toContain('does not use your search allowance');state.data={...state.data,finding:true,error:null,picks:[]};await act(async()=>renderer.update(createElement(Explore,props)));expect(renderer.root.findAllByProps({className:'search-skeleton'})).toHaveLength(3);expect(JSON.stringify(renderer.toJSON())).not.toContain('free-one');
+});
+
+it('shows the shared monthly blocker and reset while preserving picks and the unused personal allowance, then enables search when status recovers',async()=>{
+ state.data={...state.data,discoveryEnabled:true,limited:true,monthlyAllowance:{limited:true,reasons:['discovery_monthly_limit'],resetsAt:'2030-02-01T00:00:00Z'}};
+ const props={me:{budget:'any',interests:['Robotics']} as any,ask:vi.fn()};
+ await act(async()=>{renderer=create(createElement(Explore,props));});
+ expect(JSON.stringify(renderer.toJSON())).toContain('shared monthly search allowance');expect(JSON.stringify(renderer.toJSON())).toContain('Monthly usage resets');expect(JSON.stringify(renderer.toJSON())).toContain('free-one');
+ const button=()=>renderer.root.findAllByType('button').find(b=>b.children.join('')==='Search again')!;
+ expect(button().props.disabled).toBe(true);
+ state.data={...state.data,limited:false,monthlyAllowance:{...state.data.monthlyAllowance,limited:false,reasons:[]}};
+ await act(async()=>renderer.update(createElement(Explore,props)));expect(button().props.disabled).toBe(false);
+});
+it('keeps progress visible for already queued work when that reservation uses the final shared slot',async()=>{
+ state.data={...state.data,discoveryEnabled:true,finding:true,limited:false,monthlyAllowance:{limited:true,reasons:['ai_monthly_limit'],resetsAt:'2030-02-01T00:00:00Z'}};
+ await act(async()=>{renderer=create(createElement(Explore,{me:{budget:'any',interests:['Art']} as any,ask:vi.fn()}));});
+ expect(JSON.stringify(renderer.toJSON())).toContain('Searching for opportunities that fit your interests');expect(JSON.stringify(renderer.toJSON())).not.toContain('allowance has been reached');
+});
+it('reloads current allowance after a rejected refresh instead of leaving an apparently enabled stale control',async()=>{
+ state.data={...state.data,discoveryEnabled:true};state.api.mockRejectedValueOnce(new Error('The shared monthly AI allowance has been reached.'));
+ await act(async()=>{renderer=create(createElement(Explore,{me:{budget:'any',interests:['Art']} as any,ask:vi.fn()}));});
+ await act(async()=>renderer.root.findAllByType('button').find(b=>b.children.join('')==='Search again')!.props.onClick());
+ expect(state.reload).toHaveBeenCalledTimes(1);expect(JSON.stringify(renderer.toJSON())).toContain('monthly AI allowance');
+});
+it('offers an explicit first search without making a request or claiming an empty search result on entry',async()=>{
+ state.data={...state.data,discoveryEnabled:true,picks:[],search:{phase:'idle',found:0,detail:null,startedAt:null}};
+ await act(async()=>{renderer=create(createElement(Explore,{me:{budget:'any',interests:['Art']} as any,ask:vi.fn()}));});
+ expect(state.api).not.toHaveBeenCalled();expect(JSON.stringify(renderer.toJSON())).not.toContain('No active opportunities found');expect(renderer.root.findAllByType('details')).toHaveLength(0);
+ const button=renderer.root.findAllByType('button').find(b=>b.children.join('')==='Search for opportunities')!;expect(button.props.disabled).toBe(false);
+ await act(async()=>button.props.onClick());expect(state.api).toHaveBeenCalledWith('/api/opportunities/refresh',{method:'POST'});
+});
+it('enables catalog reuse even with AI unavailable and both shared and personal limits reached',async()=>{
+ state.data={...state.data,catalog:{complete:true,free:3,paid:3,missingInterests:[]},limited:true,refresh:{...state.data.refresh,available:false,remaining:0},monthlyAllowance:{limited:true,reasons:['ai_monthly_limit'],resetsAt:'2030-02-01T00:00:00Z'}};
+ await act(async()=>{renderer=create(createElement(Explore,{me:{budget:'any',interests:['Art']} as any,ask:vi.fn()}));});
+ const button=renderer.root.findAllByType('button').find(b=>b.children.join('')==='Search again')!;expect(button.props.disabled).toBe(false);
+ expect(JSON.stringify(renderer.toJSON())).toContain('without a new web search');expect(JSON.stringify(renderer.toJSON())).not.toContain('Monthly usage resets');
 });
