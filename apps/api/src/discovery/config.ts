@@ -1,5 +1,6 @@
 import type {WorkflowStep} from '../workflows/privacy.js';
 import { env } from '../lib/env.js';
+import type { FailureInfo } from './failures.js';
 export function setting(name: string, fallback: number, max = 1000) {
   const v = process.env[name];
   return v && /^\d+$/.test(v) && Number(v) <= max ? Number(v) : fallback;
@@ -24,6 +25,11 @@ export type Usage = {
 };
 export class RunBudget {
   readonly workflow: WorkflowStep[] = [];
+  readonly failures: FailureInfo[] = [];
+  readonly robots = new Map<string, Promise<{ url: string; body: string; status: number }>>();
+  savedIds: string[] = [];
+  phase = 'searching';
+  onStep?: () => Promise<void>;
   usage: Usage = {
     runs: 1,
     searches: 0,

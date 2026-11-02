@@ -75,11 +75,12 @@ it.each([
 
 it('reuses a failed readiness result for a minute, then recovers without a paid AI request', async () => {
   remote.describeIndex.mockRejectedValueOnce(new Error('private transport failure'));
-  expect(await discoveryAvailability(true)).toMatchObject({ enabled: false, unavailable: { code: 'vector_unavailable' } });
+  expect(await discoveryAvailability(true)).toEqual({enabled:true,unavailable:null});
   expect(await initializeKnowledge()).toBeNull();
   expect(remote.describeIndex).toHaveBeenCalledTimes(1);
   vi.advanceTimersByTime(60001);
   expect(await discoveryAvailability(true)).toEqual({ enabled: true, unavailable: null });
+  expect(await initializeKnowledge()).not.toBeNull();
   expect(remote.describeIndex).toHaveBeenCalledTimes(2);
   expect(fetch).not.toHaveBeenCalled();
 });

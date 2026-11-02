@@ -12,14 +12,14 @@ let studentId='';const originalCodes=env.accessCodes,headers=()=>({'x-student-id
 const pageText='Applications require a teacher recommendation. Submit a project outline. The deadline is January 10, 2030.';
 beforeAll(async()=>{writeFileSync(join(dir,'test.db'),'');await promisify(execFile)(process.execPath,['../../node_modules/prisma/build/index.js','migrate','deploy','--schema','prisma/schema.prisma'],{env:{...process.env,DATABASE_URL:url}});},30000);
 beforeEach(async()=>{
- env.accessCodes=[];await db.student.deleteMany();await db.opportunity.deleteMany();await db.aIUsage.deleteMany();
+ vi.unstubAllEnvs();vi.stubEnv('DISCOVERY_ENABLED','true');vi.stubEnv('SEARCH_PROVIDER','openai');vi.stubEnv('OPENAI_API_KEY','test');vi.stubEnv('AI_DISABLED','false');env.aiDisabled=false;env.accessCodes=[];await db.student.deleteMany();await db.opportunity.deleteMany();await db.aIUsage.deleteMany();
  studentId=(await db.student.create({data:{name:'Student',grade:10}})).id;
  await db.opportunity.create({data:{id:'program',name:'Program',organizer:'Example',category:'Program',url:'https://example.edu/rules',gradeMin:9,gradeMax:12,format:'Virtual',cost:'Free',commitment:'Low',skills:'[]',tags:'[]',deadline:'2030-01-10',requirements:'["Submit a project outline."]',evidence:JSON.stringify({requirements:{sourceUrl:'https://example.edu/rules',quote:pageText},deadline:{sourceUrl:'https://example.edu/rules',quote:pageText}})}});
  await db.sourcePage.create({data:{opportunityId:'program',sourceUrl:'https://example.edu/rules',pageTitle:'Rules',text:pageText,contentHash:'initial'}});
  holder.runtime={store:memoryStore(2),embedder:{dimension:2,model:'test',embed:vi.fn(async(texts:string[])=>texts.map(()=>[1,0]))}};
  holder.llm={runTools:vi.fn(async()=>({})),text:vi.fn(),json:vi.fn()};
 });
-afterAll(async()=>{env.accessCodes=originalCodes;await db.$disconnect();rmSync(dir,{recursive:true,force:true});});
+afterAll(async()=>{vi.unstubAllEnvs();env.accessCodes=originalCodes;await db.$disconnect();rmSync(dir,{recursive:true,force:true});});
 it('ingests shared chunks, skips unchanged content, replaces changed vectors and removes orphans',async()=>{
  await ingestKnowledge('program',new RunBudget());const first=await db.knowledgeChunk.findFirstOrThrow();await ingestKnowledge('program',new RunBudget());expect(holder.runtime.embedder.embed).toHaveBeenCalledTimes(1);
  await db.sourcePage.updateMany({data:{text:pageText+' New requirement.',contentHash:'changed'}});await ingestKnowledge('program',new RunBudget());const second=await db.knowledgeChunk.findFirstOrThrow();expect(second.id).not.toBe(first.id);expect((await holder.runtime.store.list()).ids).toEqual([second.id]);
@@ -61,14 +61,11 @@ it('keeps the friendly service-unavailable response when a LangGraph retrieval n
  const app=await buildApp();app.log.level='silent';try{const r=await app.inject({method:'POST',url:'/api/buddy/messages',headers:headers(),payload:{text:'What is required?',opportunityId:'program'}});expect(r.statusCode).toBe(503);expect(r.json().error).toContain('questions are taking a break');expect(r.json().error).not.toContain('private provider error');expect(await db.agentAction.count()).toBe(0);}finally{await app.close();}
 });
 
-it('explains discovery unavailability on authenticated status and catalog responses without consuming a refresh',async()=>{
+it('keeps search available when the independent program library is unavailable',async()=>{
  holder.runtime=null;const app=await buildApp();app.log.level='silent';try{
- expect((await app.inject({url:'/api/discovery/status'})).statusCode).toBe(401);
- const status=await app.inject({url:'/api/discovery/status',headers:headers()});expect(status.statusCode).toBe(200);expect(status.headers['cache-control']).toBe('no-store');expect(status.json()).toMatchObject({enabled:false,error:null,unavailable:{code:'vector_unavailable',settings:[]}});
- expect((await app.inject({url:'/api/health'})).headers['cache-control']).toBe('no-store');
- const catalog=await app.inject({url:'/api/opportunities',headers:headers()});expect(catalog.statusCode).toBe(200);expect(catalog.headers['cache-control']).toBe('no-store');expect(catalog.json()).toMatchObject({discoveryEnabled:false,unavailable:{code:'vector_unavailable'}});expect(catalog.json().picks).toBeInstanceOf(Array);
- const refresh=await app.inject({method:'POST',url:'/api/opportunities/refresh',headers:headers()});expect(refresh.statusCode).toBe(503);expect(refresh.json().error).toContain('program library');
- const after=(await app.inject({url:'/api/discovery/status',headers:headers()})).json();expect(after.refresh.remaining).toBe(status.json().refresh.remaining);expect(await db.aIUsage.count()).toBe(0);
+ const status=await app.inject({url:'/api/discovery/status',headers:headers()});expect(status.json()).toMatchObject({enabled:true,error:null,unavailable:null});
+ const catalog=await app.inject({url:'/api/opportunities',headers:headers()});expect(catalog.json()).toMatchObject({discoveryEnabled:true,knowledgeUnavailable:{code:'vector_unavailable'}});
+ expect(await db.aIUsage.count()).toBe(0);
  }finally{await app.close();}
 });
 

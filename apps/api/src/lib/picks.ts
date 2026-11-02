@@ -7,6 +7,9 @@ import { dayCapacity } from '../domain/schedule.js';
 import { bucketFor, costLabel, selectPicks } from '../domain/picks.js';
 import { scoreOpportunity } from '../domain/scoring.js';
 import { env } from './env.js';
+import { countdown } from '../domain/applications.js';
+import { activeOpportunity } from '../domain/opportunity-active.js';
+import { wallNow, dkey } from '../domain/time.js';
 export const toOpp = (o: Awaited<ReturnType<typeof prisma.opportunity.findMany>>[number]) => ({
   ...o,
   cost:
@@ -20,9 +23,11 @@ export const toOpp = (o: Awaited<ReturnType<typeof prisma.opportunity.findMany>>
 });
 export async function personalPicks(studentId: string, rebuild = false) {
   const { events, rules, ctx } = await loadContext(studentId);
+  if(!ctx.interests.length) { await prisma.studentPick.deleteMany({where:{studentId}}); return []; }
   let freeMin = 0;
   for (let d = 0; d < 7; d++) freeMin += dayCapacity(events, rules, addDays(sod(new Date()), d)).available;
-  const opps = (await prisma.opportunity.findMany({ where: env.demoMode ? {} : { isSample: false, source: { not: 'seed' } } })).map(toOpp);
+  const now=new Date(),today=dkey(wallNow(ctx.timezone||'UTC',now));
+  const opps = (await prisma.opportunity.findMany({ where: env.demoMode ? {} : { isSample: false, source: { not: 'seed' } } })).map(toOpp).filter(o=>env.demoMode&&o.isSample||activeOpportunity(o,today,now));
   // Serialize replacement with the student row. Retry conflicting refreshes on PostgreSQL.
   for (let attempt = 0; ; attempt++)
     try {
@@ -114,6 +119,7 @@ export async function personalPicks(studentId: string, rebuild = false) {
           ...p,
           verified: o.verificationStatus === 'verified' && !!o.sourceCheckedAt,
           costLabel: costLabel(o),
+          countdown: countdown(o.deadline,today),
           status: null,
           fit: scoreOpportunity(o, ctx, freeMin),
         };

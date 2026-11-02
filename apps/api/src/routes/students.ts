@@ -11,7 +11,7 @@ import { audit } from '../lib/audit.js';
 import { sampleWeek } from '../lib/sample.js';
 import { env } from '../lib/env.js';
 
-import { noteInterestChange,queueDiscovery } from '../discovery/refresh.js';
+import { noteInterestChange } from '../discovery/refresh.js';
 import { Region } from '../domain/regions.js';
 const hhmm = z.string().regex(/^\d{2}:\d{2}$/);
 const Onboard = z.object({ credentials: Credentials.optional(), region: Region.default(''), name: z.string().min(1).max(60), grade: z.number().int().min(9).max(12), interests: z.array(z.string()).max(20).default([]), goal: z.string().max(140).optional(),
@@ -39,7 +39,6 @@ export default async function routes(app: FastifyInstance) {
     if (b.goal?.trim()) await prisma.goal.create({ data: { studentId: s.id, title: b.goal.trim(), priority: 'high' } });
     if (env.demoMode && b.sampleWeek) await prisma.event.createMany({ data: sampleWeek(s.id) });
     await audit(s.id, 'student', 'Finished setup');
-    void queueDiscovery(s.id).catch(()=>{});
     return reply.code(201).send({ ...serializeStudent(s), ...(setup ? { recoveryCode: setup.recoveryCode } : {}) });
   });
 
@@ -67,11 +66,12 @@ export default async function routes(app: FastifyInstance) {
     const calendars = (await prisma.calendarLink.findMany({ where: { studentId: s.id } })).map(calendarView);
     const notifications = await prisma.notificationSettings.findUnique({ where: { studentId: s.id } });
     const nudgeHistory = await prisma.nudgeDelivery.findMany({ where: { studentId: s.id } });
+    const opportunitySearches=await prisma.opportunitySearchRequest.findMany({where:{studentId:s.id}});
     const picks = await prisma.studentPick.findMany({ where: { studentId: s.id } });
     const opportunityFeedback = await prisma.opportunityFeedback.findMany({ where: { studentId: s.id } });
     const pickRefresh=await prisma.pickRefreshState.findUnique({where:{studentId:s.id}});
     const conversations=await prisma.conversation.findMany({where:{studentId:s.id},include:{messages:true}});
-    return { pickRefresh, conversations, picks, opportunityFeedback, notifications, nudgeHistory, calendars, exportedAt: new Date().toISOString(), profile: { ...serializeStudent(s), accessCode: s.accessCode }, events, goals, portfolio, saved, proposals, activity: audits };
+    return { opportunitySearches, pickRefresh, conversations, picks, opportunityFeedback, notifications, nudgeHistory, calendars, exportedAt: new Date().toISOString(), profile: { ...serializeStudent(s), accessCode: s.accessCode }, events, goals, portfolio, saved, proposals, activity: audits };
   });
 
   app.delete('/api/me', async (req, reply) => { const s = await requireStudent(req); await prisma.$transaction([

@@ -83,7 +83,7 @@ function nodes(): DiscoveryNodes {
     search: { search: vi.fn(async () => ({ urls: [page.sourceUrl], tokens: 0 })) },
     fetch: vi.fn(async () => page),
     extract: vi.fn(async () => ({}) as Awaited<ReturnType<DiscoveryNodes['extract']>>),
-    verify: vi.fn(() => ({}) as ReturnType<DiscoveryNodes['verify']>),
+    verify: vi.fn(() => ({verificationStatus:'verified'}) as ReturnType<DiscoveryNodes['verify']>),
     save: vi.fn(async () => 'program'),
     ingest: vi.fn(async () => {}),
   };

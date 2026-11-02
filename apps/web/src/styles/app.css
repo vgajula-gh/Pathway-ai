@@ -324,3 +324,15 @@ body[data-tab="today"] #root{padding-bottom:calc(100px + env(safe-area-inset-bot
 
 .voice-controls{max-width:588px;margin:0 auto 6px;display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:8px 12px;border-radius:16px;background:var(--bar);font-size:13px}
 .voice-controls label{display:flex;align-items:center;gap:6px}
+/* Explore keeps real progress and controls legible on phones. */
+.opportunity-search .display { font-size:clamp(1.8rem,5vw,2.8rem); }
+.interest-chips { display:flex; flex-wrap:wrap; gap:8px; margin:12px 0; }
+.opportunity-search button,.opportunity-search .link { min-height:44px; }
+.search-status { margin:16px 0; }
+.search-skeletons { display:grid; gap:10px; margin:12px 0; }
+.search-skeleton { border:1px solid var(--line); border-radius:18px; padding:20px; }
+.search-skeleton i { display:block; height:12px; width:75%; background:var(--line); border-radius:6px; margin:10px 0; }
+.search-skeleton i:nth-child(2) { width:50%; }
+.opportunity-search .opp .foot { display:flex; flex-wrap:wrap; gap:8px; padding:12px; }
+.opportunity-search .opp { overflow-wrap:anywhere; }
+@media(max-width:600px) { .opportunity-search .opp .foot>* { flex:1 1 44%; text-align:center; align-content:center; } }

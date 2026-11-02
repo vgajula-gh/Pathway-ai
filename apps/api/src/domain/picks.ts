@@ -1,7 +1,7 @@
 import { Opp, scoreOpportunity } from './scoring.js';
 import { StudentContext } from './types.js';
 export type Bucket = 'free' | 'paid';
-export type PickOpportunity = Opp & { costType: string; costVerifiedAt?: Date | null; feeFlag: boolean };
+export type PickOpportunity = Opp & { costType: string; costVerifiedAt?: Date | null; feeFlag: boolean; deadline?:string|null };
 export function seedCostType(cost: string): string {
   return /^free(?:\s|$|\()/i.test(cost) ? 'free' : /fees?|dues|\$\d/i.test(cost) ? 'paid' : 'unknown';
 }
@@ -34,6 +34,7 @@ export function selectPicks(
   previous: string[] = [],
   reasons: string[] = [],
   stretches = 1,
+  today = new Date().toISOString().slice(0,10),
 ) {
   const candidates = opps
     .filter((o) => !excluded.has(o.id) && !['expired', 'stale'].includes(o.verificationStatus || ''))
@@ -58,7 +59,8 @@ export function selectPicks(
             c.score +
             (!types.has(typeKey(c.o.category)) ? 0.12 : 0) +
             (!efforts.has(c.o.commitment.split(':')[0]) ? 0.04 : 0);
-          return quality(b) - quality(a) || a.o.id.localeCompare(b.o.id);
+          const urgency=(c:typeof a)=>{const days=c.o.deadline?Math.round((Date.parse(c.o.deadline)-Date.parse(today))/86400000):Infinity;return days<7?-0.06:Number.isFinite(days)?0.05/(1+days/30):0;};
+          return (quality(b)+urgency(b)) - (quality(a)+urgency(a)) || (a.o.deadline||'9999').localeCompare(b.o.deadline||'9999') || a.o.id.localeCompare(b.o.id);
         })[0];
       if (!choice) break;
       selected.push({ opportunityId: choice.o.id, bucket, rank, isStretch: false });

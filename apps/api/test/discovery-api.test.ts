@@ -16,7 +16,7 @@ beforeAll(async()=>{writeFileSync(join(dir,'test.db'),'');await promisify(execFi
 beforeEach(async()=>{
  vi.unstubAllEnvs();vi.stubEnv('DISCOVERY_ENABLED','false');env.accessCodes=[];await db.student.deleteMany();await db.opportunity.deleteMany();
  id=(await db.student.create({data:{name:'Private student',grade:10,interests:'["coding"]',region:'NC',budget:'free'}})).id;
- for(let i=0;i<10;i++)await db.opportunity.create({data:{id:`opp${i}`,name:`Program ${i}`,organizer:'Example',isSample:false,source:'discovery',category:i%2?'Summer program':'Competition',url:'https://example.edu/program',gradeMin:9,gradeMax:12,format:'Virtual',cost:i<5?'Free':'$50',costType:i<5?'free':'paid',costVerifiedAt:new Date(),commitment:'Low',skills:'[]',tags:i===4?'["art"]':'["coding"]',checks:'[]'}});
+ for(let i=0;i<10;i++)await db.opportunity.create({data:{id:`opp${i}`,name:`Program ${i}`,organizer:'Example',isSample:false,source:'discovery',verificationStatus:'verified',verifiedAt:new Date(),sourceCheckedAt:new Date(),deadline:'2030-12-01',evidence:JSON.stringify({deadline:{sourceUrl:'https://example.edu',quote:'Apply by 2030-12-01'}}),category:i%2?'Summer program':'Competition',url:'https://example.edu/program',gradeMin:9,gradeMax:12,format:'Virtual',cost:i<5?'Free':'$50',costType:i<5?'free':'paid',costVerifiedAt:new Date(),commitment:'Low',skills:'[]',tags:i===4?'["art"]':'["coding"]',checks:'[]'}});
 });
 afterAll(async()=>{env.accessCodes=originalCodes;vi.unstubAllEnvs();await db.$disconnect();rmSync(dir,{recursive:true,force:true});});
 it('persists personal buckets, refills only the removed bucket, records feedback and preserves Interested',async()=>{
@@ -43,8 +43,8 @@ it('accepts a broad region and rejects arbitrary addresses',async()=>{
 });
 it('discovers for shared groups, targets short buckets and deduplicates official programs',async()=>{
  const {discover}=await import('../src/discovery/pipeline.js');const {RunBudget}=await import('../src/discovery/config.js');const {Extraction}=await import('../src/discovery/extraction.js');
- const sourceUrl='https://example.edu/robotics',text='Example Robotics is organized by Example. Grades 9–12. Participation is free.';
- const data=Extraction.parse({...Object.fromEntries(Object.keys(Extraction.shape).map(k=>[k,null])),name:'Example Robotics',organizer:'Example',gradeMin:9,gradeMax:12,costType:'free',evidence:Object.fromEntries(['name','organizer','gradeMin','gradeMax','costType'].map(k=>[k,{sourceUrl,quote:k==='costType'?'Participation is free.':text}]))});
+ const sourceUrl='https://example.edu/robotics',text='Example Robotics is organized by Example. Grades 9–12. Participation is free. Virtual. Apply by 2030-12-01.';
+ const data=Extraction.parse({...Object.fromEntries(Object.keys(Extraction.shape).map(k=>[k,null])),name:'Example Robotics',organizer:'Example',gradeMin:9,gradeMax:12,costType:'free',format:'Virtual',deadline:'2030-12-01',evidence:Object.fromEntries(['name','organizer','gradeMin','gradeMax','costType','format','deadline'].map(k=>[k,{sourceUrl,quote:k==='costType'?'Participation is free. Virtual. Apply by 2030-12-01.':text}]))});
  const search=vi.fn().mockResolvedValue({urls:[sourceUrl,sourceUrl],tokens:20}),fetch=vi.fn().mockResolvedValue({sourceUrl,text,pageTitle:'Program',contentHash:'h',checkedAt:new Date(),links:[]}),extract=vi.fn().mockResolvedValue(data);
  const group={key:'robotics|9-10|NC',topic:'robotics',gradeBand:'9-10',region:'NC'};
  const ids=await discover(group,['free'],new RunBudget(),{search:{search},fetch,extract});await discover(group,['free'],new RunBudget(),{search:{search},fetch,extract});

@@ -14,6 +14,9 @@ import { addDays, dkey, fmtLocal, parseLocal, sod } from '../domain/time.js';
 import { dayCapacity, freeSlots } from '../domain/schedule.js';
 import { scoreOpportunity } from '../domain/scoring.js';
 import { env } from '../lib/env.js';
+import { activeOpportunity } from '../domain/opportunity-active.js';
+import { wallNow } from '../domain/time.js';
+import { initializeKnowledge,knowledgeUnavailable } from '../knowledge/runtime.js';
 
 
 
@@ -21,7 +24,7 @@ async function scored(studentId: string) {
   const { events, rules, ctx } = await loadContext(studentId);
   let weekFree = 0; for (let d = 0; d < 7; d++) weekFree += dayCapacity(events, rules, addDays(sod(new Date()), d)).available;
   const [opps, saved] = await Promise.all([prisma.opportunity.findMany({ where: env.demoMode ? {} : { isSample: false, source: { not: 'seed' } } }), prisma.savedOpportunity.findMany({ where: { studentId } })]);
-  return opps.map(toOpp).map(o => ({ ...o, verified: !!o.sourceCheckedAt, status: saved.find(s => s.opportunityId === o.id)?.status || null, fit: scoreOpportunity(o, ctx, weekFree) }));
+  return opps.map(toOpp).filter(o=>env.demoMode&&o.isSample||activeOpportunity(o,dkey(wallNow(ctx.timezone||'UTC')),new Date())).map(o => ({ ...o, verified: !!o.sourceCheckedAt, status: saved.find(s => s.opportunityId === o.id)?.status || null, fit: scoreOpportunity(o, ctx, weekFree) }));
 }
 
 export default async function routes(app: FastifyInstance) {
@@ -33,8 +36,12 @@ export default async function routes(app: FastifyInstance) {
     const availability=await discoveryAvailability(s.aiConsent), enabled=availability.enabled;
     if(enabled)await queueDiscovery(s.id);
     const discovery=await discoveryStatus(s.id);
-    const chunks=enabled?await prisma.knowledgeChunk.findMany({where:{opportunityId:{in:picks.map(p=>p.id)}},select:{opportunityId:true}}):[];
-    return { ...discovery, discoveryEnabled:enabled, unavailable:availability.unavailable, picks:picks.map(p=>({...p,canAsk:enabled&&s.aiConsent&&chunks.some(c=>c.opportunityId===p.id)})), recommended: ok, excluded: list.filter(o => o.fit.excluded).map(o => ({ id: o.id, name: o.name, reasons: o.fit.eligibility.reasons })), dismissed: list.filter(o => o.status === 'dismissed').length, sampleData: list.some(o => o.isSample) };
+    const knowledgeReady=s.aiConsent&&!!await initializeKnowledge();
+    const chunks=knowledgeReady?await prisma.knowledgeChunk.findMany({where:{opportunityId:{in:picks.map(p=>p.id)}},select:{opportunityId:true}}):[];
+    const interestedCount=await prisma.savedOpportunity.count({where:{studentId:s.id,status:{not:'dismissed'}}});
+    return { ...discovery, discoveryEnabled:enabled, unavailable:availability.unavailable, knowledgeUnavailable:knowledgeReady?null:knowledgeUnavailable(), interestedCount,
+      picks:picks.map(p=>({...p,canAsk:knowledgeReady&&chunks.some(c=>c.opportunityId===p.id),knowledgeStatus:knowledgeReady&&chunks.some(c=>c.opportunityId===p.id)?'ready':discovery.finding?'preparing':'unavailable'})),
+      recommended: ok, excluded: list.filter(o => o.fit.excluded).map(o => ({ id: o.id, name: o.name, reasons: o.fit.eligibility.reasons })), dismissed: list.filter(o => o.status === 'dismissed').length, sampleData: list.some(o => o.isSample) };
   });
 
   app.get('/api/opportunities/:id', async req => {

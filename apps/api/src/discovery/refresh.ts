@@ -9,8 +9,10 @@ import { toOpp, personalPicks } from '../lib/picks.js';
 import { scoreOpportunity } from '../domain/scoring.js';
 import { bucketFor } from '../domain/picks.js';
 import { env } from '../lib/env.js';
+import { activeOpportunity } from '../domain/opportunity-active.js';
+import { wallNow, dkey } from '../domain/time.js';
 export const refreshDays = () => setting('REFRESH_INTERVAL_DAYS', 30, 365) || 30;
-async function transaction<T>(fn: (tx: Prisma.TransactionClient) => Promise<T>) {
+export async function transaction<T>(fn: (tx: Prisma.TransactionClient) => Promise<T>) {
   for (let attempt = 0; ; attempt++)
     try {
       return await prisma.$transaction(fn, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
@@ -24,7 +26,7 @@ async function transaction<T>(fn: (tx: Prisma.TransactionClient) => Promise<T>) 
       throw e;
     }
 }
-async function stateIn(tx: Prisma.TransactionClient, studentId: string, now: Date) {
+export async function stateIn(tx: Prisma.TransactionClient, studentId: string, now: Date) {
   const student = await tx.student.findUniqueOrThrow({ where: { id: studentId } });
   const initial = await tx.pickRefreshState.upsert({
     where: { studentId },
@@ -108,7 +110,7 @@ export async function shortBuckets(studentId: string) {
   const good = opps.map(toOpp).filter((o) => {
     const fit = scoreOpportunity(o, ctx, free);
     return (
-      !excluded.has(o.id) &&
+      !excluded.has(o.id) && (env.demoMode&&o.isSample||activeOpportunity(o,dkey(wallNow(ctx.timezone||'UTC')),new Date())) &&
       !['expired', 'stale'].includes(o.verificationStatus) &&
       !fit.excluded &&
       fit.score >= 0.38 &&
@@ -122,57 +124,18 @@ export async function shortBuckets(studentId: string) {
   );
 }
 export async function queueDiscovery(studentId: string, now = new Date()) {
-  if (!discoveryConfigured()) return;
-  const student = await prisma.student.findUnique({ where: { id: studentId } });
-  if (!student?.aiConsent) return;
-  const buckets = await shortBuckets(studentId);
-  if (!buckets.length) return;
-  for (const group of interestGroups({
-    grade: student.grade,
-    interests: j(student.interests, []),
-    region: student.region,
-  }))
-    await transaction(async (tx) => {
-      const old = await tx.discoveryGroup.findUnique({ where: { key: group.key } });
-      if (old?.lastDiscoveredAt && +now - +old.lastDiscoveredAt < 30 * 86400000) return;
-      const pendingBuckets = JSON.stringify([
-        ...new Set([...j<string[]>(old?.pendingBuckets, []), ...buckets]),
-      ]);
-      await tx.discoveryGroup.upsert({
-        where: { key: group.key },
-        create: { ...group, pendingBuckets, requestedAt: now, status: 'queued' },
-        update: {
-          pendingBuckets,
-          requestedAt: old?.requestedAt || now,
-          status: old?.status === 'running' ? 'running' : 'queued',
-        },
-      });
-    });
+  const { enqueueSearch } = await import('./requests.js');
+  return enqueueSearch(studentId,'initial',now);
 }
 export async function discoveryStatus(studentId: string) {
-  const s = await prisma.student.findUniqueOrThrow({ where: { id: studentId } }),
-    groups = interestGroups({ grade: s.grade, interests: j(s.interests, []), region: s.region });
-  const states = await prisma.discoveryGroup.findMany({ where: { key: { in: groups.map((g) => g.key) } } });
-  return {
-    error: states.find((g) => g.status === 'error')?.error || null,
-    refresh: await refreshStatus(studentId),
-    finding: states.some((g) => ['queued', 'running'].includes(g.status)),
-    limited: states.some((g) => g.status === 'limited'),
-    lastCheckedAt:
-      states
-        .map((g) => g.lastDiscoveredAt?.toISOString())
-        .filter(Boolean)
-        .sort()
-        .at(-1) || null,
-  };
+  const {searchState}=await import('./requests.js');
+  const state=await searchState(studentId);
+  return {...state,refresh:await refreshStatus(studentId),lastCheckedAt:state.search.finishedAt||state.search.startedAt};
 }
 export async function automaticRefreshBatch(now = new Date()) {
   const students = await prisma.student.findMany({
     where: {
-      OR: [
-        { pickState: null },
-        { pickState: { autoRefreshedAt: { lte: new Date(+now - refreshDays() * 86400000) } } },
-      ],
+      pickState: { autoRefreshedAt: { lte: new Date(+now - refreshDays() * 86400000) } },
     },
     orderBy: { createdAt: 'asc' },
     take: 25,
@@ -181,7 +144,8 @@ export async function automaticRefreshBatch(now = new Date()) {
     await personalPicks(s.id, true);
     await refreshStatus(s.id, now);
     await prisma.pickRefreshState.update({ where: { studentId: s.id }, data: { autoRefreshedAt: now } });
-    await queueDiscovery(s.id, now);
+    const {enqueueSearch}=await import('./requests.js');
+    await enqueueSearch(s.id,'monthly',now);
   }
   return students.length;
 }

@@ -67,7 +67,6 @@ const discovery = createDiscoveryGraph(
     },
   },
   budget,
-  (step) => budget.workflow.push(step),
 );
 let drafts = 0;
 const mock: LLM = {
