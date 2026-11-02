@@ -5,23 +5,24 @@ A sticky top bar holds the brand, an appearance toggle (Dusk → Dark → Light 
 
 | Tab | Pillar | Purpose |
 |---|---|---|
-| **Today** | Simplify | Calm snapshot: headline, 3 rings, insight, next best step, timeline, coming up |
-| **Explore** | Discover | Opportunity shortlist with fit factors; detail sheet; save/compare/dismiss |
+| **Today** | Simplify | Day at a glance, next best step, then today’s spark |
+| **Explore** | Discover | Active Free/Paid picks; search, Interested tracker and cited program questions |
 | **Buddy** | All | Conversation with tools; schedule scan; inline proposals |
 | **Grow** | Grow/Prepare | Growth story, goals & steps, learning companion, portfolio |
 | **You** | Trust | Student DNA with provenance, My Day settings, privacy, activity log, export/delete |
 
 Secondary surfaces are **bottom sheets** (detail, review, forms). One primary action per card.
 
-## Onboarding (6 screens, ~60 seconds)
+## Onboarding
 1. Welcome — promise and orb.
 2. "Your journey is yours" — decide / private / delete; **AI consent toggle**.
 3. Name + grade.
 4. Interests (chips).
 5. Aspiration (optional, skippable).
-6. Study window + protected downtime; optional labeled sample week.
+6. Study window + protected downtime. A labeled sample week is offered only with DEMO_MODE=true.
+7. Create and confirm a private sign-in phrase; save the one-time recovery code. New profiles open Explore; returning profiles open Today.
 
-## Flow A — Discover → verified reminder (the demo)
+## Flow A — Discover → verified reminder
 ```mermaid
 sequenceDiagram
   participant S as Student
@@ -50,7 +51,26 @@ Mark step done or goal reached → "Capture an experience" (what, kind, date, re
 Loading (typing dots) · empty (friendly next action) · AI off (consent) or unavailable (503) · partial extraction · proposal FAILED/EXPIRED · offline/network error toast.
 
 ## Today layout (top to bottom)
-Warm sky card (gradient by time of day; greeting, daily encouraging line, one-line summary, "Get today's insight") → Today's spark (word of the day + News for you) → next best step → Your day at a glance (rings) → timeline → coming up.
+
+A slim one-line first-name greeting and student-local date, with a subtle time-of-day accent.
+
+1. **Your day at a glance:** three rings and contributor sheets; compact timeline with time, source, clashes and flexible-item completion; Due soon for Interested applications and calendar exams/deadlines in the next seven days. An open day says “Your day is open. Add a class or deadline, or link your calendar.” Add event, Link calendar and View week remain available.
+2. **Next best step:** a pending approval takes priority. Otherwise one suggestion with Do it, Later and Why this? Later sets it aside on this visit. With no suggestion, link to Explore opportunities that fit you.
+3. **Today's spark:** word and sourced news at the bottom; respect both preferences and hide the whole section when both are off.
+
+Keep the floating Talk to Buddy orb. No dummy events, goals or suggestions fill empty space.
+
+## Explore and program questions
+
+Show **Interested** above search only when at least one application exists. Preserve Interested → Preparing → Applied → Result, notes, checklist progress, one next step and deadline countdowns, including “Deadline passed” for expired applications.
+
+Always show **Opportunity search / Opportunities picked for your interests**. Interests are editable chips and region is an optional US state or Virtual only; no street address. On the first visit, load the shared recent active catalog or queue a background search automatically. The visible page polls and requests bounded server work; closing the page does not replay paid work. A timer and owner cron can finish it.
+
+Show skeletons without fake names while searching. Show up to three Free and three Paid cards with organizer/type, future deadline or evidenced open sign-up, countdown, Verified date, honest cost/aid and Why it fits. A free-only student expands Show paid options deliberately. Partial buckets show the actual count. No matches, no interests, missing setup, monthly cap and failed search each have their own state. Errors offer Try again; unavailable setup explains the blocker.
+
+Interested pins extracted source-backed requirements and deadline and refills from the shared catalog. Not for me asks a reason, hides the item and refills its bucket. Neither action invokes AI. Search again allows one successful manual search per rolling 30 days plus one earned interest-change bonus; failures leave that allowance intact. Search again explicitly searches the web even with a full shortlist. Changing interests repeatedly does not auto-spend more searches. Public paid attempts still count toward monthly caps. Search again runs a new web search even when the current shortlist is full.
+
+Program cards and Interested items show Preparing details until their current shared chunks are indexed. Ask about this program opens a scoped Buddy thread. Ask about my opportunities uses the current server-owned picks + Interested set, groups answers by program, and cites official sources/check dates. Structured facts come from SQL/rules, textual claims must match passages exactly, and missing information gets the official-page no-answer message. Checklist changes remain proposals for review.
 
 ## Flow D — News for you
 Today card → "More for you" → topic chips (defaults from interests; student toggles; "Match my interests again") → stories newest first with source, date, Read ↗ and "Explain it simply" (Buddy, using only the story's facts). Topics with no stories say so.

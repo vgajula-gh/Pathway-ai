@@ -51,7 +51,7 @@ LangChain's CharacterTextSplitter uses word counting and retained separators to 
 
 Framework calls run in an explicit tracing-disabled context. No LangSmith account/key is required, and student prompts/passages are not exported to hosted tracing even if ordinary tracing environment flags are present. Local workflow records contain fixed node names, completion/failure status and controlled reason codes, not input/output snapshots. DiscoveryRun.usage and program-message metadata retain those small records.
 
-**Durability boundary:** Prisma still owns leases, usage reservations, job states, conversations and approval records. These graphs do not add checkpoints, replay paid nodes after a crash, or use LangGraph interrupts to approve changes. The existing proposal service remains the sole student-plan write authority after explicit approval. This refactor requires no new database migration, Pinecone index, model setting or service secret.
+**Durability boundary:** Prisma still owns leases, usage reservations, job states, conversations and approval records. These graphs do not add checkpoints, replay paid nodes after a crash, or use LangGraph interrupts to approve changes. The existing proposal service remains the sole student-plan write authority after explicit approval. The original framework refactor reused existing tables; the student-scoped rebuild below adds two portable migrations.
 
 Run `npm run demo:workflows` for an offline demonstration with labeled synthetic fixtures and no provider/database calls. `npm run demo:workflows -- --mermaid` prints diagrams generated from the actual compiled graphs. See [workflow walkthrough](13-LANGGRAPH-LANGCHAIN.md) for the code map and demonstration steps.
 
@@ -92,32 +92,38 @@ The current pilot uses one Fastify server to serve the compiled React app and `/
 
 ## Personal opportunity discovery and RAG
 
-Explore now has Interested (the existing application tracker) followed by Free and Paid picks. `domain/picks.ts` balances eligible catalog items without AI. Unknown costs belong to Paid with an explicit warning; only a separately checked official free-cost fact earns Free. A missing suitable item leaves an honest empty slot. Catalog refills preserve the remaining picks and cost no AI calls.
-
 ```mermaid
 flowchart LR
-  G[Topic + grade band + broad region] --> J[Leased background job]
-  J --> S[Search adapter]
-  S --> F[Bounded official-page fetch + robots rules]
-  F --> X[Evidence-based extraction adapter]
-  X --> V[Deterministic verification]
-  V --> C[(Shared catalog + page snapshots)]
-  C --> K[500-word chunks + embedding adapter]
-  K --> P[Pinecone opportunities namespace]
-  K --> DB[(PostgreSQL chunk text + citations)]
-  B[Program-scoped Buddy] --> R[Filtered vector query + keyword rerank]
-  R --> P
-  R --> DB
-  R --> Q[Verbatim claim and citation validation]
-  Q --> B
+  E[Explore first visit / explicit Search again] --> Q[SQL request + shared public interest group]
+  Q --> C{Enough recent active catalog items?}
+  C -->|yes| P[Deterministic StudentPick selection]
+  C -->|no| G[Leased LangGraph: search / fetch / extract / verify]
+  G --> S[(SQL catalog + official snapshots)]
+  S --> P
+  P --> K[Shared public program preparation]
+  K --> D[(SQL KnowledgeChunk text + citations)]
+  K --> V[Pinecone namespace opportunities]
+  B[Scoped Buddy] --> A[SQL owns picks + Interested scope]
+  A --> R[LangChain retriever: vector filter + SQL checks + keyword rerank]
+  R --> V
+  R --> D
+  R --> F[SQL structured facts + verified excerpt citations]
 ```
 
-The vector-store interface isolates Pinecone, optional pgvector, and the SQLite/local memory adapter. Pinecone is the recommended production store (and the production fallback when VECTOR_STORE is omitted); `.env.example` explicitly selects memory as the safe local default. Ordinary PostgreSQL migrations require no vector extension. The optional pgvector SQL creates a separate dimensioned vector table with an HNSW cosine index. In every mode, citation text comes from the app database, never vector metadata. Memory vectors are also serialized in KnowledgeChunk.localEmbedding to restore the index after restart; Pinecone/pgvector modes leave that field empty.
+Production sample seeding is off unless DEMO_MODE=true. Active-only rules live in domain/opportunity-active.ts, eligibility in scoring.ts and cost/ranking in picks.ts. SQLite remains the local default, with memory/cosine vectors. Explicit VECTOR_STORE=pinecone uses the official SDK; pgvector is optional. The default store is memory in every environment; set pinecone explicitly for durable production vectors.
 
-Ingestion embeds bounded batches, writes a new vector generation, swaps the authoritative chunk rows transactionally, then deletes old vectors. This is recoverable cross-service work, not a distributed transaction. A monthly reconciliation removes vectors with no database chunk. The server checks index dimension and cosine metric before enabling questions; a mismatch or missing optional configuration disables discovery/questions while catalog features work. Provider outages are retried for readiness after a minute; no discovery/extraction SDK retry can silently multiply the bounded paid calls.
+OpportunitySearchRequest durably tracks a student search without embedding private data. Group bindings point to public topic/grade-band/region work. Base/bonus manual slots are reserved, then charged once only after complete/empty settlement. Failed, interrupted, limited or cancelled requests are not charged. Global paid attempt reservations remain counted on failure. First use is automatic; later interest edits expose the explicit bonus action. A full recent shared catalog on first use needs no paid search or manual debit. The explicit manual action always queues new web search, even with full current picks.
 
-Program questions use a read-only LangGraph workflow: initial retrieval plus at most two rephrases, at most three JSON model drafts through a LangChain runnable. Vector queries filter opportunityId, and SQL checks opportunityId, scope and the current source snapshot hash again. Changed pages cannot serve old chunks while re-embedding is pending. The final answer accepts only verbatim excerpts mapped to returned chunk IDs (up to 120 quoted words), with links and source-check dates. Unsupported output takes the no-answer path. Eligibility and cost remain code decisions. A checklist button creates an `add_application_requirements` proposal; approval revalidates its evidence hash in the transaction before merging steps, preserving completed work, notes and student dates.
+Timers, authenticated request-bound work and owner cron share a renewable database lease. Each invocation processes at most one group, one public-program preparation and one source recheck. Request-bound work uses only the signed-in student’s persisted group bindings and current program membership. PostgreSQL serializable write-conflict retries include bounded backoff; these retry database transactions, never paid graph nodes. Autoscale may sleep; use cron for unattended progress.
 
-A minute timer and the owner-authenticated `/internal/jobs/run` share a persistent global lease and heartbeat. Each invocation refreshes up to 25 due students, processes one shared discovery group and one due source re-check, within monthly reservations and per-run limits. Interrupted groups keep their 30-day cooldown instead of silently paying again. Autoscale deployments need an external scheduled trigger for unattended discovery; a server timer alone cannot wake a sleeping deployment. See DEPLOY-REPLIT.md.
+Store once, link per student: SourcePage and KnowledgeChunk are shared by program. Ingestion skips a matching source hash + embedding provider/model/dimension + vector store/index identity. Switching index therefore re-ingests, even with the same text/model. A per-program lease prevents duplicate simultaneous embedding. SQL remains authoritative after retrieval: reject wrong program IDs, obsolete snapshot hashes, wrong model/store identity and non-opportunity scope. Pinecone metadata contains only chunkId, opportunityId, sourceUrl, pageTitle, checkedAt.
 
-Shared discovery and source re-check attempts also reserve one request against the existing **AI_MONTHLY_LIMIT** overall counter. They never consume a student's daily allowance. Their separate discovery/re-check run budgets are additional limits; an exhausted overall AI cap blocks new paid background attempts too.
+Knowledge preparation runs under the shared monthly AI and recheck/preparation allowance. A public generation/month marker prevents a failed or interrupted paid preparation from replaying on every page load. Subsequent source/model/index generations or the next month can be attempted; no provider retry policy is added. Missing keys or a dimension/metric mismatch disables questions with a safe explanation while search can still produce verified catalog results. Catalog persistence survives optional indexing failures.
+
+Retrieval scope is computed from SQL on each request/turn: current eligible active StudentPicks plus non-dismissed Interested applications, excluding explicit feedback. A caller can select one member or my_opportunities, never supply an allowed-ID list. The vector query filters the set (IN for multiple programs), requests top ten, then SQL validation and keyword reranking return five passages. The read-only LangGraph may refine at most twice more. SQL/rules render deadline, cost, eligibility and status; structured assertions are removed from model quotes. Text claims must be exact excerpts in retrieved passages. Cross-program replies are grouped and cited, with an official link when unsupported. General Buddy also renders server-verified knowledge-tool results rather than unchecked model prose.
+
+Expired picks leave scope immediately; Interested progress remains accessible. Monthly reconciliation removes expired chunks only when no saved application, pick, goal or pending proposal references the program, then removes orphan vectors. Public page snapshots remain available for later source checks. Switching to a different index does not delete the old index; retiring it is an owner operation.
+
+Two additional portable migrations add active/application fields + OpportunitySearchRequest, then KnowledgeChunk.vectorStoreKey. Apply to development PostgreSQL and let Replit Publish apply the production diff; never add DDL to npm start. See [deployment guide](../DEPLOY-REPLIT.md).
+
+Foreground work handles a search group or a standalone program preparation per call, keeping slow providers within the web request window. Timer/cron work shares a three-minute run deadline, checked before funding another stage; a final in-flight provider call can finish after that deadline. Paid nodes are never automatically replayed.
