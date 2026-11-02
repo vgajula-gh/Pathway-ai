@@ -1,9 +1,10 @@
 import {expect,it} from 'vitest';
-import {chunkText,supportedClaims} from '../src/domain/knowledge.js';
+import {supportedClaims} from '../src/domain/knowledge.js';
+import {chunkText} from '../src/knowledge/documents.js';
 import {memoryStore} from '../src/knowledge/adapters/memory.js';
 import {assertDimension} from '../src/knowledge/runtime.js';
-it('chunks with overlap and keeps final words exactly once in the last chunk',()=>{
- const words=Array.from({length:1001},(_,i)=>`word${i}`),chunks=chunkText(words.join(' '));expect(chunks).toHaveLength(3);expect(chunks[0].split(' ')).toHaveLength(500);expect(chunks[1].split(' ').slice(0,50)).toEqual(words.slice(450,500));expect(chunks.at(-1)?.endsWith('word1000')).toBe(true);expect(chunkText('')).toEqual([]);
+it('chunks with overlap and keeps final words exactly once in the last chunk',async()=>{
+ const words=Array.from({length:1001},(_,i)=>`word${i}`),chunks=await chunkText(words.join(' '));expect(chunks).toHaveLength(3);expect(chunks[0].split(' ')).toHaveLength(500);expect(chunks[1].split(' ').slice(0,50)).toEqual(words.slice(450,500));expect(chunks.at(-1)?.endsWith('word1000')).toBe(true);expect(await chunkText('')).toEqual([]);
 });
 it('memory vector contract scopes all queries, replaces IDs and supports orphan listing/deletion',async()=>{
  const store=memoryStore(2),record=(id:string,opportunityId:string,values:number[])=>({id,values,metadata:{chunkId:id,opportunityId,sourceUrl:'https://example.edu',pageTitle:'Page',checkedAt:new Date().toISOString()}});

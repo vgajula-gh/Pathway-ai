@@ -86,7 +86,7 @@ async function finishRun(
       data: {
         status,
         error,
-        usage: JSON.stringify({ ...budget.usage, tokensAreEstimates: true }),
+        usage: JSON.stringify({ ...budget.usage, tokensAreEstimates: true, workflow: budget.workflow }),
         finishedAt: new Date(),
       },
     }),

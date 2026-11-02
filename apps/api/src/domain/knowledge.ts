@@ -1,14 +1,4 @@
 import { Passage } from '../knowledge/contracts.js';
-export function chunkText(text: string, size = 500, overlap = 50) {
-  if (size <= overlap || overlap < 0) throw new Error('Invalid chunk overlap');
-  const words = text.trim().split(/\s+/).filter(Boolean),
-    chunks: string[] = [];
-  for (let start = 0; start < words.length; start += size - overlap) {
-    chunks.push(words.slice(start, start + size).join(' '));
-    if (start + size >= words.length) break;
-  }
-  return chunks;
-}
 export function keywordScore(text: string, query: string) {
   const words = [...new Set(query.toLowerCase().match(/[\p{L}\p{N}]{3,}/gu) || [])];
   return words.length ? words.filter((w) => text.toLowerCase().includes(w)).length / words.length : 0;

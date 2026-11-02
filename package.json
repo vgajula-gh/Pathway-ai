@@ -20,7 +20,8 @@
     "db:demo": "npm run db:demo --workspace apps/api",
     "ollama:setup": "node scripts/setup-ollama.mjs",
     "ollama:start": "node scripts/start-ollama.mjs",
-    "start": "node scripts/start-production.mjs"
+    "start": "node scripts/start-production.mjs",
+    "demo:workflows": "npm run demo:workflows --workspace apps/api --"
   },
   "engines": {
     "node": ">=20"
