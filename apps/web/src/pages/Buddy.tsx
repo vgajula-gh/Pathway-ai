@@ -23,7 +23,7 @@ export default function Buddy({ me, seed, clearSeed, opportunityId }: { opportun
     const convId = fresh ? undefined : active || undefined;
     if (fresh) { setActive(null); setMsgs([]); }
     setMsgs(m => [...(fresh ? [] : m), { id: 'tmp', role: 'user', content: t }]);
-    try { const r = await api<{ conversationId: string }>('/api/buddy/messages', { body: { text: t, conversationId: convId, ...(fresh && opportunityId ? {opportunityId} : {}) } }); const messages = await open(r.conversationId); const reply = [...messages].reverse().find(m => m.role === 'assistant'); if (reply) voice.speakReply(reply.content); convos.reload(); }
+    try { const r = await api<{ conversationId: string }>('/api/buddy/messages', { body: { text: t, conversationId: convId, ...(fresh && opportunityId ? opportunityId==='my_opportunities'?{scope:'my_opportunities'}:{opportunityId} : {}) } }); const messages = await open(r.conversationId); const reply = [...messages].reverse().find(m => m.role === 'assistant'); if (reply) voice.speakReply(reply.content); convos.reload(); }
     catch (e) { toast((e as Error).message); } finally { setBusy(false); }
   };
   useEffect(() => { if (seed && !seeded.current) { seeded.current = true; send(seed, true); clearSeed(); } }, [seed]); // eslint-disable-line
@@ -44,7 +44,8 @@ export default function Buddy({ me, seed, clearSeed, opportunityId }: { opportun
         <div className="chat">{msgs.map(m => <div key={m.id} style={{ display: 'contents' }}>
           <div className={`bub ${m.role === 'user' ? 'me' : 'ai'}`}>{m.content}</div>
           {m.citations && <div className="card"><p className="tiny">Official page sources</p>{m.citations.map(c=><p key={c.number} className="small"><a href={c.sourceUrl} target="_blank" rel="noreferrer">[{c.number}] {c.pageTitle}</a> · Checked {new Date(c.checkedAt).toLocaleDateString()}</p>)}{m.eligibilityNote && <p className="note">{m.eligibilityNote}</p>}</div>}
-          {m.opportunityId && m.role==='assistant' && <button className="btn" onClick={async()=>{try{setReview(await api<Proposal>(`/api/opportunities/${m.opportunityId}/requirements`,{method:'POST'}));}catch(e){toast((e as Error).message);}}}>Add these requirements to my checklist</button>}
+          {m.opportunityId && m.role==='assistant' && !m.programs && <button className="btn" onClick={async()=>{try{setReview(await api<Proposal>(`/api/opportunities/${m.opportunityId}/requirements`,{method:'POST'}));}catch(e){toast((e as Error).message);}}}>Add these requirements to my checklist</button>}
+          {m.role==='assistant'&&m.programs?.filter(p=>p.canAddRequirements).map(p=><button key={p.id} className="btn" onClick={async()=>{try{setReview(await api<Proposal>(`/api/opportunities/${p.id}/requirements`,{method:'POST'}));}catch(e){toast((e as Error).message);}}}>Add requirements for {p.name} to my checklist</button>)}
           {(m.proposalIds || []).map(id => props[id] && <div className="prop" key={id}><b>{props[id].summary}</b>{props[id].actions.slice(0, 4).map((a, i) => { const [e, t, s] = actionLine(a); return <div className="pi" key={i}><span>{e}</span><div><div>{t}</div>{s && <div className="muted small">{s}</div>}</div></div>; })}
             {props[id].status === 'AWAITING_APPROVAL' ? <div className="acts"><button className="btn fill" onClick={() => setReview(props[id])}>Review & approve</button></div> : <p className="tiny">{props[id].status === 'VERIFIED' ? 'Saved and verified' : props[id].status.toLowerCase()}</p>}</div>)}
         </div>)}{busy && <div className="status" role="status"><Typing /><span>{health.data?.provider === 'ollama' ? 'Buddy is thinking… local models can take up to a minute' : 'Buddy is thinking…'}</span></div>}</div></>}

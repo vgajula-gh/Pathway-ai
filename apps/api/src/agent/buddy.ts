@@ -24,20 +24,24 @@ export async function runBuddy(studentId: string, userText: string, conversation
   while (historyTurns.length && historyTurns[0].role !== 'user') historyTurns.shift();
   await prisma.chatMessage.create({ data: { studentId, conversationId: convo.id, role: 'user', content: userText } });
 
+  let knowledgeReply:{verifiedReply:string;citations:unknown[]}|null=null;
   const toolEvents: ToolEvent[] = [], proposalIds: string[] = [];
   let reply = await llm.runTools({
     system: BUDDY_SYSTEM(new Date().toString(), context), history: historyTurns, maxRounds: MAX_ROUNDS,
     tools: TOOLS.map(({ name, description, input_schema }) => ({ name, description, input_schema })),
     async exec(name, input) {
       const tool = TOOLS.find(t => t.name === name);
-      try { return { content: JSON.stringify(tool ? await tool.run(input, studentId, toolEvents, proposalIds) : { error: 'Unknown tool' }) }; }
+      try {const result=tool?await tool.run(input,studentId,toolEvents,proposalIds):{error:'Unknown tool'};if(name==='search_knowledge'&&result&&typeof result==='object'&&'verifiedReply' in result)knowledgeReply=result as {verifiedReply:string;citations:unknown[]};return {content:JSON.stringify(result)};}
       catch (err) { return { content: err instanceof ZodError ? err.issues.map(i => `${i.path.join('.')}: ${i.message}`).join('; ') : (err as Error).message, isError: true }; }
     }
   });
+  const verified=knowledgeReply as {verifiedReply:string;citations:unknown[]}|null;
+  if(verified)reply=verified.verifiedReply;
+  const citations=verified?.citations;
   reply = reply.trim() || (proposalIds.length ? 'I put together a plan. It\u2019s waiting for your approval.' : 'Sorry, I couldn\u2019t finish that. Try asking again.');
-  const saved = await prisma.chatMessage.create({ data: { studentId, conversationId: convo.id, role: 'assistant', content: reply, meta: JSON.stringify({ toolEvents, proposalIds }) } });
+  const saved = await prisma.chatMessage.create({ data: { studentId, conversationId: convo.id, role: 'assistant', content: reply, meta: JSON.stringify({ toolEvents, proposalIds, citations }) } });
   await prisma.conversation.update({ where: { id: convo.id }, data: { updatedAt: new Date() } });
-  return { id: saved.id, conversationId: convo.id, reply, toolEvents, proposalIds };
+  return { id: saved.id, conversationId: convo.id, reply, toolEvents, proposalIds, citations };
 }
 
 export const serializeMessage = (m: { id: string; role: string; content: string; meta: string; createdAt: Date }) => ({ id: m.id, role: m.role, content: m.content, ...j(m.meta, {}), createdAt: m.createdAt });

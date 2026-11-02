@@ -29,3 +29,21 @@ it('extracts readable data, hashes content and refuses private or non-HTTPS fetc
  await expect(fetchOfficialPage('http://example.edu',new RunBudget())).rejects.toThrow('HTTPS');await expect(fetchOfficialPage('https://127.0.0.1',new RunBudget())).rejects.toThrow('Private network');
 });
 it('stops before exceeding per-run network limits',()=>{const b=new RunBudget();b.take('searches');b.take('searches');expect(()=>b.take('searches')).toThrow('limit');expect(b.usage.searches).toBe(2);});
+
+it('requires current official activity, future competition deadlines and fresh verification',async()=>{
+ const {activeOpportunity}=await import('../src/domain/opportunity-active.js');const now=new Date('2029-01-01'),sourceUrl=page.sourceUrl;
+ const base={category:'Competition',name:'Robotics Contest',verificationStatus:'verified',verifiedAt:now,sourceCheckedAt:now,evidence:JSON.stringify({deadline:{sourceUrl,quote:'Deadline January 10, 2030'}})};
+ expect(activeOpportunity({...base,deadline:'2030-01-10'},'2029-01-01',now)).toBe(true);
+ expect(activeOpportunity(base,'2029-01-01',now)).toBe(false);
+ expect(activeOpportunity({...base,deadline:'2028-12-31'},'2029-01-01',now)).toBe(false);
+ const rolling={...base,name:'Research program',category:'Program',applicationStatus:'rolling',applicationStatusCheckedAt:now,evidence:JSON.stringify({applicationStatus:{sourceUrl,quote:'We accept applications on a rolling basis.'}})};
+ expect(activeOpportunity(rolling,'2029-01-01',now)).toBe(true);
+ expect(activeOpportunity({...rolling,evidence:JSON.stringify({applicationStatus:{sourceUrl,quote:'Applications will open next year.'}})},'2029-01-01',now)).toBe(false);
+ expect(activeOpportunity({...rolling,verificationStatus:'new_find'},'2029-01-01',now)).toBe(false);
+ expect(activeOpportunity(rolling,'2029-03-01',new Date('2029-03-01'))).toBe(false);
+ expect(activeOpportunity({...rolling,category:'Volunteering',applicationStatus:'unknown',activityDate:'2029-02-01',evidence:JSON.stringify({activityDate:{sourceUrl,quote:'Next activity February 1, 2029'}})},'2029-01-01',now)).toBe(true);
+});
+it('accepts unknown cost only as a labeled paid option and rejects invented open status',()=>{
+ const data=facts();data.costType='unknown';const result=verifyOpportunity(data,[page],new Set());expect(result.verificationStatus).toBe('verified');expect(result.costType).toBe('unknown');
+ data.deadline=null;data.applicationStatus='open';data.evidence.applicationStatus={sourceUrl:page.sourceUrl,quote:text};expect(verifyOpportunity(data,[page],new Set()).verificationStatus).toBe('new_find');
+});

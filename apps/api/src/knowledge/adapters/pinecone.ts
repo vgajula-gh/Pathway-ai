@@ -7,6 +7,7 @@ export function pineconeStore(): VectorStore {
     index = pc.index({ name, namespace: 'opportunities' });
   return {
     kind: 'pinecone',
+    identity: `pinecone:${name}:opportunities`,
     async dimension() {
       const d = await pc.describeIndex(name);
       if (d.metric !== 'cosine') throw new KnowledgeSetupError(
@@ -21,7 +22,7 @@ export function pineconeStore(): VectorStore {
       const r = await index.query({
         vector,
         topK,
-        filter: { opportunityId: { $eq: opportunityId } },
+        filter: { opportunityId: Array.isArray(opportunityId) ? { $in: opportunityId } : { $eq: opportunityId } },
         includeMetadata: false,
       });
       return r.matches.map((m) => ({ id: m.id, score: m.score || 0 }));

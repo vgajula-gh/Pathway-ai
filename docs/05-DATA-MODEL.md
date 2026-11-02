@@ -41,22 +41,29 @@ NotificationSettings is one-to-one with Student (enabled=false, local time, paus
 | Entity | Purpose and fields |
 | --- | --- |
 | Student.region | Optional US state abbreviation/DC, `virtual`, or empty. Controlled values; no new address collection. |
-| Opportunity | Nullable grade bounds; verificationStatus, verifiedAt, officialDomain, region[], costType, costAmount, costVerifiedAt, financialAidNote, feeFlag, discoveredFor[], source, evidence{}, requirements[], lastRecheckedAt. Existing seed records keep source=seed and their verification is never manufactured. |
+| Opportunity | Nullable grade bounds; verificationStatus, verifiedAt, officialDomain, region[], costType, costAmount, costVerifiedAt, financialAidNote, feeFlag, discoveredFor[], source, evidence{}, requirements[], lastRecheckedAt. Adds applicationStatus, applicationStatusCheckedAt, activityDate and opportunityType. Verified active results require official evidence; seed records stay unverified unless actually re-fetched and verified. |
+| OpportunitySearchRequest | Student relation (cascade), kind, normalized signature, queued/running/cached/complete/empty/failed/limited/cancelled status, public groupBindings, resultIds, reserved manualSlot/cycleStartedAt, countedAt, safe error, createdAt/finishedAt. Indexed by student/date; included in private export. |
 | StudentPick | Student/opportunity composite key, bucket, rank, isStretch, pickedAt, refreshCycle. Both relations cascade; repeated reads preserve the original pickedAt. |
 | OpportunityFeedback | Student/opportunity key, reason, createdAt. Separate from application progress. |
 | PickRefreshState | Student key, rolling cycle start, last automatic refresh, manual count, one earned/used interest-change bonus and normalized interest signature. |
 | DiscoveryGroup | Public normalized topic/grade-band/region key, short buckets, queue state, last discovery timestamp and safe error. No names, student IDs or exact locations. |
 | SourcePage | Shared program relation, URL/title, readable snapshot text, contentHash, checkedAt; unique by program/URL. |
-| KnowledgeChunk | Shared program relation, text, sourceUrl, pageTitle, checkedAt, contentHash, opportunity scope, embedding model/dimension identity. localEmbedding is used only by the memory adapter. |
-| JobLease | Key, unique owner token, expiry; serializes jobs across timers, cron and replicas, with heartbeat. |
+| KnowledgeChunk | Shared program relation, text, sourceUrl, pageTitle, checkedAt, contentHash, opportunity scope, embedding provider/model/dimension identity and vectorStoreKey (store/index/namespace identity). Legacy store keys default empty and require ingestion. localEmbedding is used only by the memory adapter. |
+| JobLease | Key, owner token/status, expiry; serializes jobs with heartbeat. Also stores public knowledge-generation attempt markers and monthly reconciliation markers. |
 | DiscoveryUsage | UTC month key; run/re-check reservations, searches, pages, embeddings, vector writes, token estimates and planning cost estimates. No student content. |
 | DiscoveryRun | Shared group/program key, kind, status, usage, sanitized error, start/end. Interrupted usage is explicitly incomplete, not presented as a provider invoice. |
 
 SavedOpportunity adds `citedDeadline` and `citations` separately from the student's `deadline`. Saving pins a known official deadline so later shared-catalog changes cannot silently alter that student's application. Approved requirements merge into the checklist, preserving notes, completed steps and student-entered dates. Expiry removes recommendations, not application records. The upgrade copies existing checked catalog deadlines into saved applications.
 
-Conversation optionally stores opportunityId. Program-message metadata includes checked citations and a rules-engine eligibility note. Exports include conversations/messages, picks, feedback and refresh state; student deletion cascades these private records. Shared catalog/snapshots/chunks contain public program information and remain reusable after a student deletes their account.
+Conversation optionally stores opportunityId; the reserved my_opportunities scope recomputes the current set each turn. Program-message metadata includes checked citations and a rules-engine eligibility note. Exports include conversations/messages, picks, search requests, feedback and refresh state; student deletion cascades these private records. Shared catalog/snapshots/chunks contain public program information and remain reusable after a student deletes their account.
 
 Four matching migrations for each provider: `20261103010000_personal_picks`, `20261103020000_discovery`, `20261103030000_knowledge`, `20261103040000_discovery_jobs`. Replit still uses development schema sync + Publish's schema diff. Migration-managed PostgreSQL installations can apply the versioned SQL; existing databases without migration history must be baselined first. The optional `prisma/postgresql/optional/knowledge-vector.sql` is deliberately outside ordinary migration history so Pinecone deployments never require extension privileges.
 
 
 LangGraph/LangChain orchestration adds no tables. Program ChatMessage.meta.workflow and DiscoveryRun.usage.workflow reuse JSON strings for controlled node/status/reason records. Prisma continues to own durable sessions, job leases/cooldowns, usage reservations and student approvals; ephemeral graph state is not stored as framework checkpoints.
+
+## Today / Explore rebuild migrations
+
+Both SQLite and PostgreSQL include `20261104010000_active_opportunity_search` and `20261104020000_knowledge_store_identity`. Existing profiles, sessions, notes, deadlines and completed steps are preserved. New active fields start unknown, not falsely verified. The SQLite table copy preserves existing Opportunity IDs and metadata; PostgreSQL changes are additive. `vectorStoreKey` defaults empty so older chunks are prepared for the configured store before Ask is enabled. No new student data goes to Pinecone.
+
+DEMO_MODE=false does not seed sample opportunities and hides old sample calendar events without deleting them. The manual cleanup script removes only unused public sample data and derived sample picks, protecting all student references. Production NewsStory content is retained.

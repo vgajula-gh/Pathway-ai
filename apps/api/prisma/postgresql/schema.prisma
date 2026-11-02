@@ -23,6 +23,7 @@ model Student {
   region      String   @default("") // US state abbreviation, virtual, or unspecified
   pickState   PickRefreshState?
   picks       StudentPick[]
+  opportunitySearches OpportunitySearchRequest[]
   feedback    OpportunityFeedback[]
   location    String   @default("")   // broad area only, e.g. "Raleigh area"
   interests   String   @default("[]") // JSON string[]
@@ -104,6 +105,10 @@ model Opportunity {
   checks          String   @default("[]") // JSON string[] — things to verify
   deadline        String?  // ISO date if verified, else null
   sourceCheckedAt DateTime? // null => not verified
+  applicationStatus String @default("unknown")
+  applicationStatusCheckedAt DateTime?
+  activityDate String?
+  opportunityType String @default("program")
   isSample        Boolean  @default(true)
   lastRecheckedAt DateTime?
   verificationStatus String @default("new_find")
@@ -383,6 +388,7 @@ model KnowledgeChunk {
   scope String @default("opportunity")
   localEmbedding String @default("[]") // only the memory/SQLite adapter persists vectors here
   embeddingModel String
+  vectorStoreKey String @default("")
   @@index([opportunityId, sourceUrl])
 }
 
@@ -425,4 +431,22 @@ model DiscoveryRun {
   startedAt DateTime @default(now())
   finishedAt DateTime?
   @@index([startedAt])
+}
+
+model OpportunitySearchRequest {
+  id String @id @default(cuid())
+  studentId String
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  kind String
+  signature String
+  status String @default("queued")
+  groupBindings String @default("[]")
+  resultIds String @default("[]")
+  manualSlot String?
+  cycleStartedAt DateTime?
+  countedAt DateTime?
+  error String @default("")
+  createdAt DateTime @default(now())
+  finishedAt DateTime?
+  @@index([studentId, createdAt])
 }

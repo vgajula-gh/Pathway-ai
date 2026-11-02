@@ -1,9 +1,12 @@
 import { PrismaClient } from '@prisma/client';
 import { sampleWeek } from '../src/lib/sample.js';
+import { env } from '../src/lib/env.js';
 
 const prisma = new PrismaClient();
 const id = 'pathway-demo-student';
 try {
+  if (!env.demoMode) { console.log('Demo profile disabled. Set DEMO_MODE=true to create sample data.'); }
+  else {
   // Re-running setup preserves the trainer's changes to this profile.
   await prisma.student.upsert({
     where: { id },
@@ -18,6 +21,7 @@ try {
     }
   });
   console.log(`Demo student ready: ${id} (synthetic data, AI consent off).`);
+  }
 } finally {
   await prisma.$disconnect();
 }

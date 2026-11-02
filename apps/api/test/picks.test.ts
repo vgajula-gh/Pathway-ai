@@ -14,11 +14,13 @@ it('balances types, includes one eligible stretch, excludes saved, expired and w
 });
 it('refills the same bucket without inventing picks; fee-flag items never stretch',()=>{
  const picks=selectPicks([opp('a'),opp('b',{costType:'paid'}),opp('c',{tags:['art'],feeFlag:true})],student,600,new Set(['a']),{free:1,paid:1});
- expect(picks.find(p=>p.bucket==='free')?.opportunityId).toBe('c');expect(picks.find(p=>p.bucket==='paid')?.opportunityId).toBe('b');expect(picks.some(p=>p.isStretch)).toBe(false);
+ expect(picks.find(p=>p.bucket==='free')).toBeUndefined();expect(picks.find(p=>p.bucket==='paid')?.opportunityId).toBe('b');expect(picks.some(p=>p.isStretch)).toBe(false);
 });
 it('does not treat an unknown grade requirement as confirmed eligibility',()=>{
- const picks=selectPicks([opp('x',{gradeMin:null,gradeMax:null,tags:['art']})],student,600,new Set()); expect(picks[0].isStretch).toBe(false);
+ const picks=selectPicks([opp('x',{gradeMin:null,gradeMax:null,tags:['art']})],student,600,new Set()); expect(picks).toEqual([]);
 });
 it('uses the student local day so an opportunity does not expire early at UTC midnight',async()=>{
  const {vi}=await import('vitest');const {eligibility}=await import('../src/domain/scoring.js');vi.useFakeTimers();vi.setSystemTime(new Date('2029-11-02T00:30:00Z'));try{const o=opp('today',{deadline:'2029-11-01'});expect(eligibility(o,{...student,timezone:'America/New_York'}).reasons).not.toContain('The deadline has passed');expect(eligibility(o,{...student,timezone:'UTC'}).reasons).toContain('The deadline has passed');}finally{vi.useRealTimers();}
 });
+
+it('never fills empty slots with multiple outside-interest programs',()=>{const picks=selectPicks([opp('art',{tags:['art']}),opp('music',{tags:['music']}),opp('paid-art',{tags:['art'],costType:'paid'})],student,600,new Set());expect(picks).toHaveLength(1);expect(picks[0].isStretch).toBe(true);});

@@ -92,7 +92,7 @@ export default function App() {
       </header>
       <main>
         {tab === 'today' && <Today me={me} go={go} ask={ask} setMe={setMe} />}
-        {tab === 'explore' && <Explore me={me} ask={ask} />}
+        {tab === 'explore' && <Explore me={me} ask={ask} setMe={setMe} />}
         {tab === 'buddy' && <Buddy key={buddyKey} me={me} seed={buddySeed} opportunityId={buddyScope} clearSeed={() => {setBuddySeed(null);setBuddyScope(undefined);}} />}
         {tab === 'grow' && <Grow me={me} ask={ask} go={go} />}
         {tab === 'you' && <You me={me} setMe={setMe} onSignOut={onSignedOut} />}

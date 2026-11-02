@@ -8,6 +8,7 @@ export function getEmbedder(): Embedder | null {
   if (provider === 'openai' && process.env.OPENAI_API_KEY) {
     const c = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, maxRetries: 0, timeout: 20000 });
     return {
+      provider,
       model: model || 'text-embedding-3-small',
       dimension: setting('EMBEDDING_DIMENSION', 1536, 4096),
       async embed(input) {
@@ -19,6 +20,7 @@ export function getEmbedder(): Embedder | null {
   if (provider === 'pinecone' && process.env.PINECONE_API_KEY) {
     const pc = pineconeClient();
     return {
+      provider,
       model: model || 'multilingual-e5-large',
       dimension: setting('EMBEDDING_DIMENSION', 1024, 4096),
       async embed(inputs, type) {
@@ -33,6 +35,7 @@ export function getEmbedder(): Embedder | null {
   }
   if (provider === 'voyage' && process.env.VOYAGE_API_KEY)
     return {
+      provider,
       model: model || 'voyage-3-lite',
       dimension: setting('EMBEDDING_DIMENSION', 512, 4096),
       async embed(input, type) {
@@ -63,6 +66,7 @@ export function getEmbedder(): Embedder | null {
       timeout: 60000,
     });
     return {
+      provider,
       model: model || 'nomic-embed-text',
       dimension: setting('EMBEDDING_DIMENSION', 768, 4096),
       async embed(input) {

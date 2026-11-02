@@ -6,6 +6,10 @@ import { addDays, sod } from '../domain/time.js';
 import { dayCapacity } from '../domain/schedule.js';
 import { bucketFor, costLabel, selectPicks } from '../domain/picks.js';
 import { scoreOpportunity } from '../domain/scoring.js';
+import { env } from './env.js';
+import { countdown } from '../domain/applications.js';
+import { activeOpportunity } from '../domain/opportunity-active.js';
+import { wallNow, dkey } from '../domain/time.js';
 export const toOpp = (o: Awaited<ReturnType<typeof prisma.opportunity.findMany>>[number]) => ({
   ...o,
   cost:
@@ -19,9 +23,11 @@ export const toOpp = (o: Awaited<ReturnType<typeof prisma.opportunity.findMany>>
 });
 export async function personalPicks(studentId: string, rebuild = false) {
   const { events, rules, ctx } = await loadContext(studentId);
+  if(!ctx.interests.length) { await prisma.studentPick.deleteMany({where:{studentId}}); return []; }
   let freeMin = 0;
   for (let d = 0; d < 7; d++) freeMin += dayCapacity(events, rules, addDays(sod(new Date()), d)).available;
-  const opps = (await prisma.opportunity.findMany()).map(toOpp);
+  const now=new Date(),today=dkey(wallNow(ctx.timezone||'UTC',now));
+  const opps = (await prisma.opportunity.findMany({ where: env.demoMode ? {} : { isSample: false, source: { not: 'seed' } } })).map(toOpp).filter(o=>env.demoMode&&o.isSample||activeOpportunity(o,today,now));
   // Serialize replacement with the student row. Retry conflicting refreshes on PostgreSQL.
   for (let attempt = 0; ; attempt++)
     try {
@@ -56,7 +62,7 @@ export async function personalPicks(studentId: string, rebuild = false) {
             excluded,
             counts,
             valid.map((p) => p.opportunityId),
-            feedback.map((f) => f.reason),
+            feedback.flatMap(f=>f.reason==='not my interest'?opps.find(o=>o.id===f.opportunityId)?.tags.map(t=>'interest:'+t.toLowerCase())||[]:[f.reason]),
             setting('STRETCH_PICKS', 1, 1),
           );
           if (!rebuild)
@@ -72,6 +78,13 @@ export async function personalPicks(studentId: string, rebuild = false) {
                 ...[...keep, ...fill].slice(0, counts[bucket]).map((p, rank) => ({ ...p, bucket, rank })),
               );
             }
+          // Preserving a different bucket must not reintroduce a second outside-interest pick.
+          const outside=chosen.filter(p=>{const fit=scoreOpportunity(opps.find(o=>o.id===p.opportunityId)!,ctx,freeMin);return !fit.excluded&&!fit.matched.length&&!fit.goalHit;});
+          const keepOutside=outside.find(p=>valid.some(v=>v.opportunityId===p.opportunityId))||outside[0];
+          chosen.splice(0,chosen.length,...chosen.filter(p=>!outside.some(x=>x.opportunityId===p.opportunityId)||p===keepOutside));
+          const missing={free:counts.free-chosen.filter(p=>p.bucket==='free').length,paid:counts.paid-chosen.filter(p=>p.bucket==='paid').length};
+          const refill=selectPicks(opps,ctx,freeMin,new Set([...excluded,...chosen.map(p=>p.opportunityId)]),missing,[],[],0,today);
+          for(const p of refill)chosen.push({...p,rank:chosen.filter(x=>x.bucket===p.bucket).length});
           // Never allow multiple stretch badges after preserving/refilling picks.
           const stretch =
             setting('STRETCH_PICKS', 1, 1) > 0
@@ -113,17 +126,20 @@ export async function personalPicks(studentId: string, rebuild = false) {
           ...p,
           verified: o.verificationStatus === 'verified' && !!o.sourceCheckedAt,
           costLabel: costLabel(o),
+          countdown: countdown(o.deadline,today),
           status: null,
           fit: scoreOpportunity(o, ctx, freeMin),
         };
       });
     } catch (e) {
       if (
-        attempt < 4 &&
+        attempt < 7 &&
         e instanceof Prisma.PrismaClientKnownRequestError &&
         ['P2034', 'P2002', 'P1008'].includes(e.code)
-      )
+      ) {
+        await new Promise(resolve=>setTimeout(resolve,40*(attempt+1)+Math.floor(Math.random()*25)));
         continue;
+      }
       throw e;
     }
 }

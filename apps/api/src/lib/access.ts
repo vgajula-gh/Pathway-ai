@@ -11,7 +11,7 @@ export function accessCode(req: Pick<FastifyRequest, 'headers'>): string | null 
   return code.data;
 }
 export async function accessRoutes(app: FastifyInstance) {
-  app.get('/api/config', async () => ({ accessRequired: env.accessCodes.length > 0 || process.env.NODE_ENV === 'production', feedbackUrl: env.feedbackUrl }));
+  app.get('/api/config', async () => ({ accessRequired: env.accessCodes.length > 0 || process.env.NODE_ENV === 'production', feedbackUrl: env.feedbackUrl, demoMode: env.demoMode }));
   app.post('/api/access', async req => {
     const { code } = z.object({ code: z.string().min(1).max(256) }).parse(req.body);
     accessCode({ headers: { 'x-access-code': code } });

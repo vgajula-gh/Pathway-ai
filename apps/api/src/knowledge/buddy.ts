@@ -1,3 +1,5 @@
+import {knowledgeScope,MY_OPPORTUNITIES} from './scope.js';
+import {structuredFacts,requestedFacts,structuredExcerpt} from './facts.js';
 import { prisma } from '../lib/db.js';
 import { HttpError } from '../lib/errors.js';
 import { requireLLM } from '../agent/llm/index.js';
@@ -15,13 +17,14 @@ export async function runProgramBuddy(
   opportunityId: string,
   conversationId?: string,
 ) {
+  const programs=await knowledgeScope(studentId,opportunityId);
+  if(!programs.length)throw new HttpError(422,'Add a program to your picks or Interested list first.');
   if (!(await initializeKnowledge()))
     throw new HttpError(
       503,
       'Program questions are unavailable right now. You can still explore programs and open their official sites.',
     );
-  const opportunity = await prisma.opportunity.findUnique({ where: { id: opportunityId } });
-  if (!opportunity) throw new HttpError(404, 'Program not found');
+  const opportunity=programs[0],cross=opportunityId===MY_OPPORTUNITIES;
   const found = conversationId
     ? await prisma.conversation.findFirst({ where: { id: conversationId, studentId, opportunityId } })
     : null;
@@ -29,7 +32,7 @@ export async function runProgramBuddy(
   const convo =
     found ||
     (await prisma.conversation.create({
-      data: { studentId, opportunityId, title: `About ${opportunity.name}`.slice(0, 60) },
+      data: { studentId, opportunityId, title:cross?'My opportunities':`About ${opportunity.name}`.slice(0,60) },
     }));
   const history = await prisma.chatMessage.findMany({
     where: { studentId, conversationId: convo.id },
@@ -42,7 +45,7 @@ export async function runProgramBuddy(
   const steps: WorkflowStep[] = [];
   const draft = programAnswerChain(
     requireLLM(),
-    opportunity,
+    {id:opportunityId,name:cross?programs.map(p=>p.name).join('; '):opportunity.name},
     history.reverse().map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content })),
     text,
   );
@@ -51,7 +54,7 @@ export async function runProgramBuddy(
       draft,
       async retrieve(query) {
         try {
-          return await searchKnowledge(opportunityId, query);
+          return await searchKnowledge(studentId,query,opportunityId);
         } catch {
           pauseKnowledge();
           throw new HttpError(
@@ -66,29 +69,30 @@ export async function runProgramBuddy(
   const result = await privateWorkflow(() =>
     graph.invoke({ query: text.slice(0, 1000) }, workflowConfig('program-question', 20)),
   );
-  const supported = result.supported;
-  const citations = supported.map((c, i) => ({
-    number: i + 1,
-    chunkId: c.passage.id,
-    sourceUrl: c.passage.sourceUrl,
-    pageTitle: c.passage.pageTitle,
-    checkedAt: c.passage.checkedAt.toISOString(),
-  }));
-  const { ctx } = await loadContext(studentId),
-    fit = eligibility(toOpp(opportunity), ctx);
-  const reply = supported.length
-    ? supported.map((c, i) => `“${c.quote}” [${i + 1}]`).join('\n\n')
-    : `The official pages don’t say. Please check ${opportunity.url}`;
-  const eligibilityNote =
-    fit.status === 'not_eligible'
-      ? fit.reasons.join('; ')
-      : fit.status === 'check'
-        ? `Please confirm: ${fit.checks.join('; ')}`
-        : 'Your grade fits the listed grade range. Other program requirements may apply.';
+  // Recompute membership on every turn, including just before returning passages.
+  const current=await knowledgeScope(studentId,opportunityId),{ctx}=await loadContext(studentId);
+  if(!current.length)throw new HttpError(422,'Your opportunity list changed. Open Explore and choose a program again.');
+  const supported=result.supported.filter(c=>current.some(p=>p.id===c.passage.opportunityId)&&!structuredExcerpt(c.quote));
+  const citations:{number:number;chunkId?:string;opportunityId:string;sourceUrl:string;pageTitle:string;checkedAt:string}[]=[];
+  const requested=requestedFacts(text);
+  const reply=current.map(o=>{
+    const claims=supported.filter(c=>c.passage.opportunityId===o.id),facts=structuredFacts(o,ctx);
+    const lines=requested.map(key=>{
+      const fact=facts[key];let citation='';
+      if(fact.sourceUrl&&o.sourceCheckedAt){const number=citations.length+1;citations.push({number,opportunityId:o.id,sourceUrl:fact.sourceUrl,pageTitle:o.name,checkedAt:o.sourceCheckedAt.toISOString()});citation=` [${number}]`;}
+      return `${key[0].toUpperCase()+key.slice(1)}: ${fact.value}${citation}`;
+    });
+    for(const c of claims){const number=citations.length+1;citations.push({number,chunkId:c.passage.id,opportunityId:o.id,sourceUrl:c.passage.sourceUrl,pageTitle:c.passage.pageTitle,checkedAt:c.passage.checkedAt.toISOString()});lines.push(`“${c.quote}” [${number}]`);}
+    if(!claims.length)lines.push(`The official pages don’t say. Please check ${o.url}`);
+    return `${cross?o.name+'\n':''}${lines.join('\n\n')}`;
+  }).join('\n\n');
+  const eligibilityNote=cross?'Eligibility is checked separately for each program.':structuredFacts(current[0],ctx).eligibility.value;
+  const interested=await prisma.savedOpportunity.findMany({where:{studentId,status:{not:'dismissed'}}});
   const meta = {
     citations,
     workflow: { engine: 'langgraph', steps },
-    opportunityId,
+    ...(cross?{scope:MY_OPPORTUNITIES}:{opportunityId}),
+    programs:current.map(o=>({id:o.id,name:o.name,canAddRequirements:interested.some(s=>s.opportunityId===o.id)})),
     eligibilityNote,
     toolEvents: [
       {

@@ -20,7 +20,7 @@ export const knowledgeIssue = (code: KnowledgeIssue['code'], settings: string[] 
   ({ code, message: messages[code], settings });
 
 /** Only setting names and fixed messages leave the server, never values or SDK errors. */
-export function configurationIssue(values: NodeJS.ProcessEnv, aiDisabled: boolean): KnowledgeIssue | null {
+export function searchConfigurationIssue(values: NodeJS.ProcessEnv, aiDisabled: boolean): KnowledgeIssue | null {
   if (values.DISCOVERY_ENABLED !== 'true') return knowledgeIssue('discovery_disabled', ['DISCOVERY_ENABLED']);
   if (aiDisabled || values.AI_DISABLED === 'true')
     return knowledgeIssue('ai_unavailable', ['AI_DISABLED', 'LLM_PROVIDER']);
@@ -28,6 +28,10 @@ export function configurationIssue(values: NodeJS.ProcessEnv, aiDisabled: boolea
     : values.SEARCH_PROVIDER === 'anthropic' ? 'ANTHROPIC_API_KEY' : null;
   if (!searchKey) return knowledgeIssue('search_not_configured', ['SEARCH_PROVIDER']);
   if (!values[searchKey]) return knowledgeIssue('search_not_configured', [searchKey]);
+  return null;
+}
+export function knowledgeConfigurationIssue(values:NodeJS.ProcessEnv,aiDisabled:boolean):KnowledgeIssue|null {
+  if(aiDisabled||values.AI_DISABLED==='true')return knowledgeIssue('ai_unavailable',['AI_DISABLED','LLM_PROVIDER']);
 
   const embeddingKeys: Record<string, string | null> = {
     openai: 'OPENAI_API_KEY', pinecone: 'PINECONE_API_KEY', voyage: 'VOYAGE_API_KEY', ollama: null,
@@ -39,7 +43,7 @@ export function configurationIssue(values: NodeJS.ProcessEnv, aiDisabled: boolea
   if (embeddingKey && !values[embeddingKey]) return knowledgeIssue('embedding_not_configured', [embeddingKey]);
 
   const kind = values.DATABASE_URL?.startsWith('file:') ? 'memory'
-    : values.VECTOR_STORE || (values.NODE_ENV === 'production' ? 'pinecone' : 'memory');
+    : values.VECTOR_STORE || 'memory';
   if (!['memory', 'pinecone', 'pgvector'].includes(kind))
     return knowledgeIssue('vector_not_configured', ['VECTOR_STORE']);
   if (kind === 'pinecone') {
@@ -47,6 +51,9 @@ export function configurationIssue(values: NodeJS.ProcessEnv, aiDisabled: boolea
     if (missing.length) return knowledgeIssue('vector_not_configured', missing);
   }
   return null;
+}
+export function configurationIssue(values:NodeJS.ProcessEnv,aiDisabled:boolean):KnowledgeIssue|null {
+  return searchConfigurationIssue(values,aiDisabled)||knowledgeConfigurationIssue(values,aiDisabled);
 }
 
 export class KnowledgeSetupError extends Error {

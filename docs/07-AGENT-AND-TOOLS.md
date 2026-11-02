@@ -10,7 +10,7 @@
 | check_plan | sessions[] | {ok[], problems[]} | must be used before proposing calendar blocks |
 | search_opportunities | query? | results with factors + verified flag; excluded with reasons | hard exclusions first |
 | get_learning_resources | topics[] | curated resources | only these URLs may be recommended |
-| search_knowledge | opportunityId, query (≤1000 chars) | up to five official passages with sourceUrl, pageTitle, checkedAt | vector filter and database scope checked; max three searches/turn |
+| search_knowledge | query (≤1000 chars), either opportunityId or scope=my_opportunities | grouped program facts from SQL + up to five official passages with citations | server-owned picks + Interested scope; reject client ID lists; max three searches/turn |
 | propose_actions | summary, rationale, actions[] | proposalId, status | **only write path**; zod-validated; calendar revalidated |
 
 ## Action types
@@ -41,16 +41,15 @@ The HTTP boundary reserves persistent AI usage before Buddy, extraction, coach, 
 Hosted `gpt-5-nano` (including dated snapshots) uses low reasoning effort and 4,096 completion tokens of additional headroom for each model call, because reasoning and visible output share the completion allowance. This is a maximum, not a fixed charge. Other models and Ollama keep their existing limits. Incomplete or empty responses return a friendly 502 rather than Buddy's generic empty-answer fallback; truncated tool calls are not executed. No automatic retry is added. Server diagnostics include only model, finish reason and reasoning-token count, never student text or credentials. Live provider quality/availability still needs deployment verification.
 
 
-## Program-scoped retrieval and checklist proposals
+## Student-scoped retrieval and checklist proposals
 
-Ask about this program passes a real opportunityId in the API request and persists it on the conversation. Its LangGraph workflow invokes a LangChain retriever bound to that program; plain text cannot switch scope and the graph exposes no data-writing tool. An initial retrieval plus at most two further searches supports rephrasing, with three model rounds maximum. Public page text/history are untrusted data with no authority to execute actions. Eligibility/cost come from code, with unknown details labeled for confirmation.
+Ask about this program supplies one opportunityId. Ask about my opportunities supplies scope=my_opportunities. The server derives membership from active StudentPick + non-dismissed Interested records, excludes explicit feedback, and rechecks on every follow-up and before returning claims. A model query cannot change that set. search_knowledge is read-only, rejects arbitrary ID lists, applies a vector ID filter then SQL snapshot/model/store checks, keyword reranks ten dense matches to five passages, and groups results by program.
 
-The LangChain prompt/LLM bridge returns `{claims:[{chunkId,quote}], nextQuery?: string|null}`. LangGraph validates claims and may retrieve again for a distinct nextQuery, within three retrieval/model rounds; a repeated query or empty initial result ends the graph. The verifier accepts only exact excerpts (10–600 characters) present in returned passages, up to 120 quoted words; unsupported IDs, paraphrases, added claims and invalid JSON are removed. Each displayed excerpt has a clickable source and check date. An empty supported answer says the official pages do not say and supplies the official link. This deliberately favors traceable excerpts over unsupported fluent answers.
+LangGraph retrieves → drafts JSON → verifies exact excerpts → optionally refines. At most three retrieval/draft rounds, no repeated normalized query and no automatic provider retries. Program text/history are untrusted data, never instructions. Deadline, cost, eligibility and status are rendered from database/rules; structured assertions in model excerpts are omitted. The verifier accepts only 10–600 character exact quotes from returned passages, with a 120-word quote budget. Every accepted excerpt has a source/check date. Unsupported information gets the official-page no-answer message and link; cross-program answers are grouped by program name. General Buddy’s knowledge-tool response is also rendered from server-checked results rather than unchecked model prose.
 
-The explicit checklist button builds a deterministic source-backed proposal. Its action carries checklist titles/source URLs, optional deadline and an evidence hash. Creation and transactional execution both require that student's existing Interested application and unchanged source evidence. Approval merges new titles without resetting completed ones, stores citations and a separate cited deadline, and preserves student dates/notes. It reports actual VERIFIED/FAILED status and audits the outcome. It does not register or submit an application.
+Ask remains disabled with Preparing details until the selected source generation is ingested. SQL text/chunks are shared once per public program; store/model/hash changes invalidate freshness. No student names, IDs, profiles or chat content enter Pinecone.
 
-Shared discovery and source re-check attempts also reserve one request against the existing **AI_MONTHLY_LIMIT** overall counter. They never consume a student's daily allowance. Their separate discovery/re-check run budgets are additional limits; an exhausted overall AI cap blocks new paid background attempts too.
-
+Checklist buttons build source-backed proposals carrying titles/URLs, cited deadline and evidence hash. Scope is checked on creation; transactional execution requires the student’s Interested record and unchanged evidence, merges steps/citations, preserves completed work, notes and student dates, and reports VERIFIED/FAILED. Nothing registers or submits an application. Shared search/recheck/preparation attempts reserve the overall monthly AI allowance; interactive questions also use the student’s daily allowance.
 
 ## Framework orchestration and local workflow records
 

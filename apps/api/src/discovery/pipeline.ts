@@ -42,7 +42,7 @@ async function storeCandidate(data: VerifiedOpportunity, pages: Page[], group: G
     await tx.opportunity.upsert({
       where: { id },
       create: { id, ...data, discoveredFor, source: 'discovery' },
-      update: { ...data, discoveredFor },
+      update: { ...data, discoveredFor, source:'discovery' },
     });
     await tx.sourcePage.deleteMany({
       where: { opportunityId: id, sourceUrl: { notIn: pages.map((p) => p.sourceUrl) } },
@@ -87,7 +87,6 @@ export async function discover(
       ingest: deps?.ingest,
     },
     budget,
-    (step) => budget.workflow.push(step),
   );
   const result = await privateWorkflow(() =>
     graph.invoke({ group, buckets }, workflowConfig('opportunity-discovery')),

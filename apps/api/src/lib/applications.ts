@@ -6,7 +6,11 @@ import { HttpError } from './auth.js';
 export async function saveApplication(db: Prisma.TransactionClient, studentId: string, opportunityId: string) {
   const opportunity = await db.opportunity.findUnique({ where: { id: opportunityId } });
   if (!opportunity) throw new HttpError(404, 'Opportunity not found');
-  return db.savedOpportunity.upsert({ where: { studentId_opportunityId: { studentId, opportunityId } }, update: {}, create: { studentId, opportunityId, status: 'interested', citedDeadline: opportunity.deadline && (opportunity.sourceCheckedAt || j<Record<string,unknown>>(opportunity.evidence,{}).deadline) ? opportunity.deadline : null, citations:JSON.stringify(j<Record<string,{sourceUrl:string}>>(opportunity.evidence,{}).deadline ? {deadline:j<Record<string,{sourceUrl:string}>>(opportunity.evidence,{}).deadline.sourceUrl}:{}), checklist: JSON.stringify(initialChecklist(j(opportunity.checks, []))) } });
+  const evidence=j<Record<string,{sourceUrl:string;quote:string}>>(opportunity.evidence,{});
+  const requirements=evidence.requirements?j<string[]>(opportunity.requirements,[]).filter(t=>evidence.requirements.quote.includes(t)):[];
+  const citations={...Object.fromEntries(requirements.map(t=>[t,evidence.requirements.sourceUrl])),...(evidence.deadline?{deadline:evidence.deadline.sourceUrl}:{})};
+  return db.savedOpportunity.upsert({where:{studentId_opportunityId:{studentId,opportunityId}},update:{},create:{studentId,opportunityId,status:'interested',citedDeadline:opportunity.deadline&&evidence.deadline?opportunity.deadline:null,citations:JSON.stringify(citations),checklist:JSON.stringify(initialChecklist(requirements.length?requirements:j(opportunity.checks,[])))}});
+
 }
 export async function applicationsFor(studentId: string, today: string) {
   const [saved, opps] = await Promise.all([prisma.savedOpportunity.findMany({ where: { studentId, status: { not: 'dismissed' } } }), prisma.opportunity.findMany()]);

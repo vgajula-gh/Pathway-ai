@@ -20,7 +20,15 @@ components:
       properties:
         available: { type: boolean }
         remaining: { type: integer, minimum: 0 }
-        nextAvailableAt: { type: string, format: date-time }
+        nextAvailableAt: { type: string, format: date-time, description: Rolling successful-search allowance resets here; failures are not debited }
+    SearchProgress:
+      type: object
+      properties:
+        phase: { enum: [idle, queued, searching, reading_sources, checking_facts, indexing, cached, complete, empty, failed, limited, cancelled] }
+        found: { type: integer, minimum: 0 }
+        detail: { type: [string, 'null'] }
+        startedAt: { type: [string, 'null'], format: date-time }
+        finishedAt: { type: [string, 'null'], format: date-time }
     DiscoveryUnavailable:
       type: [object, 'null']
       description: Safe readiness explanation; contains setting names only, never values or raw provider errors
@@ -40,12 +48,15 @@ components:
         limited: { type: boolean }
         error: { type: [string, 'null'] }
         lastCheckedAt: { type: [string, 'null'], format: date-time }
+        search: { $ref: '#/components/schemas/SearchProgress' }
+        resultIds: { type: array, items: { type: string } }
         refresh: { $ref: '#/components/schemas/RefreshAvailability' }
     KnowledgeCitation:
       type: object
       properties:
         number: { type: integer }
-        chunkId: { type: string }
+        chunkId: { type: string, description: Present for passage excerpts; structured SQL facts may omit it }
+        opportunityId: { type: string }
         sourceUrl: { type: string, format: uri }
         pageTitle: { type: string }
         checkedAt: { type: string, format: date-time }
@@ -57,12 +68,19 @@ components:
         excluded: { type: array, items: { type: object } }
         dismissed: { type: integer }
         sampleData: { type: boolean }
+        interestedCount: { type: integer, minimum: 0 }
+        canAskAll: { type: boolean }
+        preparing: { type: boolean }
+        knowledgeStates: { type: object, additionalProperties: { enum: [ready, preparing, unavailable] } }
+        knowledgeUnavailable: { $ref: '#/components/schemas/DiscoveryUnavailable' }
         discoveryEnabled: { type: boolean }
         unavailable: { $ref: '#/components/schemas/DiscoveryUnavailable' }
         finding: { type: boolean }
         limited: { type: boolean }
         error: { type: [string, 'null'] }
         lastCheckedAt: { type: [string, 'null'], format: date-time }
+        search: { $ref: '#/components/schemas/SearchProgress' }
+        resultIds: { type: array, items: { type: string } }
         refresh: { $ref: '#/components/schemas/RefreshAvailability' }
     AccountCredentials:
       type: object
@@ -123,12 +141,18 @@ components:
         rank: { type: integer }
         isStretch: { type: boolean }
         canAsk: { type: boolean }
+        knowledgeStatus: { enum: [ready, preparing, unavailable] }
+        opportunityType: { enum: [competition, program, internship, scholarship, volunteering, club] }
+        applicationStatus: { enum: [open, rolling, closed, unknown] }
+        applicationStatusCheckedAt: { type: [string, 'null'], format: date-time }
+        activityDate: { type: [string, 'null'], format: date }
+        countdown: { type: [object, 'null'], properties: { days: { type: integer }, label: { type: string } } }
         costType: { enum: [free, paid, unknown] }
         costAmount: { type: [string, 'null'] }
         costLabel: { type: string }
         financialAidNote: { type: [string, 'null'] }
         feeFlag: { type: boolean }
-        verificationStatus: { enum: [verified, new_find, stale, expired] }
+        verificationStatus: { description: Production picks must be verified and active; samples are opt-in, enum: [verified, new_find, stale, expired] }
         verifiedAt: { type: [string, 'null'], format: date-time }
         sourceCheckedAt: { type: [string, 'null'], format: date-time }
         verified: { type: boolean }
@@ -269,7 +293,7 @@ paths:
     get:
       security: []
       responses:
-        '200': { description: 'Public runtime config: accessRequired boolean and feedbackUrl string or null; no access codes' }
+        '200': { description: 'Public runtime config: accessRequired boolean, feedbackUrl string or null, demoMode boolean (false by default); no access codes' }
   /api/access:
     post:
       security: []
@@ -306,7 +330,7 @@ paths:
       responses: { '200': { description: OK } }
     delete: { summary: Delete all student data, responses: { '204': { description: Deleted } } }
   /api/me/export: { get: { summary: Export all data, responses: { '200': { description: JSON export } } } }
-  /api/today: { get: { summary: Today snapshot, responses: { '200': { description: OK } } } }
+  /api/today: { get: { summary: Today snapshot (glance then next step then spark), responses: { '200': { description: 'Student-local greetingPart/date, rings, timeline, dueSoon and dueSoonEvents within seven days, pending approvals, nullable nextAction, word/brief' } } } }
   /api/today/insight: { post: { summary: AI brief (cached daily), responses: { '200': { description: OK }, '403': { description: AI consent off }, '503': { description: AI unavailable } } } }
   /api/events:
     get: { summary: Occurrences in range, parameters: [{ name: from, in: query, schema: { type: string } }, { name: to, in: query, schema: { type: string } }], responses: { '200': { description: OK } } }
@@ -331,11 +355,31 @@ paths:
     post: { summary: Create prep proposal, responses: { '200': { description: Proposal, content: { application/json: { schema: { $ref: '#/components/schemas/Proposal' } } } } } }
   /api/opportunities/refresh:
     post:
-      summary: Use one rolling-cycle manual allowance and queue shared discovery only for short buckets
+      summary: Queue an explicit new web search within the successful-search allowance
+      description: Failed/limited/cancelled searches do not consume the manual allowance. Global paid attempts remain counted. Same pending requests coalesce; a full current shortlist does not skip explicit web search.
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: false }
       responses:
-        '200': { description: Catalog picks rebuilt; returns refresh and queue status }
-        '429': { description: Allowance reached with next available date }
-        '503': { description: Optional discovery configuration unavailable or student AI consent off }
+        '202': { description: Request queued or coalesced; requestId/requested plus current discovery/search/refresh status }
+        '403': { description: Student AI consent off }
+        '422': { description: Add interests first or invalid input }
+        '429': { description: Successful manual allowance or overall monthly attempt cap reached }
+        '503': { description: Search configuration unavailable }
+  /api/discovery/run:
+    post:
+      summary: Process bounded work for the signed-in student’s persisted groups and current program set
+      description: No client-selected group keys or program allowlists. Can prepare existing program details when live search is off and knowledge is configured.
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: false }
+      responses:
+        '200': { description: skipped true if locked; otherwise result discovered/prepared counts }
+        '403': { description: Student AI consent off }
+        '422': { description: Unexpected body fields }
+        '503': { description: Neither search nor knowledge configuration available }
   /api/discovery/status:
     get:
       summary: Current student discovery readiness, queue, safe errors and refresh availability
@@ -348,13 +392,14 @@ paths:
       summary: Propose adding source-backed checklist steps and deadline to an existing Interested item
       responses:
         '200': { description: Awaiting approval; no checklist mutation yet, content: { application/json: { schema: { $ref: '#/components/schemas/Proposal' } } } }
-        '422': { description: Missing saved application or current evidenced requirements/deadline }
+        '403': { description: Program outside the student’s current set }
+        '422': { description: Missing Interested application or current evidenced requirements/deadline }
   /internal/jobs/run:
     post:
       security: [{ jobsSecret: [] }]
       summary: Owner-only bounded discovery, source recheck and automatic-refresh jobs
       responses:
-        '200': { description: skipped true if locked; otherwise result counts }
+        '200': { description: skipped true if locked; otherwise result expired/refreshed/discovered/prepared counts }
         '401': { description: Invalid or missing bearer secret }
         '503': { description: JOBS_SECRET missing or too short on the server }
   /api/proposals: { get: { summary: List proposals, responses: { '200': { description: OK } } } }
@@ -371,7 +416,7 @@ paths:
   /api/portfolio: { get: { summary: Portfolio, responses: { '200': { description: OK } } }, post: { summary: Capture experience, responses: { '201': { description: Created } } } }
   /api/buddy/messages:
     post:
-      summary: Send a general or program-scoped Buddy message
+      summary: Send a general, single-program or my_opportunities Buddy message
       requestBody:
         required: true
         content:
@@ -382,7 +427,10 @@ paths:
               properties:
                 text: { type: string, minLength: 1, maxLength: 4000 }
                 conversationId: { type: string, maxLength: 200 }
-                opportunityId: { type: string, maxLength: 200, description: Starts a program-only conversation; subsequent requests inherit saved scope }
+                opportunityId: { type: string, maxLength: 200, description: Must belong to current server-owned picks or Interested set; mutually exclusive with scope }
+                scope: { const: my_opportunities, description: Current server-owned program set; recomputed on every turn }
+              additionalProperties: false
+              not: { required: [opportunityId, scope] }
       responses:
         '200':
           description: Reply, conversationId, toolEvents and proposalIds; scoped replies also include source citations and rules-engine eligibilityNote
@@ -394,6 +442,10 @@ paths:
                   reply: { type: string }
                   conversationId: { type: string }
                   opportunityId: { type: string }
+                  scope: { const: my_opportunities }
+                  programs:
+                    type: array
+                    items: { type: object, properties: { id: { type: string }, name: { type: string }, canAddRequirements: { type: boolean } } }
                   eligibilityNote: { type: string }
                   workflow:
                     type: object
@@ -409,7 +461,7 @@ paths:
                             status: { enum: [completed, skipped, failed] }
                             reason: { enum: [run_limit, source_unavailable, unconfirmed_facts, storage_unavailable, index_unavailable, provider_unavailable] }
                   citations: { type: array, items: { $ref: '#/components/schemas/KnowledgeCitation' } }
-        '403': { description: Student AI consent off }
+        '403': { description: Student AI consent off or program outside the current server-owned set }
         '429': { description: Student daily or overall monthly AI request limit reached }
         '503': { description: Optional AI or program knowledge unavailable }
   /api/extract: { post: { summary: Extract candidate events (not saved), responses: { '200': { description: Candidates } } } }

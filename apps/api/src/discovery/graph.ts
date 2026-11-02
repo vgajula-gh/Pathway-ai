@@ -6,7 +6,8 @@ import type { SearchProvider } from './search/index.js';
 import { CAPS, RunBudget } from './config.js';
 import { discoveryQuery } from './groups.js';
 import type { verifyOpportunity } from '../domain/opportunity-verification.js';
-import { noObserver, StepObserver } from '../workflows/privacy.js';
+import { noObserver, StepObserver, WorkflowStep } from '../workflows/privacy.js';
+import { failureInfo, FailureStage, DiscoveryFailure } from './failures.js';
 
 export type VerifiedOpportunity = ReturnType<typeof verifyOpportunity>;
 export type DiscoveryNodes = {
@@ -39,12 +40,19 @@ export function createDiscoveryGraph(
   budget: RunBudget,
   observe: StepObserver = noObserver,
 ) {
+  const record = async (step: WorkflowStep) => {
+    budget.workflow.push(step);
+    budget.phase = step.node === 'search_candidates' || step.node === 'skip_candidate' ? 'reading_sources'
+      : ['fetch_official_pages', 'extract_facts'].includes(step.node) ? 'checking_facts' : 'indexing';
+    observe(step);
+    await budget.onStep?.();
+  };
   const guarded =
     (node: string, run: (s: Snapshot) => Promise<Update> | Update) =>
     async (s: Snapshot): Promise<Update> => {
       try {
         const update = await run(s);
-        observe({ node, status: 'completed' });
+        await record({ node, status: 'completed' });
         return update;
       } catch (error) {
         const reason: NonNullable<import('../workflows/privacy.js').WorkflowStep['reason']> = /limit/i.test(
@@ -58,7 +66,10 @@ export function createDiscoveryGraph(
               : node === 'ingest_knowledge'
                 ? 'index_unavailable'
                 : 'unconfirmed_facts';
-        observe({ node, status: 'failed', reason });
+        const stage: FailureStage = node === 'fetch_official_pages' ? 'fetch' : node === 'extract_facts' ? 'extract'
+          : node === 'verify_facts' ? 'verify' : node === 'store_catalog' ? 'store' : 'index';
+        budget.failures.push(failureInfo(error, stage));
+        await record({ node, status: 'failed', reason });
         return { failed: true };
       }
     };
@@ -81,10 +92,11 @@ export function createDiscoveryGraph(
           budget.usage.tokens += result.tokens;
           result.urls.slice(0, CAPS.candidates).forEach((url) => urls.add(url));
         }
-        observe({ node: 'search_candidates', status: 'completed' });
+        await record({ node: 'search_candidates', status: 'completed' });
         return { urls: [...urls].slice(0, CAPS.candidates) };
       } catch (error) {
-        observe({ node: 'search_candidates', status: 'failed' });
+        budget.failures.push(failureInfo(error, 'search'));
+        await record({ node: 'search_candidates', status: 'failed' });
         throw error;
       }
     })
@@ -122,7 +134,11 @@ export function createDiscoveryGraph(
     )
     .addNode(
       'verify_facts',
-      guarded('verify_facts', (s) => ({ verified: nodes.verify(s.facts!, s.pages) })),
+      guarded('verify_facts', (s) => {
+        const verified=nodes.verify(s.facts!,s.pages);
+        if(verified.verificationStatus!=='verified')throw new DiscoveryFailure({stage:'verify',code:'missing_evidence'});
+        return {verified};
+      }),
     )
     .addNode(
       'store_catalog',
@@ -136,8 +152,8 @@ export function createDiscoveryGraph(
       }),
     )
     .addNode('record_saved', (s) => ({ saved: [...s.saved, s.savedId!] }))
-    .addNode('skip_candidate', () => {
-      observe({ node: 'skip_candidate', status: 'skipped' });
+    .addNode('skip_candidate', async () => {
+      await record({ node: 'skip_candidate', status: 'skipped' });
       return {};
     })
     .addEdge(START, 'search_candidates')
@@ -159,10 +175,8 @@ export function createDiscoveryGraph(
       'skip_candidate',
       'ingest_knowledge',
     ])
-    .addConditionalEdges('ingest_knowledge', (s) => (s.failed ? 'skip_candidate' : 'record_saved'), [
-      'skip_candidate',
-      'record_saved',
-    ])
+    // Source-backed catalog results remain useful when optional vector ingestion fails.
+    .addEdge('ingest_knowledge', 'record_saved')
     .addConditionalEdges('record_saved', next, ['select_candidate', END])
     .addConditionalEdges('skip_candidate', next, ['select_candidate', END])
     .compile({ name: 'pathway_opportunity_discovery' });

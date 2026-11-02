@@ -1,3 +1,6 @@
+import {withJobLock} from '../lib/job-lock.js';
+import {j} from '../lib/db.js';
+import {knowledgeScope} from './scope.js';
 import { createHash } from 'node:crypto';
 import { prisma } from '../lib/db.js';
 import { RunBudget } from '../discovery/config.js';
@@ -5,8 +8,8 @@ import { splitOfficialPages } from './documents.js';
 import { ProgramRetriever, passageFromDocument } from './retriever.js';
 import { privateWorkflow, workflowConfig } from '../workflows/privacy.js';
 import { initializeKnowledge, KnowledgeRuntime } from './runtime.js';
-import { validVector, Passage, embeddingIdentity } from './contracts.js';
-export async function ingestKnowledge(opportunityId: string, budget: RunBudget, runtime?: KnowledgeRuntime) {
+import { validVector, Passage, embeddingIdentity, vectorStoreIdentity } from './contracts.js';
+async function ingestUnlocked(opportunityId: string, budget: RunBudget, runtime?: KnowledgeRuntime) {
   const rt = runtime || (await initializeKnowledge());
   if (!rt) return;
   const pages = await prisma.sourcePage.findMany({ where: { opportunityId } });
@@ -23,7 +26,7 @@ export async function ingestKnowledge(opportunityId: string, budget: RunBudget, 
     if (
       old.length &&
       old.every(
-        (c) => c.contentHash === page.contentHash && c.embeddingModel === embeddingIdentity(rt.embedder),
+        (c) => c.contentHash === page.contentHash && c.embeddingModel === embeddingIdentity(rt.embedder) && c.vectorStoreKey===vectorStoreIdentity(rt.store),
       )
     ) {
       await prisma.knowledgeChunk.updateMany({
@@ -48,7 +51,7 @@ export async function ingestKnowledge(opportunityId: string, budget: RunBudget, 
         'chunk-' +
         createHash('sha256')
           .update(
-            `${opportunityId}|${page.sourceUrl}|${page.contentHash}|${embeddingIdentity(rt.embedder)}|${i}`,
+            `${opportunityId}|${page.sourceUrl}|${page.contentHash}|${embeddingIdentity(rt.embedder)}|${vectorStoreIdentity(rt.store)}|${i}`,
           )
           .digest('hex'),
       opportunityId,
@@ -58,6 +61,7 @@ export async function ingestKnowledge(opportunityId: string, budget: RunBudget, 
       checkedAt: page.checkedAt,
       contentHash: page.contentHash,
       embeddingModel: embeddingIdentity(rt.embedder),
+      vectorStoreKey:vectorStoreIdentity(rt.store),
       localEmbedding: rt.store.kind === 'memory' ? JSON.stringify(vectors[i]) : '[]',
     }));
     budget.take('vectorUpserts', chunks.length);
@@ -82,11 +86,26 @@ export async function ingestKnowledge(opportunityId: string, budget: RunBudget, 
     await rt.store.delete(old.map((c) => c.id));
   }
 }
+export async function ingestKnowledge(opportunityId:string,budget:RunBudget,runtime?:KnowledgeRuntime) {
+  return withJobLock('knowledge:'+opportunityId,()=>ingestUnlocked(opportunityId,budget,runtime));
+}
 export async function reconcileVectors(runtime?: KnowledgeRuntime) {
   const rt = runtime || (await initializeKnowledge());
   if (!rt) return 0;
+  // Expired public text is retired only when no student still references it.
+  const expired=await prisma.opportunity.findMany({where:{verificationStatus:'expired'},select:{id:true}});
+  let retired=0;
+  for(const o of expired) {
+    const chunks=await prisma.$transaction(async tx=>{
+      const [picks,saved,goals,proposals]=await Promise.all([tx.studentPick.count({where:{opportunityId:o.id}}),tx.savedOpportunity.count({where:{opportunityId:o.id,status:{not:'dismissed'}}}),tx.goal.count({where:{opportunityId:o.id}}),tx.agentAction.findMany({where:{status:'AWAITING_APPROVAL'},select:{actions:true}})]);
+      if(picks||saved||goals||proposals.some(p=>j<{opportunityId?:string}[]>(p.actions,[]).some(a=>a.opportunityId===o.id)))return [];
+      const chunks=await tx.knowledgeChunk.findMany({where:{opportunityId:o.id},select:{id:true}});
+      await tx.knowledgeChunk.deleteMany({where:{opportunityId:o.id}});return chunks;
+    });
+    await rt.store.delete(chunks.map(c=>c.id));retired+=chunks.length;
+  }
   let cursor: string | undefined,
-    removed = 0;
+    removed = retired;
   for (let page = 0; page < 100; page++) {
     const list = await rt.store.list(cursor);
     const known = await prisma.knowledgeChunk.findMany({
@@ -101,16 +120,9 @@ export async function reconcileVectors(runtime?: KnowledgeRuntime) {
   }
   return removed;
 }
-export async function searchKnowledge(
-  opportunityId: string,
-  query: string,
-  runtime?: KnowledgeRuntime,
-): Promise<Passage[]> {
-  const rt = runtime || (await initializeKnowledge());
-  if (!rt) return [];
-  return privateWorkflow(async () =>
-    (
-      await new ProgramRetriever(opportunityId, rt).invoke(query, workflowConfig('retrieve-official-program'))
-    ).map(passageFromDocument),
-  );
+export async function searchKnowledge(studentId:string,query:string,scope:string,runtime?:KnowledgeRuntime):Promise<Passage[]> {
+  const programs=await knowledgeScope(studentId,scope);
+  if(!programs.length)return [];
+  const rt=runtime||await initializeKnowledge();if(!rt)return [];
+  return privateWorkflow(async()=>(await new ProgramRetriever(programs.map(p=>p.id),rt).invoke(query,workflowConfig('retrieve-official-program'))).map(passageFromDocument));
 }

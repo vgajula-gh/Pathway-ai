@@ -1,3 +1,4 @@
+import {knowledgeScope} from '../knowledge/scope.js';
 import { z } from 'zod';
 import { reserveAI } from '../lib/ai-limits.js';
 import { FastifyInstance } from 'fastify';
@@ -29,10 +30,12 @@ export default async function routes(app: FastifyInstance) {
   });
   app.post('/api/buddy/messages', async req => {
     const s = await requireStudent(req); gate(s);
-    const {text,conversationId,opportunityId}=z.object({text:z.string().min(1).max(4000),conversationId:z.string().max(200).optional(),opportunityId:z.string().max(200).optional()}).parse(req.body);
+    const {text,conversationId,opportunityId,scope}=z.object({text:z.string().min(1).max(4000),conversationId:z.string().max(200).optional(),opportunityId:z.string().max(200).optional(),scope:z.literal('my_opportunities').optional()}).strict().refine(b=>!(b.opportunityId&&b.scope)).parse(req.body);
+    if(conversationId){const conversation=await prisma.conversation.findFirst({where:{id:conversationId,studentId:s.id}});if(!conversation)throw new HttpError(404,'Conversation not found');if(conversation.opportunityId)await knowledgeScope(s.id,conversation.opportunityId);}
+    if(scope||opportunityId)await knowledgeScope(s.id,scope||opportunityId!);
     if (!text?.trim()) throw new HttpError(422, 'Empty message');
     if (getLLM()) await reserveAI(s.id);
-    return runBuddy(s.id, text.trim().slice(0, 4000), conversationId, opportunityId);
+    return runBuddy(s.id, text.trim().slice(0, 4000), conversationId, scope||opportunityId);
   });
 
   // Returns CANDIDATE events only. Nothing is saved until the student confirms via POST /api/events/bulk.

@@ -1,5 +1,6 @@
 import type { Extracted } from '../discovery/extraction.js';
 import type { Page } from '../discovery/pages.js';
+import { explicitApplicationStatus, opportunityKind } from './opportunity-active.js';
 const normalized = (s: string) => s.normalize('NFKC').toLowerCase().replace(/\s+/g, ' ').trim();
 export function factEvidence(raw: Extracted, pages: Page[], field: keyof Extracted) {
   const e = raw.evidence[field];
@@ -111,17 +112,31 @@ export function verifyOpportunity(
   const feeFlag = !trusted && (costType === 'unknown' || amount >= 500);
   const format = value('format'),
     region = value('region');
+  const statusEvidence=factEvidence(raw,pages,'applicationStatus');
+  const applicationStatus=statusEvidence&&explicitApplicationStatus(raw.applicationStatus,statusEvidence.quote)?raw.applicationStatus:'unknown';
+  if(applicationStatus!=='unknown'&&statusEvidence)evidence.applicationStatus=statusEvidence;
+  const activityEvidence=factEvidence(raw,pages,'activityDate');
+  const activityDate=raw.activityDate&&activityEvidence&&dateInQuote(raw.activityDate,activityEvidence.quote)?raw.activityDate:null;
+  if(activityDate&&activityEvidence)evidence.activityDate=activityEvidence;
+  const opportunityType=opportunityKind(String(value('category')||''),String(name),pages[0].pageTitle+' '+pages[0].text.slice(0,3000));
+  const today=now.toISOString().slice(0,10);
+  const active=applicationStatus!=='closed'&&(opportunityType==='competition'?!!deadline&&deadline>today
+    :['club','volunteering'].includes(opportunityType)?['open','rolling'].includes(applicationStatus)||!!activityDate&&activityDate>=today
+    :!!deadline&&deadline>today||['open','rolling'].includes(applicationStatus));
   const verified =
     trusted &&
     gradeMin != null &&
     gradeMax != null &&
-    costType !== 'unknown' &&
     !!format &&
-    !!deadline &&
+    active &&
     !feeFlag;
   return {
     name,
     organizer,
+    opportunityType,
+    applicationStatus,
+    applicationStatusCheckedAt:applicationStatus==='unknown'?null:now,
+    activityDate,
     url: pages[0].sourceUrl,
     officialDomain: domain,
     category: value('category') || 'Program',

@@ -14,7 +14,7 @@ export function memoryStore(dimension: number): VectorStore {
     },
     async query(values, opportunityId, topK) {
       return [...records.values()]
-        .filter((v) => v.metadata.opportunityId === opportunityId)
+        .filter((v) => (Array.isArray(opportunityId)?opportunityId:[opportunityId]).includes(v.metadata.opportunityId))
         .map((v) => ({ id: v.id, score: cosine(values, v.values) }))
         .sort((a, b) => b.score - a.score)
         .slice(0, topK);
