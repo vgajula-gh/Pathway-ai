@@ -5,8 +5,9 @@ import { Opportunity, Proposal, Student } from '../lib/types';
 import { CEMO, FIT_LABEL } from '../lib/format';
 import { Sheet, Typing, toast, useLoad } from '../components/ui';
 import ProposalReview from '../components/ProposalReview';
+import OpportunitySearch, { OpportunitySearchStatus } from '../components/OpportunitySearch';
 
-type List = { error: string | null; finding: boolean; limited: boolean; refresh: {available:boolean;remaining:number;nextAvailableAt:string}; discoveryEnabled: boolean; picks: Opportunity[]; recommended: Opportunity[]; excluded: { id: string; name: string; reasons: string[] }[]; dismissed: number; sampleData: boolean };
+type List = OpportunitySearchStatus & { picks: Opportunity[]; recommended: Opportunity[]; excluded: { id: string; name: string; reasons: string[] }[]; dismissed: number; sampleData: boolean };
 
 export default function Explore({ me, ask }: { me: Student; ask: (t: string, opportunityId?: string) => void }) {
   const { data, reload } = useLoad(() => api<List>('/api/opportunities'), []);
@@ -23,8 +24,10 @@ export default function Explore({ me, ask }: { me: Student; ask: (t: string, opp
       <div className="top"><p className="date">Discover · Opportunities</p></div>
       <h1 className="display">Picked for you</h1>
       <p className="muted" style={{ marginTop: 8 }}>Checked against your grade, time and interests, with the reasons shown.</p>
-      {data.discoveryEnabled && <div className="card" style={{marginTop:16}}>{data.finding ? <p role="status">Finding more programs for you… usually takes a minute.</p> : <><button className="btn" disabled={!data.refresh.available} onClick={async()=>{try{await api('/api/opportunities/refresh',{method:'POST'});reload();toast('Your catalog picks have been refreshed.');}catch(e){toast((e as Error).message);}}}>Find new opportunities</button>{!data.refresh.available && <p className="note">Next refresh available on {new Date(data.refresh.nextAvailableAt).toLocaleDateString()}</p>}</>}{data.error && <p className="note">{data.error}</p>}{data.limited && <p className="note">Live discovery has reached its allowance. You can still explore, save and replace catalog picks.</p>}</div>}
-      {!data.discoveryEnabled && <p className="note">Showing catalog picks. Live discovery and program questions are not available right now.</p>}
+      <OpportunitySearch status={data} interests={me.interests} onRefresh={async () => {
+        try { await api('/api/opportunities/refresh', { method: 'POST' }); reload(); toast('Your catalog picks have been refreshed.'); }
+        catch (e) { toast((e as Error).message); }
+      }} />
       <div className="sec" style={{ marginTop: 18 }}>{(['free', 'paid'] as const).map(bucket => <details key={bucket} className="fold" open={bucket === 'free' || me.budget !== 'free'}><summary>{bucket === 'free' ? 'Free' : me.budget === 'free' ? 'Show paid options' : 'Paid'} ({data.picks.filter(o=>o.bucket===bucket).length})</summary>{!data.picks.some(o=>o.bucket===bucket) && <p className="note">No suitable {bucket} options in the catalog yet. We’ll show them here when available.</p>}{data.picks.filter(o=>o.bucket===bucket).map(o => (
         <div className="opp" key={o.id}>
           <button className="main" onClick={() => setOpen(o)}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><span className="emo">{CEMO[o.category] || '✨'}</span><span className={`fit ${o.fit.fit}`}>{FIT_LABEL[o.fit.fit!]}</span></div>

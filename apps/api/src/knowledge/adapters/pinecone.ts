@@ -1,5 +1,6 @@
 import { pineconeClient } from './pinecone-client.js';
 import { VectorStore } from '../contracts.js';
+import { knowledgeIssue, KnowledgeSetupError } from '../readiness.js';
 export function pineconeStore(): VectorStore {
   const pc = pineconeClient(),
     name = process.env.PINECONE_INDEX!,
@@ -8,7 +9,9 @@ export function pineconeStore(): VectorStore {
     kind: 'pinecone',
     async dimension() {
       const d = await pc.describeIndex(name);
-      if (d.metric !== 'cosine') throw new Error('Pinecone index must use cosine similarity');
+      if (d.metric !== 'cosine') throw new KnowledgeSetupError(
+        knowledgeIssue('index_metric_mismatch', ['PINECONE_INDEX']), 'Pinecone index must use cosine similarity',
+      );
       return d.dimension || 0;
     },
     async upsert(records) {

@@ -21,6 +21,26 @@ components:
         available: { type: boolean }
         remaining: { type: integer, minimum: 0 }
         nextAvailableAt: { type: string, format: date-time }
+    DiscoveryUnavailable:
+      type: [object, 'null']
+      description: Safe readiness explanation; contains setting names only, never values or raw provider errors
+      required: [code, message, settings]
+      properties:
+        code:
+          type: string
+          enum: [ai_consent_required, discovery_disabled, ai_unavailable, search_not_configured, embedding_not_configured, vector_not_configured, pinecone_authorization_failed, pinecone_index_not_found, index_metric_mismatch, index_dimension_mismatch, vector_unavailable]
+        message: { type: string }
+        settings: { type: array, items: { type: string } }
+    DiscoveryStatus:
+      type: object
+      properties:
+        enabled: { type: boolean }
+        unavailable: { $ref: '#/components/schemas/DiscoveryUnavailable' }
+        finding: { type: boolean }
+        limited: { type: boolean }
+        error: { type: [string, 'null'] }
+        lastCheckedAt: { type: [string, 'null'], format: date-time }
+        refresh: { $ref: '#/components/schemas/RefreshAvailability' }
     KnowledgeCitation:
       type: object
       properties:
@@ -38,6 +58,7 @@ components:
         dismissed: { type: integer }
         sampleData: { type: boolean }
         discoveryEnabled: { type: boolean }
+        unavailable: { $ref: '#/components/schemas/DiscoveryUnavailable' }
         finding: { type: boolean }
         limited: { type: boolean }
         error: { type: [string, 'null'] }
@@ -317,9 +338,10 @@ paths:
         '503': { description: Optional discovery configuration unavailable or student AI consent off }
   /api/discovery/status:
     get:
-      summary: Current student discovery queue, safe errors and refresh availability
+      summary: Current student discovery readiness, queue, safe errors and refresh availability
       responses:
-        '200': { description: Enabled/finding/limited/error/lastCheckedAt and refresh availability }
+        '200': { description: Readiness reason, queue and refresh availability, content: { application/json: { schema: { $ref: '#/components/schemas/DiscoveryStatus' } } } }
+        '401': { description: Student authentication required }
   /api/opportunities/{id}/requirements:
     parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
     post:

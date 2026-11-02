@@ -186,7 +186,23 @@ With an always-on Reserved VM, the timer can supply this scheduling itself. Keep
 3. Finish a new test profile with a topic and state. Catalog picks appear immediately. A queued group shows “Finding more programs for you…”; keep Explore open while the background trigger runs. Source access, queue size, budgets and model responses can mean fewer than six cards.
 4. In Pinecone, open your index and the **opportunities** namespace. New `chunk-...` vectors should appear after successful ingestion. Metadata includes opportunityId, chunkId, sourceUrl, pageTitle and checkedAt; it should contain no student name/profile.
 5. Use Ask about this program and ask a fact visible on its official page. Confirm clickable sources/check dates. Ask something absent from the pages: Buddy should say the official pages do not say.
-6. If only catalog mode appears, check deployment Secrets, model access, Pinecone Ready status, cosine metric and dimensions. Dimension failures have a plain-language deployment log message. In Replit's database viewer, DiscoveryGroup shows queue/error state; DiscoveryRun/DiscoveryUsage show attempts and estimated usage. A fetched site can legitimately prohibit crawling; that result stays unknown/skipped.
+6. If discovery is unavailable, Explore keeps **Find new opportunities** visible and explains the blocker. While signed in to the published site in the same browser, open `/api/discovery/status`. Read `unavailable.code` and `unavailable.settings`; those fields contain no API key values. `error: null` only means no background search error was recorded; it does not establish readiness. Use the table below to fix the reported setup, save **Publishing → Adjust settings → Production app secrets**, and republish. Connection checks retry after a minute. In Replit's database viewer, DiscoveryGroup shows queue/error state; DiscoveryRun/DiscoveryUsage show attempts and estimated usage. A fetched site can legitimately prohibit crawling; that result stays unknown/skipped.
+
+| `unavailable.code` | What to check |
+|---|---|
+| `ai_consent_required` | In Pathway, turn on **You → Privacy → Use AI to help me**. No publishing change needed. |
+| `discovery_disabled` | Set `DISCOVERY_ENABLED=true` in the published app. |
+| `ai_unavailable` | Set `LLM_PROVIDER=openai`, provide `OPENAI_API_KEY`, and set `AI_DISABLED=false` for the OpenAI setup. `/api/health` should report `aiEnabled:true`; that reports configuration, not a live AI key/model test. |
+| `search_not_configured` | For OpenAI, set `SEARCH_PROVIDER=openai` and provide `OPENAI_API_KEY`. Enter the exact values without spaces or quotation marks. |
+| `embedding_not_configured` | For this guide, set `EMBEDDING_PROVIDER=openai` and provide `OPENAI_API_KEY`. |
+| `vector_not_configured` | Check the variable names listed in `settings`: set `VECTOR_STORE=pinecone`, `PINECONE_API_KEY`, and the exact `PINECONE_INDEX` name. |
+| `pinecone_authorization_failed` | Check the Pinecone project/key and permissions, including index describe access. |
+| `pinecone_index_not_found` | The index name and API key must belong to the same Pinecone project. |
+| `index_dimension_mismatch` | This guide uses a dense 1536-dimension index with `EMBEDDING_MODEL=text-embedding-3-small` and `EMBEDDING_DIMENSION=1536`. |
+| `index_metric_mismatch` | Use an index configured for cosine similarity. |
+| `vector_unavailable` | Check Pinecone Ready status/service availability or the optional pgvector setup. Try status again after a minute. |
+
+Status checks only inspect configuration and vector-store readiness; they do not send a paid search, extraction or embedding request. Responses and readiness logs contain controlled codes and setting names, never raw provider errors or key values. Health, discovery status and opportunity-list responses also tell browsers not to cache them. No new Secret or database migration is required for these explanations.
 
 ### Published-site manual checklist
 

@@ -1,7 +1,7 @@
 import {beforeAll,beforeEach,afterAll,it,expect,vi} from 'vitest';
 import {PrismaClient} from '@prisma/client';import {mkdtempSync,writeFileSync,rmSync} from 'node:fs';import {tmpdir} from 'node:os';import {join} from 'node:path';import {execFile} from 'node:child_process';import {promisify} from 'node:util';
 const remote=vi.hoisted(()=>({discover:vi.fn(async()=>[]),reconcile:vi.fn(async()=>0)}));
-vi.mock('../src/knowledge/runtime.js',()=>({initializeKnowledge:async()=>({})}));
+vi.mock('../src/knowledge/runtime.js',()=>({initializeKnowledge:async()=>({}),knowledgeUnavailable:()=>null}));
 vi.mock('../src/discovery/pipeline.js',async()=>({...await vi.importActual('../src/discovery/pipeline.js'),discover:remote.discover}));
 vi.mock('../src/knowledge/service.js',async()=>({...await vi.importActual('../src/knowledge/service.js'),reconcileVectors:remote.reconcile}));
 const dir=mkdtempSync(join(tmpdir(),'pathway-jobs-')),url=`file:${dir}/test.db`,db=new PrismaClient({datasourceUrl:url+'?connection_limit=1'});

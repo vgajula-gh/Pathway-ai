@@ -5,31 +5,46 @@ import { pineconeStore } from './adapters/pinecone.js';
 import { pgvectorStore } from './adapters/pgvector.js';
 import { prisma, j } from '../lib/db.js';
 import { discoveryConfigured } from '../discovery/config.js';
+import { env } from '../lib/env.js';
+import { configurationIssue, connectionIssue, knowledgeIssue, KnowledgeIssue, KnowledgeSetupError } from './readiness.js';
 export type KnowledgeRuntime = { store: VectorStore; embedder: Embedder };
 export function assertDimension(index: number, embedding: number) {
   if (index !== embedding)
-    throw new Error(
+    throw new KnowledgeSetupError(
+      knowledgeIssue('index_dimension_mismatch', ['EMBEDDING_MODEL', 'EMBEDDING_DIMENSION', 'PINECONE_INDEX', 'VECTOR_STORE']),
       `The vector index has ${index} dimensions, but the embedding model needs ${embedding}. Ask about this program is turned off until the settings match.`,
     );
 }
 let cached: Promise<KnowledgeRuntime | null> | undefined;
 let retryAfter = 0;
+let unavailable: KnowledgeIssue | null = null;
+export function knowledgeUnavailable(): KnowledgeIssue {
+  return unavailable || configurationIssue(process.env, env.aiDisabled) || knowledgeIssue('vector_unavailable');
+}
 export function pauseKnowledge() {
+  unavailable = knowledgeIssue('vector_unavailable');
   cached = Promise.resolve(null);
   retryAfter = Date.now() + 60000;
 }
 export async function initializeKnowledge(): Promise<KnowledgeRuntime | null> {
-  if (!discoveryConfigured()) return null;
+  if (!discoveryConfigured()) {
+    unavailable = configurationIssue(process.env, env.aiDisabled);
+    return null;
+  }
   if (cached && (!retryAfter || Date.now() < retryAfter)) return cached;
   retryAfter = 0;
+  const kind = process.env.DATABASE_URL?.startsWith('file:')
+    ? 'memory'
+    : process.env.VECTOR_STORE || (process.env.NODE_ENV === 'production' ? 'pinecone' : 'memory');
   cached = (async () => {
     try {
+      unavailable = configurationIssue(process.env, env.aiDisabled);
+      if (unavailable) {
+        retryAfter = Date.now() + 60000;
+        return null;
+      }
       const embedder = getEmbedder();
-      if (!embedder) return null;
-      const kind = process.env.DATABASE_URL?.startsWith('file:')
-        ? 'memory'
-        : process.env.VECTOR_STORE || (process.env.NODE_ENV === 'production' ? 'pinecone' : 'memory');
-      if (kind === 'pinecone' && (!process.env.PINECONE_API_KEY || !process.env.PINECONE_INDEX)) return null;
+      if (!embedder) throw new KnowledgeSetupError(knowledgeIssue('embedding_not_configured', ['EMBEDDING_PROVIDER']), 'Embedding provider unavailable');
       const store =
         kind === 'pinecone'
           ? pineconeStore()
@@ -38,7 +53,7 @@ export async function initializeKnowledge(): Promise<KnowledgeRuntime | null> {
             : kind === 'memory'
               ? memoryStore(embedder.dimension)
               : null;
-      if (!store) return null;
+      if (!store) throw new KnowledgeSetupError(knowledgeIssue('vector_not_configured', ['VECTOR_STORE']), 'Vector store unavailable');
       assertDimension(await store.dimension(), embedder.dimension);
       if (store.kind === 'memory') {
         const chunks = await prisma.knowledgeChunk.findMany({
@@ -65,11 +80,12 @@ export async function initializeKnowledge(): Promise<KnowledgeRuntime | null> {
           }),
         );
       }
+      unavailable = null;
       return { embedder, store };
     } catch (error) {
+      unavailable = connectionIssue(error, kind);
       console.warn(
-        'Program questions are unavailable. Check embedding model, vector index dimensions and provider credentials.',
-        error instanceof Error && error.message.includes('dimensions') ? error.message : '',
+        'Opportunity discovery is unavailable.', unavailable.code, unavailable.settings.join(', '),
       );
       retryAfter = Date.now() + 60000;
       return null;
