@@ -43,7 +43,7 @@ export function knowledgeConfigurationIssue(values:NodeJS.ProcessEnv,aiDisabled:
   if (embeddingKey && !values[embeddingKey]) return knowledgeIssue('embedding_not_configured', [embeddingKey]);
 
   const kind = values.DATABASE_URL?.startsWith('file:') ? 'memory'
-    : values.VECTOR_STORE || (values.NODE_ENV === 'production' ? 'pinecone' : 'memory');
+    : values.VECTOR_STORE || 'memory';
   if (!['memory', 'pinecone', 'pgvector'].includes(kind))
     return knowledgeIssue('vector_not_configured', ['VECTOR_STORE']);
   if (kind === 'pinecone') {

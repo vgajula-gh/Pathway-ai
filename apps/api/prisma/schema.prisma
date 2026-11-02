@@ -388,6 +388,7 @@ model KnowledgeChunk {
   scope String @default("opportunity")
   localEmbedding String @default("[]") // only the memory/SQLite adapter persists vectors here
   embeddingModel String
+  vectorStoreKey String @default("")
   @@index([opportunityId, sourceUrl])
 }
 

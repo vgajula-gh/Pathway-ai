@@ -20,9 +20,9 @@ export function pgvectorStore(): VectorStore {
     },
     async query(values, opportunityId, topK) {
       return prisma.$queryRawUnsafe<{ id: string; score: number }[]>(
-        'SELECT id, 1 - (embedding <=> $1::vector) AS score FROM "KnowledgeVector" WHERE "opportunityId"=$2 ORDER BY embedding <=> $1::vector LIMIT $3',
+        'SELECT id, 1 - (embedding <=> $1::vector) AS score FROM "KnowledgeVector" WHERE "opportunityId" = ANY($2::text[]) ORDER BY embedding <=> $1::vector LIMIT $3',
         JSON.stringify(values),
-        opportunityId,
+        Array.isArray(opportunityId)?opportunityId:[opportunityId],
         topK,
       );
     },

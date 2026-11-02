@@ -1,4 +1,4 @@
-import { Embedder, VectorStore, validVector, embeddingIdentity } from './contracts.js';
+import { Embedder, VectorStore, validVector, embeddingIdentity,vectorStoreIdentity } from './contracts.js';
 import { getEmbedder } from './embeddings/providers.js';
 import { memoryStore } from './adapters/memory.js';
 import { pineconeStore } from './adapters/pinecone.js';
@@ -34,7 +34,7 @@ export async function initializeKnowledge(): Promise<KnowledgeRuntime | null> {
   retryAfter = 0;
   const kind = process.env.DATABASE_URL?.startsWith('file:')
     ? 'memory'
-    : process.env.VECTOR_STORE || (process.env.NODE_ENV === 'production' ? 'pinecone' : 'memory');
+    : process.env.VECTOR_STORE || 'memory';
   cached = (async () => {
     try {
       unavailable = knowledgeConfigurationIssue(process.env, env.aiDisabled);
@@ -56,7 +56,7 @@ export async function initializeKnowledge(): Promise<KnowledgeRuntime | null> {
       assertDimension(await store.dimension(), embedder.dimension);
       if (store.kind === 'memory') {
         const chunks = await prisma.knowledgeChunk.findMany({
-          where: { embeddingModel: embeddingIdentity(embedder) },
+          where: { embeddingModel: embeddingIdentity(embedder),vectorStoreKey:vectorStoreIdentity(store) },
         });
         await store.upsert(
           chunks.flatMap((c) => {
@@ -84,7 +84,7 @@ export async function initializeKnowledge(): Promise<KnowledgeRuntime | null> {
     } catch (error) {
       unavailable = connectionIssue(error, kind);
       console.warn(
-        'Opportunity discovery is unavailable.', unavailable.code, unavailable.settings.join(', '),
+        'Program questions are unavailable.', unavailable.code, unavailable.settings.join(', '),
       );
       retryAfter = Date.now() + 60000;
       return null;

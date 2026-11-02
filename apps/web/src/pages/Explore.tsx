@@ -8,7 +8,7 @@ import { Sheet, Typing, toast, useLoad } from '../components/ui';
 import ProposalReview from '../components/ProposalReview';
 import OpportunitySearch, { OpportunitySearchStatus } from '../components/OpportunitySearch';
 
-type List = OpportunitySearchStatus & { picks: Opportunity[]; recommended: Opportunity[]; excluded: { id: string; name: string; reasons: string[] }[]; interestedCount: number; dismissed: number; sampleData: boolean };
+type List = OpportunitySearchStatus & { picks: Opportunity[]; recommended: Opportunity[]; excluded: { id: string; name: string; reasons: string[] }[]; canAskAll?:boolean; knowledgeStates?:Record<string,string>; preparing?:boolean; interestedCount: number; dismissed: number; sampleData: boolean };
 
 export default function Explore({ me, ask, setMe }: { me: Student; ask: (t: string, opportunityId?: string) => void; setMe?: (s:Student)=>void }) {
   const { data, error, reload, setData } = useLoad(() => api<List>('/api/opportunities'), []);
@@ -18,12 +18,12 @@ export default function Explore({ me, ask, setMe }: { me: Student; ask: (t: stri
   const worker=useRef(false);
   useEffect(()=>{setInterests(me.interests);setRegion(me.region||'');},[me.interests,me.region]);
   useEffect(()=>{
-    if(!data?.finding||!data.discoveryEnabled||!me.interests.length)return;
+    if(!(data?.finding||data?.preparing)||!me.aiConsent)return;
     let active=true;
     const work=async()=>{if(worker.current)return;worker.current=true;try{await api('/api/discovery/run',{method:'POST',body:{}});if(active){setSearchError(null);reload();}}catch(e){if(active)setSearchError((e as Error).message);}finally{worker.current=false;}};
     void work();const timer=setInterval(()=>{reload();void work();},5000);
     return()=>{active=false;clearInterval(timer);};
-  },[data?.finding,data?.discoveryEnabled,me.interests.join(',')]);
+  },[data?.finding,data?.preparing,me.aiConsent,me.interests.join(',')]);
   const refresh=async()=>{if(busy)return;setBusy(true);setSearchError(null);try{const result=await api<OpportunitySearchStatus>('/api/opportunities/refresh',{method:'POST'});setData(old=>old?{...old,...result}:old);reload();}catch(e){setSearchError((e as Error).message);}finally{setBusy(false);}};
   const saveInterests=async()=>{setBusy(true);try{const student=await api<Student>('/api/me',{method:'PATCH',body:{interests,region}});setMe?.(student);setEditing(false);reload();}catch(e){toast((e as Error).message);}finally{setBusy(false);}};
   if (!data) return <section aria-label="Opportunity search"><h1>Opportunity search</h1>{error?<p role="alert">{error} <button className="btn" onClick={reload}>Try again</button></p>:<p role="status">Loading your interests… <Typing/></p>}</section>;
@@ -32,7 +32,7 @@ export default function Explore({ me, ask, setMe }: { me: Student; ask: (t: stri
   const compared = data.recommended.filter(o => cmp.includes(o.id));
   return (
     <>
-      {data.interestedCount>0&&<Applications refresh={String(data.interestedCount)+data.recommended.map(o=>o.status).join()} />}
+      {data.interestedCount>0&&<Applications ask={ask} knowledgeStates={data.knowledgeStates} refresh={String(data.interestedCount)+data.recommended.map(o=>o.status).join()} />}
       <section className="sec opportunity-search" aria-label="Opportunity search">
       <p className="label">Opportunity search</p>
       <h1 className="display">Opportunities picked for your interests</h1>
@@ -46,7 +46,7 @@ export default function Explore({ me, ask, setMe }: { me: Student; ask: (t: stri
         <RegionSelect value={region} onChange={setRegion}/><button className="btn fill" disabled={busy} type="submit">Save interests</button>
       </form>}
       <OpportunitySearch status={data} interests={me.interests} onRefresh={refresh} busy={busy} error={searchError}/>
-      <button className="link" disabled={!data.picks.some(p=>p.canAsk)} onClick={()=>ask('What should I know about my opportunities?','my_opportunities')}>Ask about my opportunities</button>
+      <button className="link" disabled={!data.canAskAll} onClick={()=>ask('What should I know about my opportunities?','my_opportunities')}>Ask about my opportunities</button>
       {!data.finding&&me.interests.length>0&&!data.picks.length&&data.discoveryEnabled&&!data.error&&!data.limited&&<p className="card">No active opportunities found for these interests right now. Try adding another interest, or check back next month.</p>}
       {error&&<p role="alert">{error} <button className="link" onClick={reload}>Try again</button></p>}
       <div className="sec" style={{ marginTop: 18 }}>{(['free', 'paid'] as const).map(bucket => <details key={bucket} className="fold" open={bucket === 'free' || me.budget !== 'free'}><summary>{bucket === 'free' ? 'Free' : me.budget === 'free' ? 'Show paid options' : 'Paid'} ({data.picks.filter(o=>o.bucket===bucket).length})</summary>{!data.finding&&data.picks.filter(o=>o.bucket===bucket).length<3&&<p className="note">Only {data.picks.filter(o=>o.bucket===bucket).length} active {bucket} opportunities found right now — we’ll keep looking.</p>}{data.picks.filter(o=>o.bucket===bucket).map(o => (

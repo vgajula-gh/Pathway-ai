@@ -1,6 +1,8 @@
 import { FastifyInstance } from 'fastify';
 import { discoveryStatus,queueDiscovery } from '../discovery/refresh.js';
 import { discoveryAvailability } from '../discovery/availability.js';
+import {knowledgeScope,studentOpportunityIds} from '../knowledge/scope.js';
+import {knowledgeStates} from '../knowledge/preparation.js';
 import { requirementsAction } from '../knowledge/requirements.js';
 import { personalPicks, toOpp } from '../lib/picks.js';
 import { prisma, j } from '../lib/db.js';
@@ -36,11 +38,11 @@ export default async function routes(app: FastifyInstance) {
     const availability=await discoveryAvailability(s.aiConsent), enabled=availability.enabled;
     if(enabled)await queueDiscovery(s.id);
     const discovery=await discoveryStatus(s.id);
-    const knowledgeReady=s.aiConsent&&!!await initializeKnowledge();
-    const chunks=knowledgeReady?await prisma.knowledgeChunk.findMany({where:{opportunityId:{in:picks.map(p=>p.id)}},select:{opportunityId:true}}):[];
+    const runtime=s.aiConsent?await initializeKnowledge():null;
+    const states=await knowledgeStates(await studentOpportunityIds(s.id),runtime);
     const interestedCount=await prisma.savedOpportunity.count({where:{studentId:s.id,status:{not:'dismissed'}}});
-    return { ...discovery, discoveryEnabled:enabled, unavailable:availability.unavailable, knowledgeUnavailable:knowledgeReady?null:knowledgeUnavailable(), interestedCount,
-      picks:picks.map(p=>({...p,canAsk:knowledgeReady&&chunks.some(c=>c.opportunityId===p.id),knowledgeStatus:knowledgeReady&&chunks.some(c=>c.opportunityId===p.id)?'ready':discovery.finding?'preparing':'unavailable'})),
+    return { ...discovery, discoveryEnabled:enabled, unavailable:availability.unavailable, knowledgeUnavailable:runtime?null:knowledgeUnavailable(), preparing:Object.values(states).includes('preparing'), interestedCount, knowledgeStates:states,canAskAll:Object.values(states).includes('ready'),
+      picks:picks.map(p=>({...p,canAsk:states[p.id]==='ready',knowledgeStatus:states[p.id]})),
       recommended: ok, excluded: list.filter(o => o.fit.excluded).map(o => ({ id: o.id, name: o.name, reasons: o.fit.eligibility.reasons })), dismissed: list.filter(o => o.status === 'dismissed').length, sampleData: list.some(o => o.isSample) };
   });
 
@@ -57,11 +59,12 @@ export default async function routes(app: FastifyInstance) {
     if (status === 'none') await prisma.savedOpportunity.deleteMany({ where: { studentId: s.id, opportunityId: id } });
     else if (status === 'saved') { await saveApplication(prisma, s.id, id); await prisma.savedOpportunity.updateMany({ where: { studentId: s.id, opportunityId: id, status: 'dismissed' }, data: { status: 'interested' } }); }
     else await prisma.savedOpportunity.upsert({ where: { studentId_opportunityId: { studentId: s.id, opportunityId: id } }, update: { status }, create: { studentId: s.id, opportunityId: id, status } });
+    await prisma.studentPick.deleteMany({where:{studentId:s.id,opportunityId:id}});
     await audit(s.id, 'student', status === 'saved' ? 'Saved opportunity' : status === 'dismissed' ? 'Dismissed opportunity' : 'Cleared opportunity', id);
     return { ok: true };
   });
 
-  app.post('/api/opportunities/:id/requirements',async req=>{const s=await requireStudent(req),{id}=z.object({id:z.string().max(200)}).parse(req.params);const o=await prisma.opportunity.findUnique({where:{id}});if(!o)throw new HttpError(404,'Program not found');const action=requirementsAction(o);return serializeProposal(await createProposal(s.id,{summary:`Add official requirements for ${o.name}`.slice(0,200),rationale:'Review these source-backed checklist steps and deadline. Your notes and completed steps are preserved.',actions:[action]},'student',{dataUsed:[...action.checklist.map(c=>`${c.title} — ${c.sourceUrl}`)],effect:'Adds to your Interested checklist after approval. Nothing is submitted to the program.'}));});
+  app.post('/api/opportunities/:id/requirements',async req=>{const s=await requireStudent(req),{id}=z.object({id:z.string().max(200)}).parse(req.params);await knowledgeScope(s.id,id);const saved=await prisma.savedOpportunity.findUnique({where:{studentId_opportunityId:{studentId:s.id,opportunityId:id}}});if(!saved||saved.status==='dismissed')throw new HttpError(422,'Add this program to Interested first.');const o=await prisma.opportunity.findUnique({where:{id}});if(!o)throw new HttpError(404,'Program not found');const action=requirementsAction(o);return serializeProposal(await createProposal(s.id,{summary:`Add official requirements for ${o.name}`.slice(0,200),rationale:'Review these source-backed checklist steps and deadline. Your notes and completed steps are preserved.',actions:[action]},'student',{dataUsed:[...action.checklist.map(c=>`${c.title} — ${c.sourceUrl}`)],effect:'Adds to your Interested checklist after approval. Nothing is submitted to the program.'}));});
 
   // Journey A: deterministic prep plan (no AI needed) → proposal awaiting approval.
   app.post('/api/opportunities/:id/prep', async req => {

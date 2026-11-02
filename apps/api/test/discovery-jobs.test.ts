@@ -1,6 +1,7 @@
 import {beforeAll,beforeEach,afterAll,it,expect,vi} from 'vitest';
 import {PrismaClient} from '@prisma/client';import {mkdtempSync,writeFileSync,rmSync} from 'node:fs';import {tmpdir} from 'node:os';import {join} from 'node:path';import {execFile} from 'node:child_process';import {promisify} from 'node:util';
 const remote=vi.hoisted(()=>({discover:vi.fn(async()=>[]),reconcile:vi.fn(async()=>0)}));
+vi.mock('../src/knowledge/preparation.js',()=>({prepareKnowledgeBatch:async()=>0,knowledgeStates:async()=>({})}));
 vi.mock('../src/knowledge/runtime.js',()=>({initializeKnowledge:async()=>({}),knowledgeUnavailable:()=>null}));
 vi.mock('../src/discovery/pipeline.js',async()=>({...await vi.importActual('../src/discovery/pipeline.js'),discover:remote.discover}));
 vi.mock('../src/knowledge/service.js',async()=>({...await vi.importActual('../src/knowledge/service.js'),reconcileVectors:remote.reconcile}));
@@ -82,11 +83,16 @@ it('does not debit a failed search, keeps global paid attempts counted and permi
  expect((await db.discoveryUsage.findFirstOrThrow()).runs).toBe(1);await queueDiscovery(studentId);expect(await db.opportunitySearchRequest.count()).toBe(1);
  await enqueueSearch(studentId,'manual');expect(await db.opportunitySearchRequest.count()).toBe(2);
 });
-it('uses a full active shared catalog without a new web search or manual debit',async()=>{
+it('reuses a full active catalog on first use while an explicit manual search still queues the web',async()=>{
  for(let i=0;i<3;i++)await db.opportunity.create({data:{id:'free'+i,name:'Free '+i,organizer:'Org',source:'discovery',isSample:false,verificationStatus:'verified',verifiedAt:new Date(),sourceCheckedAt:new Date(),category:'Program',url:'https://example.edu',gradeMin:9,gradeMax:12,format:'Virtual',cost:'Free',costType:'free',costVerifiedAt:new Date(),commitment:'Low',skills:'[]',tags:'["robotics"]',deadline:'2030-12-01',evidence:JSON.stringify({deadline:{sourceUrl:'https://example.edu',quote:'Apply by 2030-12-01'}})}});
- const {enqueueSearch}=await import('../src/discovery/requests.js');expect(await enqueueSearch(studentId,'manual')).toMatchObject({usedSharedCatalog:true});expect(await db.discoveryGroup.count()).toBe(0);expect(await db.discoveryRun.count()).toBe(0);expect(await db.studentPick.count()).toBe(6);expect((await refreshStatus(studentId)).remaining).toBe(1);
+ const {enqueueSearch}=await import('../src/discovery/requests.js');expect(await enqueueSearch(studentId,'initial')).toMatchObject({usedSharedCatalog:true});expect(await db.discoveryGroup.count()).toBe(0);expect(await db.discoveryRun.count()).toBe(0);expect(await db.studentPick.count()).toBe(6);expect((await refreshStatus(studentId)).remaining).toBe(1);expect(await enqueueSearch(studentId,'manual')).toMatchObject({requested:true});expect(JSON.parse((await db.discoveryGroup.findFirstOrThrow()).pendingBuckets)).toEqual(['free','paid']);expect(await db.discoveryRun.count()).toBe(0);
 });
 it('does not queue a first-use search without interests or beyond the global monthly cap',async()=>{
  await db.student.update({where:{id:studentId},data:{interests:'[]'}});await queueDiscovery(studentId);expect(await db.opportunitySearchRequest.count()).toBe(0);
  await db.student.update({where:{id:studentId},data:{interests:'["robotics"]'}});vi.stubEnv('DISCOVERY_MONTHLY_BUDGET','0');await queueDiscovery(studentId);expect((await db.opportunitySearchRequest.findFirstOrThrow()).status).toBe('limited');expect(await db.discoveryGroup.count()).toBe(0);expect((await refreshStatus(studentId)).remaining).toBe(1);
+});
+
+it('requires the explicit interest-change bonus action instead of automatically paying for every profile edit',async()=>{
+ await queueDiscovery(studentId);await runJobs();await db.student.update({where:{id:studentId},data:{interests:'["art"]'}});await noteInterestChange(studentId,['robotics'],['art']);await queueDiscovery(studentId);expect(await db.opportunitySearchRequest.count()).toBe(1);expect((await refreshStatus(studentId)).remaining).toBe(2);
+ const {enqueueSearch}=await import('../src/discovery/requests.js');await enqueueSearch(studentId,'manual');expect(await db.opportunitySearchRequest.count()).toBe(2);
 });

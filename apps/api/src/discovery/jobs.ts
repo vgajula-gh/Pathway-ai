@@ -2,7 +2,6 @@ import {reserveMonthlyAI} from '../lib/ai-limits.js';
 import {HttpError} from '../lib/errors.js';
 import { recheckDue } from '../domain/refresh.js';
 import { identity, interestGroups } from './groups.js';
-import { randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { prisma, j } from '../lib/db.js';
 import { RunBudget, setting, discoveryConfigured } from './config.js';
@@ -15,28 +14,9 @@ import { extract } from './extraction.js';
 import { verifyOpportunity } from '../domain/opportunity-verification.js';
 import { failureInfo, failureMessage, FailureStage, DiscoveryFailure } from './failures.js';
 import { settleSearchRequests } from './requests.js';
-export async function withJobLock<T>(key: string, fn: () => Promise<T>, now = new Date()) {
-  const owner = randomUUID();
-  await prisma.jobLease.upsert({ where: { key }, create: { key, expiresAt: new Date(0) }, update: {} });
-  const claim = await prisma.jobLease.updateMany({
-    where: { key, expiresAt: { lte: now } },
-    data: { owner, expiresAt: new Date(+now + 300000) },
-  });
-  if (!claim.count) return { skipped: true as const };
-  const heartbeat = setInterval(() => {
-    void prisma.jobLease
-      .updateMany({ where: { key, owner }, data: { expiresAt: new Date(Date.now() + 300000) } })
-      .catch(() => {});
-  }, 30000);
-  heartbeat.unref();
-  try {
-    return { skipped: false as const, result: await fn() };
-  } finally {
-    clearInterval(heartbeat);
-    await prisma.jobLease.updateMany({ where: { key, owner }, data: { expiresAt: new Date(0), owner: '' } });
-  }
-}
-export async function reserveRun(groupKey: string, kind: 'discovery' | 'recheck', now = new Date()) {
+export {withJobLock} from '../lib/job-lock.js';
+import {withJobLock} from '../lib/job-lock.js';
+export async function reserveRun(groupKey: string, kind: 'discovery' | 'recheck' | 'knowledge', now = new Date()) {
   const month = now.toISOString().slice(0, 7),
     field = kind === 'discovery' ? 'runs' : 'rechecks',
     cap = setting(
@@ -70,7 +50,7 @@ export async function reserveRun(groupKey: string, kind: 'discovery' | 'recheck'
       throw e;
     }
 }
-async function finishRun(
+export async function finishRun(
   run: { id: string; startedAt: Date },
   budget: RunBudget,
   status: string,
@@ -199,6 +179,7 @@ export async function recheckOpportunity(
   }
 }
 async function recoverInterrupted() {
+    await prisma.jobLease.updateMany({where:{key:{startsWith:'knowledge-attempt:'},owner:'running'},data:{owner:'failed'}});
     await prisma.discoveryGroup.updateMany({
       where: { status: 'running' },
       data: {
@@ -216,7 +197,8 @@ async function recoverInterrupted() {
     });
 }
 
-async function discoverNext(groupKeys?: string[], foreground = false) {
+async function discoverNext(groupKeys?: string[], foreground = false,deadlineAt=Infinity) {
+  if(Date.now()>=deadlineAt)return 0;
   const group = await prisma.discoveryGroup.findFirst({
     where: {
       ...(groupKeys ? { key: { in: groupKeys } } : {}),
@@ -237,7 +219,8 @@ async function discoverNext(groupKeys?: string[], foreground = false) {
     return 0;
   }
   const budget = new RunBudget();
-  if (foreground) budget.deadlineAt = Date.now() + 60000;
+  budget.deadlineAt=Math.min(budget.deadlineAt,deadlineAt);
+  if (foreground) budget.deadlineAt = Math.min(budget.deadlineAt,Date.now() + 60000);
   budget.onStep = async () => {
     await prisma.discoveryRun.update({ where: { id: run.id }, data: { usage: JSON.stringify({ ...budget.usage, phase: budget.phase, savedIds: budget.savedIds, workflow: budget.workflow, failures: budget.failures }) } });
   };
@@ -267,26 +250,26 @@ async function discoverNext(groupKeys?: string[], foreground = false) {
 /** Request-bound work lets a visible Explore screen make progress on Autoscale. */
 export async function runStudentDiscovery(studentId: string) {
   const student = await prisma.student.findUniqueOrThrow({ where: { id: studentId } });
-  if (!student.aiConsent || !discoveryConfigured()) return { skipped: true as const };
+  if (!student.aiConsent) return { skipped: true as const };
   const request=await prisma.opportunitySearchRequest.findFirst({where:{studentId,status:{in:['queued','running']}},orderBy:{createdAt:'desc'}});
   const keys=request?j<{key:string}[]>(request.groupBindings,[]).map(g=>g.key):[];
-  if (!keys.length) return { skipped: true as const };
   return withJobLock('opportunity-jobs', async () => {
     await recoverInterrupted();
-    const discovered=await discoverNext(keys,true);
+    const discovered=keys.length&&discoveryConfigured()?await discoverNext(keys,true):0;
+    const prepared=keys.length&&discoveryConfigured()?0:await (await import('../knowledge/preparation.js')).prepareKnowledgeBatch(studentId);
     await settleSearchRequests(studentId);
-    return {discovered};
+    return {discovered,prepared};
   });
 }
 
 export async function runJobs() {
   return withJobLock('opportunity-jobs', async () => {
     await recoverInterrupted();
+    const deadlineAt=Date.now()+180000;
     const expired = await expireCatalog(),
       refreshed = await automaticRefreshBatch();
-    if (!discoveryConfigured())
-      return { expired, refreshed, discovered: 0 };
-    const discovered = await discoverNext();
+    const discovered = discoveryConfigured()?await discoverNext(undefined,false,deadlineAt):0;
+    const prepared=await (await import('../knowledge/preparation.js')).prepareKnowledgeBatch(undefined,deadlineAt);
     await settleSearchRequests();
     // One bounded re-check per invocation. Requests that cannot be funded are left due.
     const now = new Date();
@@ -296,10 +279,11 @@ export async function runJobs() {
         orderBy: { lastRecheckedAt: 'asc' },
       })
     ).find((o) => recheckDue(o, now));
-    if (due) {
+    if (due&&discoveryConfigured()&&Date.now()<deadlineAt) {
       const run = await reserveRun(due.id, 'recheck');
       if (run) {
         const budget = new RunBudget();
+        budget.deadlineAt=Math.min(budget.deadlineAt,deadlineAt);
         try {
           await recheckOpportunity(due.id, budget);
           await finishRun(run, budget, 'complete');
@@ -316,6 +300,6 @@ export async function runJobs() {
       await reconcileVectors();
       await prisma.jobLease.create({ data: { key: marker, expiresAt: now } });
     }
-    return { expired, refreshed, discovered };
+    return { expired, refreshed, discovered, prepared };
   });
 }

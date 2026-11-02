@@ -18,11 +18,13 @@ export async function transaction<T>(fn: (tx: Prisma.TransactionClient) => Promi
       return await prisma.$transaction(fn, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     } catch (e) {
       if (
-        attempt < 4 &&
+        attempt < 7 &&
         e instanceof Prisma.PrismaClientKnownRequestError &&
         ['P2034', 'P2002', 'P1008'].includes(e.code)
-      )
+      ) {
+        await new Promise(resolve=>setTimeout(resolve,40*(attempt+1)+Math.floor(Math.random()*25)));
         continue;
+      }
       throw e;
     }
 }

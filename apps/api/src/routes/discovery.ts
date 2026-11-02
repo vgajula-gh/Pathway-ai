@@ -1,3 +1,4 @@
+import {initializeKnowledge} from '../knowledge/runtime.js';
 import { FastifyInstance } from 'fastify';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
@@ -15,7 +16,7 @@ export default async function routes(app: FastifyInstance) {
       .parse(req.body || {});
     const availability = await discoveryAvailability(s.aiConsent);
     if (!availability.enabled)
-      throw new HttpError(503, availability.unavailable!.message);
+      throw new HttpError(s.aiConsent?503:403, availability.unavailable!.message);
     const result=await enqueueSearch(s.id,'manual');
     return reply.code(202).send({...result,...await discoveryStatus(s.id)});
   });
@@ -23,7 +24,8 @@ export default async function routes(app: FastifyInstance) {
     const s=await requireStudent(req);
     z.object({}).strict().parse(req.body||{});
     const availability=await discoveryAvailability(s.aiConsent);
-    if(!availability.enabled)throw new HttpError(503,availability.unavailable!.message);
+    if(!s.aiConsent)throw new HttpError(403,availability.unavailable!.message);
+    if(!availability.enabled&&!await initializeKnowledge())throw new HttpError(503,availability.unavailable!.message);
     return runStudentDiscovery(s.id);
   });
   app.get('/api/discovery/status', async (req, reply) => {

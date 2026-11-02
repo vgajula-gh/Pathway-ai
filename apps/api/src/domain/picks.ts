@@ -1,7 +1,7 @@
 import { Opp, scoreOpportunity } from './scoring.js';
 import { StudentContext } from './types.js';
 export type Bucket = 'free' | 'paid';
-export type PickOpportunity = Opp & { costType: string; costVerifiedAt?: Date | null; feeFlag: boolean; deadline?:string|null };
+export type PickOpportunity = Opp & { costType: string; costVerifiedAt?: Date | null; feeFlag: boolean; deadline?:string|null; opportunityType?:string };
 export function seedCostType(cost: string): string {
   return /^free(?:\s|$|\()/i.test(cost) ? 'free' : /fees?|dues|\$\d/i.test(cost) ? 'paid' : 'unknown';
 }
@@ -41,9 +41,13 @@ export function selectPicks(
     .flatMap((o) => {
       const fit = scoreOpportunity(o, student, freeMin);
       if (fit.excluded) return [];
+      const outside=!fit.matched.length&&!fit.goalHit;
+      if(outside&&(stretches<1||o.feeFlag||fit.eligibility.status!=='eligible'))return [];
       const penalty =
         (reasons.includes('too much time') && /^high/i.test(o.commitment) ? 0.2 : 0) +
-        (reasons.includes('cost') && bucketFor(o) === 'paid' ? 0.15 : 0);
+        (reasons.includes('cost') && bucketFor(o) === 'paid' ? 0.15 : 0) +
+        (reasons.includes('too far')&&!/virtual|online/i.test(o.format)?0.15:0)+
+        (reasons.some(r=>r.startsWith('interest:')&&o.tags.some(t=>t.toLowerCase()===r.slice(9)))?0.2:0);
       return [{ o, fit, score: fit.score - penalty + (previous.includes(o.id) ? 0.015 : 0) }];
     });
   const selected: { opportunityId: string; bucket: Bucket; rank: number; isStretch: boolean }[] = [];
@@ -53,24 +57,24 @@ export function selectPicks(
   for (const bucket of ['free', 'paid'] as const)
     for (let rank = 0; rank < counts[bucket]; rank++) {
       const choice = candidates
-        .filter((c) => bucketFor(c.o) === bucket && !used.has(c.o.id))
+        .filter((c) => bucketFor(c.o) === bucket && !used.has(c.o.id)&& (c.fit.matched.length>0||c.fit.goalHit||!selected.some(p=>p.isStretch)))
         .sort((a, b) => {
           const quality = (c: typeof a) =>
             c.score +
-            (!types.has(typeKey(c.o.category)) ? 0.12 : 0) +
+            (!types.has(typeKey(c.o.opportunityType||c.o.category)) ? 0.12 : 0) +
             (!efforts.has(c.o.commitment.split(':')[0]) ? 0.04 : 0);
           const urgency=(c:typeof a)=>{const days=c.o.deadline?Math.round((Date.parse(c.o.deadline)-Date.parse(today))/86400000):Infinity;return days<7?-0.06:Number.isFinite(days)?0.05/(1+days/30):0;};
           return (quality(b)+urgency(b)) - (quality(a)+urgency(a)) || (a.o.deadline||'9999').localeCompare(b.o.deadline||'9999') || a.o.id.localeCompare(b.o.id);
         })[0];
       if (!choice) break;
-      selected.push({ opportunityId: choice.o.id, bucket, rank, isStretch: false });
+      selected.push({ opportunityId: choice.o.id, bucket, rank, isStretch: !choice.fit.matched.length&&!choice.fit.goalHit });
       used.add(choice.o.id);
-      types.add(typeKey(choice.o.category));
+      types.add(typeKey(choice.o.opportunityType||choice.o.category));
       efforts.add(choice.o.commitment.split(':')[0]);
     }
   const stretch = candidates
-    .filter((c) => !c.o.feeFlag && !c.fit.matched.length && c.fit.eligibility.status === 'eligible')
-    .sort((a, b) => b.score - a.score || a.o.id.localeCompare(b.o.id))
+    .filter((c) => !c.o.feeFlag && !c.fit.matched.length && !c.fit.goalHit && c.fit.eligibility.status === 'eligible')
+    .sort((a, b) => Number(selected.some(p=>p.opportunityId===b.o.id&&p.isStretch))-Number(selected.some(p=>p.opportunityId===a.o.id&&p.isStretch))||b.score-a.score||a.o.id.localeCompare(b.o.id))
     .find((c) => selected.some((p) => p.bucket === bucketFor(c.o)));
   if (stretch && stretches > 0) {
     const existing = selected.find((p) => p.opportunityId === stretch.o.id);

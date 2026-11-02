@@ -10,14 +10,16 @@ export type VectorRecord = {
   };
 };
 export interface VectorStore {
+  identity?: string;
   kind: 'memory' | 'pinecone' | 'pgvector';
   dimension(): Promise<number>;
   upsert(records: VectorRecord[]): Promise<void>;
-  query(values: number[], opportunityId: string, topK: number): Promise<{ id: string; score: number }[]>;
+  query(values: number[], opportunityId: string | string[], topK: number): Promise<{ id: string; score: number }[]>;
   delete(ids: string[]): Promise<void>;
   list(cursor?: string): Promise<{ ids: string[]; cursor?: string }>;
 }
 export interface Embedder {
+  provider?: string;
   dimension: number;
   model: string;
   embed(texts: string[], type: 'query' | 'passage'): Promise<number[][]>;
@@ -38,4 +40,6 @@ export function validVector(v: number[], dimension: number) {
   return v.length === dimension && v.every(Number.isFinite) && v.some((x) => x !== 0);
 }
 
-export const embeddingIdentity = (e: Embedder) => `${e.model}:${e.dimension}`;
+export const embeddingIdentity = (e: Embedder) => `${e.provider ? e.provider+":" : ""}${e.model}:${e.dimension}`;
+
+export const vectorStoreIdentity=(s:VectorStore)=>s.identity||s.kind;

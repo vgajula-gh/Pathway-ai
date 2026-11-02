@@ -17,7 +17,7 @@ export async function enqueueSearch(studentId:string,kind:'initial'|'manual'|'mo
     return {requested:false};
   }
   await settleSearchRequests(studentId);
-  const short=await shortBuckets(studentId),cached=!short.length;
+  const short=await shortBuckets(studentId),cached=kind!=='manual'&&!short.length;
   const cachedPicks=cached?await personalPicks(studentId):[];
   return transaction(async tx=>{
     const student=await tx.student.update({where:{id:studentId},data:{updatedAt:now}});
@@ -35,6 +35,10 @@ export async function enqueueSearch(studentId:string,kind:'initial'|'manual'|'mo
     const active=await tx.opportunitySearchRequest.findFirst({where:{studentId,status:{in:pending}},orderBy:{createdAt:'desc'}});
     if(active&&active.signature===signature)return {requested:false,requestId:active.id};
     if(active)await tx.opportunitySearchRequest.update({where:{id:active.id},data:{status:'cancelled',finishedAt:now}});
+    if(kind==='initial'&&!cached) {
+      const recent=await tx.opportunitySearchRequest.findFirst({where:{studentId,createdAt:{gte:new Date(+now-refreshDays()*86400000)}},orderBy:{createdAt:'desc'}});
+      if(recent&&recent.signature!==signature&&!(recent.status==='limited'&&recent.createdAt.toISOString().slice(0,7)!==now.toISOString().slice(0,7)))return {requested:false};
+    }
     const previous=kind!=='manual'?await tx.opportunitySearchRequest.findFirst({where:{studentId,signature,createdAt:{gte:new Date(+now-refreshDays()*86400000)}},orderBy:{createdAt:'desc'}}):null;
     if(previous&&!(previous.status==='limited'&&previous.createdAt.toISOString().slice(0,7)!==now.toISOString().slice(0,7)))return {requested:false};
     const state=await stateIn(tx,studentId,now);
@@ -64,8 +68,8 @@ export async function enqueueSearch(studentId:string,kind:'initial'|'manual'|'mo
         bindings.push({key:group.key,since:(old.requestedAt||old.lastDiscoveredAt||now).toISOString()});
         continue;
       }
-      await tx.discoveryGroup.upsert({where:{key:group.key},create:{...group,status:'queued_manual',pendingBuckets:JSON.stringify(short),requestedAt:now},
-        update:{status:'queued_manual',pendingBuckets:JSON.stringify(short),requestedAt:now,error:''}});
+      await tx.discoveryGroup.upsert({where:{key:group.key},create:{...group,status:'queued_manual',pendingBuckets:JSON.stringify(short.length?short:['free','paid']),requestedAt:now},
+        update:{status:'queued_manual',pendingBuckets:JSON.stringify(short.length?short:['free','paid']),requestedAt:now,error:''}});
       bindings.push({key:group.key,since:now.toISOString()});
     }
     const request=await tx.opportunitySearchRequest.create({data:{studentId,kind,signature,groupBindings:JSON.stringify(bindings),manualSlot,cycleStartedAt:state.cycleStartedAt,createdAt:now}});
