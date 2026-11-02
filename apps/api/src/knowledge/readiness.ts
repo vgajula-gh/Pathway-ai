@@ -3,6 +3,7 @@ const messages = {
   discovery_disabled: 'Live opportunity search is turned off for this website. Catalog picks still work.',
   ai_unavailable: 'AI is not configured for this website yet. Catalog picks still work.',
   search_not_configured: 'The website owner needs to connect opportunity search. Catalog picks still work.',
+  extraction_not_configured:'The website owner needs to set a program-reading AI model. Catalog picks still work.',
   embedding_not_configured: 'The website owner needs to finish setting up the program library. Catalog picks still work.',
   vector_not_configured: 'The website owner needs to finish connecting the program library. Catalog picks still work.',
   pinecone_authorization_failed: 'The program library could not authenticate. The website owner needs to check its connection.',
@@ -28,6 +29,8 @@ export function searchConfigurationIssue(values: NodeJS.ProcessEnv, aiDisabled: 
     : values.SEARCH_PROVIDER === 'anthropic' ? 'ANTHROPIC_API_KEY' : null;
   if (!searchKey) return knowledgeIssue('search_not_configured', ['SEARCH_PROVIDER']);
   if (!values[searchKey]) return knowledgeIssue('search_not_configured', [searchKey]);
+  if(values.LLM_PROVIDER?.toLowerCase()==='openai'&&!values.AI_MODEL_EXTRACTION?.trim()&&!values.OPENAI_MODEL?.trim())
+    return knowledgeIssue('extraction_not_configured',['AI_MODEL_EXTRACTION','OPENAI_MODEL']);
   return null;
 }
 export function knowledgeConfigurationIssue(values:NodeJS.ProcessEnv,aiDisabled:boolean):KnowledgeIssue|null {

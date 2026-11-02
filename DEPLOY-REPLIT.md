@@ -223,3 +223,29 @@ A DISCOVERY_MONTHLY_BUDGET of 30 allows thirty shared topic-group discovery atte
 AI_MONTHLY_LIMIT is a separate shared cap for interactive requests plus discovery/recheck/preparation reservations. If it remains 1000, ten equally active students have about 100 interactive requests each per month before subtracting shared work. AI_DAILY_LIMIT=20 still caps each student’s daily interactive requests. A feature request can include multiple model calls; these limits are not dollar budgets.
 
 When raising a cap, change the production Secret and republish. The recovery update rechecks both caps against stored current-month usage. Choose Search again to resume previously unfunded work; opening Explore or reading status alone does not start it. It keeps usage records and manual intent; failed paid searches are not automatically replayed. Check `/api/discovery/status` while signed in: `monthlyAllowance.reasons` identifies which cap still blocks searches, and `resetsAt` identifies the shared UTC-month reset. The personal rolling-cycle next date is separate. If the app still reports a cap after this fix, have Replit Agent report the current DiscoveryUsage.runs / DISCOVERY_MONTHLY_BUDGET and AIUsage month count / AI_MONTHLY_LIMIT without printing credentials. This change needs no new schema changes or Secrets. It does not change your configured caps.
+
+## Test extraction without Replit Agent
+
+Use these checks after syncing this code to Replit, before publishing. They run in **Shell**, independently of Agent and your student account. They use the current workspace settings; production Secrets may differ.
+
+1. Open your project and find **Shell** in the tools menu. From the project root, run:
+
+   ```sh
+   npm run check:extraction
+   ```
+
+   This prints the requested model IDs and checks that extraction has a model and AI is enabled with a provider key. It makes no API request. Fix any reported missing setting in Secrets, restart Run and open a fresh Shell tab. With OpenAI, `AI_MODEL_EXTRACTION` overrides `OPENAI_MODEL`; leaving the override absent is supported.
+
+2. To test the actual configured model, run once:
+
+   ```sh
+   npm run check:extraction -- --live
+   ```
+
+   This makes one hosted extraction request against clearly synthetic program text and can incur a small provider charge. It does not query or write your database, fetch websites, create a real opportunity or write Pinecone vectors. It is an owner diagnostic outside the app's usage counters; do not run it repeatedly. Hosted retries are disabled. Local Ollama keeps its existing JSON compatibility behavior.
+
+3. A successful `ok: true` live result confirms extraction, local format validation and deterministic evidence verification for that fixture. It does not guarantee that a real website can be fetched or contains enough evidence for verification. If it fails, copy the JSON report: model IDs, failure code and safe field paths are enough to start diagnosis; no key or raw model response is printed.
+
+4. If the check succeeds, test one real search in Preview. Check the correct environment's latest DiscoveryRun records. New records include `usage.models`; old records cannot establish which historical model was used. An empty Pinecone index alone is not proof that search failed: vectors are written after source verification and catalog persistence, in namespace **opportunities**.
+
+OpenAI extraction now sends its exact JSON schema, accepts nullable unknown evidence, requests compact source quotes and allows 4096 output-text tokens (plus nano's existing reasoning headroom). Official-source, grade, date, cost and activity checks remain mandatory. A run where every candidate fails extraction is marked failed; failures keep shared paid reservations counted but leave the student's successful-search allowance intact. No new Secrets, database migration or configured quota changes are required.

@@ -19,6 +19,7 @@
     "setup": "node scripts/setup.mjs",
     "db:demo": "npm run db:demo --workspace apps/api",
     "cleanup:samples": "node --import tsx scripts/cleanup-samples.mjs",
+    "check:extraction": "node --env-file-if-exists=.env --import tsx scripts/check-extraction.mjs",
     "ollama:setup": "node scripts/setup-ollama.mjs",
     "ollama:start": "node scripts/start-ollama.mjs",
     "start": "node scripts/start-production.mjs",

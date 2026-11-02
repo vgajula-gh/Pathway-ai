@@ -239,3 +239,19 @@ it('reports current cached results when an older cached request predates a newer
  await db.opportunitySearchRequest.create({data:{studentId,kind:'manual',signature:'robotics|9-10|NC',status:'limited',createdAt:new Date(Date.now()-1000),finishedAt:new Date()}});
  await enqueueSearch(studentId,'manual');expect(await searchState(studentId)).toMatchObject({finding:false,search:{phase:'cached',found:6}});
 });
+it('marks all-extraction failures failed, records requested models and retains the student allowance and shared usage',async()=>{
+ const {enqueueSearch,searchState}=await import('../src/discovery/requests.js');
+ vi.stubEnv('SEARCH_MODEL','test-web-model');vi.stubEnv('AI_MODEL_EXTRACTION','test-reader-model');
+ remote.discover.mockImplementationOnce(async(_group,_buckets,budget:any)=>{
+  budget.failures.push({stage:'extract',code:'invalid_schema',issues:[{field:'gradeMin',code:'invalid_type'}]});
+  return [];
+ });
+ await enqueueSearch(studentId,'manual');await runJobs();
+ const run=await db.discoveryRun.findFirstOrThrow(),usage=JSON.parse(run.usage);
+ expect(run.status).toBe('failed');expect(usage).toMatchObject({phase:'failed',savedIds:[],models:{search:{provider:'openai',model:'test-web-model'},extraction:{model:'test-reader-model'}}});
+ expect((await searchState(studentId)).search.phase).toBe('failed');expect((await refreshStatus(studentId)).remaining).toBe(1);
+ expect((await db.discoveryUsage.findFirstOrThrow()).runs).toBe(1);expect((await db.aIUsage.findFirstOrThrow()).count).toBe(1);
+ expect(await db.opportunitySearchRequest.findFirstOrThrow()).toMatchObject({status:'failed',countedAt:null});
+ await runJobs();expect(remote.discover).toHaveBeenCalledTimes(1);
+ expect(run.usage).not.toContain('fake-test-key');
+});
