@@ -35,3 +35,25 @@ SavedOpportunity now stores deadline (student-entered, separate from Opportunity
 CalendarLink stores student ownership, a label, maskedUrl, AES-256-GCM encryptedUrl, eventType, lastSync, syncAfter, leaseUntil and sanitized error. Event adds calendarId/importKey (unique together), readOnly and a cascading source relation. A successful sync atomically upserts its mirror and removes absent occurrences; failed syncs preserve events. Exports contain masked calendar metadata only, never the private URL or ciphertext.
 
 NotificationSettings is one-to-one with Student (enabled=false, local time, pausedUntil). PushSubscription stores an endpoint hash and AES-GCM ciphertext, never plaintext endpoint/keys in API responses or exports. NudgeDelivery has a composite studentId/local-date primary key, status and accepted count; reserving before sends prevents duplicate daily nudges across processes. All three cascade on student deletion. Exports include settings and delivery history but exclude subscription capabilities.
+
+## Shared discovery and program knowledge
+
+| Entity | Purpose and fields |
+| --- | --- |
+| Student.region | Optional US state abbreviation/DC, `virtual`, or empty. Controlled values; no new address collection. |
+| Opportunity | Nullable grade bounds; verificationStatus, verifiedAt, officialDomain, region[], costType, costAmount, costVerifiedAt, financialAidNote, feeFlag, discoveredFor[], source, evidence{}, requirements[], lastRecheckedAt. Existing seed records keep source=seed and their verification is never manufactured. |
+| StudentPick | Student/opportunity composite key, bucket, rank, isStretch, pickedAt, refreshCycle. Both relations cascade; repeated reads preserve the original pickedAt. |
+| OpportunityFeedback | Student/opportunity key, reason, createdAt. Separate from application progress. |
+| PickRefreshState | Student key, rolling cycle start, last automatic refresh, manual count, one earned/used interest-change bonus and normalized interest signature. |
+| DiscoveryGroup | Public normalized topic/grade-band/region key, short buckets, queue state, last discovery timestamp and safe error. No names, student IDs or exact locations. |
+| SourcePage | Shared program relation, URL/title, readable snapshot text, contentHash, checkedAt; unique by program/URL. |
+| KnowledgeChunk | Shared program relation, text, sourceUrl, pageTitle, checkedAt, contentHash, opportunity scope, embedding model/dimension identity. localEmbedding is used only by the memory adapter. |
+| JobLease | Key, unique owner token, expiry; serializes jobs across timers, cron and replicas, with heartbeat. |
+| DiscoveryUsage | UTC month key; run/re-check reservations, searches, pages, embeddings, vector writes, token estimates and planning cost estimates. No student content. |
+| DiscoveryRun | Shared group/program key, kind, status, usage, sanitized error, start/end. Interrupted usage is explicitly incomplete, not presented as a provider invoice. |
+
+SavedOpportunity adds `citedDeadline` and `citations` separately from the student's `deadline`. Saving pins a known official deadline so later shared-catalog changes cannot silently alter that student's application. Approved requirements merge into the checklist, preserving notes, completed steps and student-entered dates. Expiry removes recommendations, not application records. The upgrade copies existing checked catalog deadlines into saved applications.
+
+Conversation optionally stores opportunityId. Program-message metadata includes checked citations and a rules-engine eligibility note. Exports include conversations/messages, picks, feedback and refresh state; student deletion cascades these private records. Shared catalog/snapshots/chunks contain public program information and remain reusable after a student deletes their account.
+
+Four matching migrations for each provider: `20261103010000_personal_picks`, `20261103020000_discovery`, `20261103030000_knowledge`, `20261103040000_discovery_jobs`. Replit still uses development schema sync + Publish's schema diff. Migration-managed PostgreSQL installations can apply the versioned SQL; existing databases without migration history must be baselined first. The optional `prisma/postgresql/optional/knowledge-vector.sql` is deliberately outside ordinary migration history so Pinecone deployments never require extension privileges.

@@ -6,10 +6,43 @@ info:
 servers: [{ url: http://localhost:8787 }]
 components:
   securitySchemes:
+    jobsSecret: { type: http, scheme: bearer, description: Owner-only JOBS_SECRET; never sent by students }
     accountSession: { type: apiKey, in: cookie, name: pathway_session }
     accessCode: { type: apiKey, in: header, name: x-access-code }
     devStudent: { type: apiKey, in: header, name: x-student-id }
   schemas:
+    StudentRegion:
+      type: string
+      description: Optional broad region; empty means unspecified
+      enum: ['', virtual, AL, AK, AZ, AR, CA, CO, CT, DE, FL, GA, HI, ID, IL, IN, IA, KS, KY, LA, ME, MD, MA, MI, MN, MS, MO, MT, NE, NV, NH, NJ, NM, NY, NC, ND, OH, OK, OR, PA, RI, SC, SD, TN, TX, UT, VT, VA, WA, WV, WI, WY, DC]
+    RefreshAvailability:
+      type: object
+      properties:
+        available: { type: boolean }
+        remaining: { type: integer, minimum: 0 }
+        nextAvailableAt: { type: string, format: date-time }
+    KnowledgeCitation:
+      type: object
+      properties:
+        number: { type: integer }
+        chunkId: { type: string }
+        sourceUrl: { type: string, format: uri }
+        pageTitle: { type: string }
+        checkedAt: { type: string, format: date-time }
+    OpportunityList:
+      type: object
+      properties:
+        picks: { type: array, items: { $ref: '#/components/schemas/Opportunity' } }
+        recommended: { type: array, items: { $ref: '#/components/schemas/Opportunity' } }
+        excluded: { type: array, items: { type: object } }
+        dismissed: { type: integer }
+        sampleData: { type: boolean }
+        discoveryEnabled: { type: boolean }
+        finding: { type: boolean }
+        limited: { type: boolean }
+        error: { type: [string, 'null'] }
+        lastCheckedAt: { type: [string, 'null'], format: date-time }
+        refresh: { $ref: '#/components/schemas/RefreshAvailability' }
     AccountCredentials:
       type: object
       required: [phrase, confirmPhrase]
@@ -29,7 +62,7 @@ components:
       type: object
       required: [type]
       properties:
-        type: { enum: [add_event, move_event, remove_event, add_goal, add_milestone, save_opportunity, add_portfolio_entry] }
+        type: { enum: [add_event, move_event, remove_event, add_goal, add_milestone, save_opportunity, add_portfolio_entry, add_application_requirements] }
         title: { type: string }
         eventType: { enum: [class, exam, deadline, club, sports, competition, volunteering, study, personal, reminder, other] }
         start: { type: string, pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$' }
@@ -40,6 +73,9 @@ components:
         effortMin: { type: integer }
         targetDate: { type: string }
         opportunityId: { type: string }
+        referenceHash: { type: string, pattern: '^[a-f0-9]{64}$' }
+        deadline: { type: string, format: date }
+        checklist: { type: array, items: { type: object, required: [title, sourceUrl], properties: { title: { type: string, maxLength: 240 }, sourceUrl: { type: string, format: uri } } } }
     Proposal:
       type: object
       properties:
@@ -62,6 +98,18 @@ components:
         organizer: { type: string }
         url: { type: string }
         category: { type: string }
+        bucket: { enum: [free, paid] }
+        rank: { type: integer }
+        isStretch: { type: boolean }
+        canAsk: { type: boolean }
+        costType: { enum: [free, paid, unknown] }
+        costAmount: { type: [string, 'null'] }
+        costLabel: { type: string }
+        financialAidNote: { type: [string, 'null'] }
+        feeFlag: { type: boolean }
+        verificationStatus: { enum: [verified, new_find, stale, expired] }
+        verifiedAt: { type: [string, 'null'], format: date-time }
+        sourceCheckedAt: { type: [string, 'null'], format: date-time }
         verified: { type: boolean }
         deadline: { type: [string, 'null'] }
         fit:
@@ -220,7 +268,7 @@ paths:
     post:
       security: [{ accessCode: [] }]
       summary: Onboard a student (credentials required in production)
-      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [name, grade], properties: { credentials: { $ref: '#/components/schemas/AccountCredentials' }, name: { type: string }, grade: { type: integer, minimum: 9, maximum: 12 }, interests: { type: array, items: { type: string } }, goal: { type: string }, aiConsent: { type: boolean }, timezone: { type: string }, studyStart: { type: string }, studyEnd: { type: string }, downtimeStart: { type: string }, downtimeEnd: { type: string }, sampleWeek: { type: boolean } } } } } }
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [name, grade], properties: { region: { $ref: '#/components/schemas/StudentRegion' }, credentials: { $ref: '#/components/schemas/AccountCredentials' }, name: { type: string }, grade: { type: integer, minimum: 9, maximum: 12 }, interests: { type: array, items: { type: string } }, goal: { type: string }, aiConsent: { type: boolean }, timezone: { type: string }, studyStart: { type: string }, studyEnd: { type: string }, downtimeStart: { type: string }, downtimeEnd: { type: string }, sampleWeek: { type: boolean } } } } } }
       responses: { '201': { description: Created } }
   /api/me:
     get: { summary: Current student, responses: { '200': { description: OK } } }
@@ -232,6 +280,7 @@ paths:
             schema:
               type: object
               properties:
+                region: { $ref: '#/components/schemas/StudentRegion' }
                 settings: { $ref: '#/components/schemas/StudentSettings' }
       responses: { '200': { description: OK } }
     delete: { summary: Delete all student data, responses: { '204': { description: Deleted } } }
@@ -249,16 +298,43 @@ paths:
   /api/events/{id}/ics:
     parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
     get: { summary: Calendar file, responses: { '200': { description: text/calendar } } }
-  /api/opportunities: { get: { summary: Ranked opportunities with factors, responses: { '200': { description: OK } } } }
+  /api/opportunities: { get: { summary: Personal Free/Paid picks with fit factors and discovery availability, responses: { '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/OpportunityList' } } } } } } }
   /api/opportunities/{id}:
     parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
     get: { summary: One opportunity, responses: { '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Opportunity' } } } } } }
   /api/opportunities/{id}/status:
     parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
-    post: { summary: Save / dismiss / clear, responses: { '200': { description: OK } } }
+    post: { summary: Interested / dismiss with reason / clear, requestBody: { required: true, content: { application/json: { schema: { type: object, required: [status], properties: { status: { enum: [saved, dismissed, none] }, reason: { enum: ['not my interest', 'too much time', 'too far', cost, other] } } } } } }, responses: { '200': { description: OK } } }
   /api/opportunities/{id}/prep:
     parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
     post: { summary: Create prep proposal, responses: { '200': { description: Proposal, content: { application/json: { schema: { $ref: '#/components/schemas/Proposal' } } } } } }
+  /api/opportunities/refresh:
+    post:
+      summary: Use one rolling-cycle manual allowance and queue shared discovery only for short buckets
+      responses:
+        '200': { description: Catalog picks rebuilt; returns refresh and queue status }
+        '429': { description: Allowance reached with next available date }
+        '503': { description: Optional discovery configuration unavailable or student AI consent off }
+  /api/discovery/status:
+    get:
+      summary: Current student discovery queue, safe errors and refresh availability
+      responses:
+        '200': { description: Enabled/finding/limited/error/lastCheckedAt and refresh availability }
+  /api/opportunities/{id}/requirements:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    post:
+      summary: Propose adding source-backed checklist steps and deadline to an existing Interested item
+      responses:
+        '200': { description: Awaiting approval; no checklist mutation yet, content: { application/json: { schema: { $ref: '#/components/schemas/Proposal' } } } }
+        '422': { description: Missing saved application or current evidenced requirements/deadline }
+  /internal/jobs/run:
+    post:
+      security: [{ jobsSecret: [] }]
+      summary: Owner-only bounded discovery, source recheck and automatic-refresh jobs
+      responses:
+        '200': { description: skipped true if locked; otherwise result counts }
+        '401': { description: Invalid or missing bearer secret }
+        '503': { description: JOBS_SECRET missing or too short on the server }
   /api/proposals: { get: { summary: List proposals, responses: { '200': { description: OK } } } }
   /api/proposals/{id}/approve:
     parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
@@ -271,7 +347,36 @@ paths:
     parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
     patch: { summary: Toggle step, responses: { '200': { description: OK } } }
   /api/portfolio: { get: { summary: Portfolio, responses: { '200': { description: OK } } }, post: { summary: Capture experience, responses: { '201': { description: Created } } } }
-  /api/buddy/messages: { get: { summary: History, responses: { '200': { description: OK } } }, post: { summary: Send message (runs agent), responses: { '200': { description: Reply with toolEvents and proposalIds } } } }
+  /api/buddy/messages:
+    post:
+      summary: Send a general or program-scoped Buddy message
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                text: { type: string, minLength: 1, maxLength: 4000 }
+                conversationId: { type: string, maxLength: 200 }
+                opportunityId: { type: string, maxLength: 200, description: Starts a program-only conversation; subsequent requests inherit saved scope }
+      responses:
+        '200':
+          description: Reply, conversationId, toolEvents and proposalIds; scoped replies also include source citations and rules-engine eligibilityNote
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  reply: { type: string }
+                  conversationId: { type: string }
+                  opportunityId: { type: string }
+                  eligibilityNote: { type: string }
+                  citations: { type: array, items: { $ref: '#/components/schemas/KnowledgeCitation' } }
+        '403': { description: Student AI consent off }
+        '429': { description: Student daily or overall monthly AI request limit reached }
+        '503': { description: Optional AI or program knowledge unavailable }
   /api/extract: { post: { summary: Extract candidate events (not saved), responses: { '200': { description: Candidates } } } }
   /api/coach: { post: { summary: Learning explanation, responses: { '200': { description: OK } } } }
   /api/audit: { get: { summary: Activity log, responses: { '200': { description: OK } } } }

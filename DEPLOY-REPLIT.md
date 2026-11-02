@@ -28,7 +28,7 @@ Open **Secrets** (the padlock), and add the following. Also check them in the pu
 | `OPENAI_API_KEY` | Your OpenAI API key if using `openai`; also set `OPENAI_MODEL` to a model supported by your account. |
 | `AI_DISABLED` | `false` to enable configured AI, or `true` to run without AI. |
 
-Only one provider key is needed. Missing keys also disable AI. Calendar, opportunities, goals, data export, and the other ordinary features continue to work with AI off or capped. Ollama remains available locally; a hosted Replit app needs a reachable Ollama server if you choose that provider.
+For Buddy, only one AI provider key is needed. Missing keys also disable AI. Calendar, opportunities, goals, data export, and the other ordinary features continue to work with AI off or capped. Ollama remains available locally; a hosted Replit app needs a reachable Ollama server if you choose that provider.
 
 Limits count accepted AI feature requests (Buddy, schedule scan, coach, and Today insights), including provider failures. A request may involve several model/tool calls, so these are request caps, not dollar budgets. Days and months reset at midnight UTC. Counters are stored in PostgreSQL, survive restarts, and monthly usage remains counted after a student deletes their profile. The daily counter uses the student ID, so creating another profile starts a separate daily allowance; the shared monthly cap still applies.
 
@@ -50,7 +50,7 @@ Before publishing this update, add `SIGN_IN_SECRET` in Replit Secrets and in dep
 node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
 ```
 
-Copy the result into `SIGN_IN_SECRET` and keep a secure backup. This is your app's own secret, not an OpenAI key. Use the same value in all deployment instances. Do not change it during updates: changing it stops existing private phrases and recovery codes from working. Startup refuses to run in production without at least 32 characters. No other new service or account is needed.
+Copy the result into `SIGN_IN_SECRET` and keep a secure backup. This is your app's own secret, not an OpenAI key. Use the same value in all deployment instances. Do not change it during updates: changing it stops existing private phrases and recovery codes from working. Startup refuses to run in production without at least 32 characters. No other new service or account is needed for phrase sign-in.
 
 ## Returning students
 
@@ -91,3 +91,120 @@ New deployment environment variables for these three features: `CALENDAR_SECRET`
 
 ## Combined sign-in and student-feature upgrade
 Keep `SIGN_IN_SECRET` from the sign-in deployment, and add calendar/VAPID Secrets only for those optional features. Replit applies production schema changes during Publish; the app does not run production DDL at startup. New migration-managed SQLite databases include the matching account migration too; existing local databases can continue using db:push. Signing out removes notifications on that device; changing/recovering a phrase turns notifications off on all devices, which must opt in again.
+
+## Personal opportunity discovery: publish safely first
+
+This update works with your existing database, sign-in, calendar, AI and notification Secrets. Keep those values. You can publish with `DISCOVERY_ENABLED=false` first: Interested and catalog picks work without a Pinecone account. Students who finish a new profile now see Explore after saving their recovery code; returning students still open their dashboard.
+
+Before publishing, sync the new schema to the **development** Replit database with `npm run db:sync:replit`, review the schema changes in Publish, and keep the production database selected there. Confirm the database target explicitly; a workspace environment label alone does not identify the development database. Do not replace production DATABASE_URL with a development URL. Replit applies the schema diff on Publish; `npm start` keeps the existing no-production-DDL behavior.
+
+### Create a Pinecone index
+
+For the simplest setup, use your existing OpenAI key for embeddings and Pinecone for vector storage:
+
+1. Open [Pinecone](https://app.pinecone.io/), create an account, and create/select a project.
+2. In **Database / Indexes**, choose **Create index**. Choose a **serverless dense index for your own vectors** (labels may vary), not an integrated text-embedding index.
+3. Give it the name `pathway-opportunities`. Set **dimension 1536** and **metric cosine**. Choose a cloud/region available under your plan. This dimension matches OpenAI `text-embedding-3-small`.
+4. Wait until the index says Ready. The app creates/uses the namespace **opportunities** when it first writes vectors. Keep this namespace dedicated to Pathway's public program knowledge.
+5. Open Pinecone **API keys**, create a key for this project with index read/write access, and copy it into Replit deployment Secret `PINECONE_API_KEY`. Set `PINECONE_INDEX=pathway-opportunities`.
+6. Keep the key private. Students do not need Pinecone accounts or any service API keys. PostgreSQL still stores program text/citations; Pinecone holds public-program vectors/metadata, not student profiles or chats.
+
+Reference: [Pinecone index settings](https://docs.pinecone.io/reference/api/2025-10/control-plane/configure_index). A different embedding model can need a different index dimension. Changing only the secret will not resize an existing index; create the matching index and arrange re-ingestion when changing models. A dimension mismatch turns program questions off with a log message instead of stopping the app.
+
+### Add discovery settings to Replit deployment Secrets
+
+These are **server settings**, even where the value is not confidential. Never prefix keys or JOBS_SECRET with `VITE_`. Keep `AI_DISABLED=false` when you want paid discovery. Keep your existing `LLM_PROVIDER`, provider key and Buddy model (`OPENAI_MODEL` for OpenAI).
+
+| Name | Safe default / what to enter |
+| --- | --- |
+| `DISCOVERY_ENABLED` | `false`; change to `true` only after the index/settings below are ready. |
+| `SEARCH_PROVIDER` | `none`; choose `openai` for your OpenAI account or `anthropic` for Claude search. |
+| `SEARCH_MODEL` | Optional. OpenAI defaults to `gpt-4.1-mini`; Claude inherits ANTHROPIC_MODEL. Use a web-search-capable model available in your account. This is separate from Buddy's model. |
+| `AI_MODEL_EXTRACTION` | Optional; blank inherits Buddy's model. You can enter the cheaper model already working in your account, such as your existing nano setting if still supported. |
+| `EMBEDDING_PROVIDER` | `none`; enter `openai` for the 1536-dimension setup above. Alternatives: pinecone, voyage, ollama. |
+| `EMBEDDING_MODEL` | For this setup: `text-embedding-3-small`. Provider defaults are listed below. |
+| `EMBEDDING_DIMENSION` | For this setup: `1536`; must match the index. Blank uses the selected provider's default. |
+| `VECTOR_STORE` | Local template: `memory`. **Set `pinecone` explicitly in production.** If omitted in production, the app selects pinecone. SQLite always uses memory/cosine. |
+| `PINECONE_API_KEY` | Your Pinecone project API key. No default. |
+| `PINECONE_INDEX` | `pathway-opportunities`, or the exact index name you created. No default. |
+| `VOYAGE_API_KEY` | Only needed if EMBEDDING_PROVIDER=voyage. No default. |
+| `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` | Existing provider keys; also used by the corresponding search/embedding adapters. Do not generate another OpenAI key just for this feature unless you want separate project billing. |
+| `DISCOVERY_MONTHLY_BUDGET` | `10` shared discovery attempts per UTC month. Start small; `0` prevents new discovery attempts. Not a dollar amount. |
+| `DISCOVERY_RECHECKS_PER_MONTH` | `10` separate source re-check attempts per UTC month; `0` pauses these paid re-checks. |
+| `DISCOVERY_TRUSTED_DOMAINS` | Optional comma-separated organizer domains you have reviewed, e.g. `official-organization.example`. No protocol/path. Seed domains and education/government sources are already recognized; .org alone is not proof. |
+| `JOBS_SECRET` | A **new, separate** random value of at least 32 characters for your scheduled trigger. Generate it as described below. |
+| `MANUAL_REFRESHES_PER_MONTH` | `1` per rolling cycle, plus at most one earned interest-change bonus. |
+| `FREE_PICKS` / `PAID_PICKS` | `3` each. These are targets; there may be fewer suitable catalog records. |
+| `STRETCH_PICKS` | `1`; `0` disables the optional stretch slot. Never invent a stretch item when none qualifies. |
+| `REFRESH_INTERVAL_DAYS` | `30`. “Monthly refresh” means a rolling 30-day cycle, not the first day of each calendar month. |
+
+Embedding defaults if you choose another provider: Pinecone `multilingual-e5-large` / 1024 dimensions; Voyage `voyage-3-lite` / 512; local Ollama `nomic-embed-text` / 768 (download that embedding model separately). Those choices require a matching index and their provider configuration. The recommended pilot remains OpenAI embeddings + Pinecone vectors.
+
+Run the random-value command **again** to make JOBS_SECRET; do not reuse or change SIGN_IN_SECRET or CALENDAR_SECRET:
+
+```sh
+node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
+```
+
+Copy the result into `JOBS_SECRET` in the website deployment and into the scheduled trigger's Secrets. It authorizes background checks only; students never enter it. If you rotate it, update both places together. Missing JOBS_SECRET disables the external endpoint; the in-server timer can still run while the server is awake.
+
+### Schedule the background checks
+
+The app checks for work every minute while running. **Autoscale can sleep**, so add a scheduled HTTP trigger for unattended work. The trigger operates on the published app's database through its protected API; it does not need DATABASE_URL or AI/Pinecone keys.
+
+If your Replit plan offers Scheduled Deployments:
+
+1. Create a separate small **Node.js** Replit app for the trigger, so the main website keeps its Autoscale deployment.
+2. In that trigger app's Secrets, add `PATHWAY_URL` = the published website's full HTTPS address (no `/api`), and the same `JOBS_SECRET` you put on the website.
+3. Put the following in its `index.js`. Choose `node index.js` as its run command. No extra packages are needed.
+4. Publish it as a **Scheduled Deployment** at the cadence available on your plan, ideally every 5 minutes. One invocation handles one queued interest group plus one re-check, so initial discoveries can take several invocations. Run it once manually to check the output.
+
+```js
+const site = process.env.PATHWAY_URL;
+if (!site?.startsWith('https://') || !process.env.JOBS_SECRET) {
+  throw new Error('Add PATHWAY_URL and JOBS_SECRET to this trigger app’s Secrets.');
+}
+const result = await fetch(new URL('/internal/jobs/run', site), {
+  method: 'POST',
+  headers: { Authorization: `Bearer ${process.env.JOBS_SECRET}` },
+  signal: AbortSignal.timeout(600000),
+});
+if (!result.ok) throw new Error(`Pathway background check failed (${result.status}).`);
+console.log(await result.json());
+```
+
+Save that trigger file as `index.mjs` and use `node index.mjs` if the trigger project does not enable JavaScript modules. Its output contains counts/skipped status, not credentials.
+
+An external cron service is an alternative: configure an HTTPS **POST** to `https://YOUR-PUBLISHED-SITE/internal/jobs/run` and a private request header named **Authorization** with value **Bearer YOUR_JOBS_SECRET**. Leave the body empty. Use a service that supports private headers and up to ten minutes for a request; do not put the secret in the URL. `skipped:true` simply means another worker already holds the lock. Missing/wrong credentials give 401; missing server secret gives 503.
+
+With an always-on Reserved VM, the timer can supply this scheduling itself. Keep Autoscale unless you choose to change hosting. This new endpoint runs **opportunity jobs**, not calendar syncs or push delivery; those existing timed features still need an awake server.
+
+### Confirm it works, then enable discovery
+
+1. Publish once with `DISCOVERY_ENABLED=false`. Sign in and open Explore: Interested and catalog picks should work; the note explains live discovery is unavailable.
+2. Add the index/provider settings above to **deployment Secrets**, set DISCOVERY_ENABLED=true and AI_DISABLED=false, then republish. Open Explore; the refresh area should be available. A card gets Ask about this program only after its official pages have been ingested.
+3. Finish a new test profile with a topic and state. Catalog picks appear immediately. A queued group shows “Finding more programs for you…”; keep Explore open while the background trigger runs. Source access, queue size, budgets and model responses can mean fewer than six cards.
+4. In Pinecone, open your index and the **opportunities** namespace. New `chunk-...` vectors should appear after successful ingestion. Metadata includes opportunityId, chunkId, sourceUrl, pageTitle and checkedAt; it should contain no student name/profile.
+5. Use Ask about this program and ask a fact visible on its official page. Confirm clickable sources/check dates. Ask something absent from the pages: Buddy should say the official pages do not say.
+6. If only catalog mode appears, check deployment Secrets, model access, Pinecone Ready status, cosine metric and dimensions. Dimension failures have a plain-language deployment log message. In Replit's database viewer, DiscoveryGroup shows queue/error state; DiscoveryRun/DiscoveryUsage show attempts and estimated usage. A fetched site can legitimately prohibit crawling; that result stays unknown/skipped.
+
+### Published-site manual checklist
+
+- [ ] New signup: region optional, recovery-code flow intact, Free/Paid picks appear. Returning phrase sign-in still opens the existing dashboard.
+- [ ] Free-only budget: Paid starts collapsed behind Show paid options; unknown fees are clearly labeled. Unverified seed Free text is not presented as confirmed free.
+- [ ] Interested: the item moves into the existing tracker; notes/checklist/status controls still work; the empty slot refills in the same bucket if a replacement exists.
+- [ ] Not for me: select a reason, confirm it disappears and refills from catalog without consuming a manual refresh.
+- [ ] Program questions: answers link to the correct program's official passages and check dates; an absent answer stays unknown; switching to a new general Buddy chat does not keep the old program scope.
+- [ ] Checklist: save the program to Interested first, ask about it, then choose Add these requirements to my checklist. Check the preview. Nothing changes before Approve; after approval the result is VERIFIED and previous notes/completed steps remain.
+- [ ] Manual refresh: after any pending searches settle, use Find new opportunities; after the allowance is used, the next date is displayed. A meaningful interest change gives only one extra refresh; repeated edits do not mint more.
+- [ ] Pinecone: confirm the opportunities namespace contains program vectors with matching dimension and public-only metadata.
+- [ ] Fallback: turn DISCOVERY_ENABLED=false and republish; browsing, Interested, refills, calendar, goals and approvals still work. Restore it after checking.
+- [ ] Existing data: verify a returning student's applications, phrase, calendar links and notes remain intact after deployment.
+
+Cost planning, caps and provider-price links are in [docs/08-OPPORTUNITY-AND-NEWS-SOURCING.md](docs/08-OPPORTUNITY-AND-NEWS-SOURCING.md). The monthly discovery allowance counts shared runs, not dollars; student Buddy limits are separate. Begin with small run/re-check allowances and monitor your provider dashboards.
+
+### Optional pgvector alternative (developer setup)
+
+Pinecone needs no PostgreSQL extension. For a migration-managed PostgreSQL installation that supports pgvector, `apps/api/prisma/postgresql/optional/knowledge-vector.sql` enables the extension and creates a separate KnowledgeVector table with a 1536-dimension embedding column and HNSW cosine index. Adjust the dimension and EMBEDDING_DIMENSION together before use, apply that SQL explicitly to the intended database, then set VECTOR_STORE=pgvector. The separate vector table keeps the portable Prisma/SQLite text schema independent of extension-only types. This optional DDL is not automatically run by the app. Replit's managed schema-diff workflow may treat manually added tables separately; use Pinecone for the documented Replit pilot. Keep the optional vector table out of unrelated schema cleanup operations. On SQLite, the app automatically uses memory/cosine instead.
+
+Shared discovery and source re-check attempts also reserve one request against the existing **AI_MONTHLY_LIMIT** overall counter. They never consume a student's daily allowance. Their separate discovery/re-check run budgets are additional limits; an exhausted overall AI cap blocks new paid background attempts too.
