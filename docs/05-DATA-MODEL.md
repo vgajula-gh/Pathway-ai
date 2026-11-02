@@ -57,3 +57,6 @@ SavedOpportunity adds `citedDeadline` and `citations` separately from the studen
 Conversation optionally stores opportunityId. Program-message metadata includes checked citations and a rules-engine eligibility note. Exports include conversations/messages, picks, feedback and refresh state; student deletion cascades these private records. Shared catalog/snapshots/chunks contain public program information and remain reusable after a student deletes their account.
 
 Four matching migrations for each provider: `20261103010000_personal_picks`, `20261103020000_discovery`, `20261103030000_knowledge`, `20261103040000_discovery_jobs`. Replit still uses development schema sync + Publish's schema diff. Migration-managed PostgreSQL installations can apply the versioned SQL; existing databases without migration history must be baselined first. The optional `prisma/postgresql/optional/knowledge-vector.sql` is deliberately outside ordinary migration history so Pinecone deployments never require extension privileges.
+
+
+LangGraph/LangChain orchestration adds no tables. Program ChatMessage.meta.workflow and DiscoveryRun.usage.workflow reuse JSON strings for controlled node/status/reason records. Prisma continues to own durable sessions, job leases/cooldowns, usage reservations and student approvals; ephemeral graph state is not stored as framework checkpoints.

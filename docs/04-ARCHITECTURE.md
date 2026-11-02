@@ -39,17 +39,21 @@ Buddy agent · insights · schedule scan · coach
 ```
 Tool definitions are written once (JSON Schema) and translated by each adapter. Guardrails do not depend on the model: tools validate input, the engine decides facts, and only the approval service writes data.
 
-## Agent frameworks: LangGraph, LangChain and others
-**Decision for the MVP: no framework.** The agent is one orchestrator with six tools and a strict approval gate. A thin, typed loop (about 50 lines per provider) is easier to test, audit and explain to schools than a framework abstraction, and it has no extra dependencies to secure.
+## LangGraph and LangChain workflows
 
-| Option | What it would add | When to adopt |
-| --- | --- | --- |
-| **LangGraph.js** | Stateful graphs, checkpoints, durable human-in-the-loop interrupts, parallel branches | When Discover & guide becomes truly multi-agent, or approvals must pause and resume across sessions (Phase 2) |
-| **LangChain.js** | Many model and data integrations, retrievers, document loaders | When the sourcing pipeline needs loaders and retrieval over many documents |
-| **Vercel AI SDK** | Unified TypeScript API over many providers, streaming UI helpers | If we add more providers or want streaming quickly |
-| **OpenAI Agents SDK / Claude Agent SDK** | Vendor-native agent loops and tooling | Only if we commit to one vendor |
+Opportunity discovery and program-scoped Buddy now use **LangGraph.js** for explicit state transitions and conditional routing. **LangChain.js core/textsplitters** supply Documents, word-preserving text splitting, a scoped BaseRetriever and the prompt-to-LLM runnable chain. The framework work executes in production paths; these are not unused dependencies. The general Buddy/schedule/coach provider adapters still implement the existing provider-neutral LLM interface.
 
-**Migration path:** the six tools, the `LLM` interface and the approval service map directly onto LangGraph nodes (orchestrator → tool nodes → an `interrupt` before execute → verify). See prompt 13 in `docs/12-CODEX-PLAYBOOK.md`.
+Discovery graph: search → select candidate → fetch official pages → extract → deterministic verification → shared catalog transaction → knowledge ingestion → next candidate. Failed candidates follow a skip branch. Search failures propagate to the existing job failure handler; paid nodes have no graph retry policy. The same RunBudget limits and public-only queries remain authoritative.
+
+Program-question graph: retrieve → draft JSON → verify quotes → finish or refine query → retrieve. It stops after three retrievals/model drafts, repeated normalized queries, or an empty initial result. The program scope is bound by the server's LangChain retriever. Models can suggest a different search phrase, never another program ID or a data-writing operation.
+
+LangChain's CharacterTextSplitter uses word counting and retained separators to preserve the prior 500-word/50-word overlap, normalized text and chunk IDs. PromptTemplate produces a PromptValue, which the bridge converts to text before calling the existing LLM.json adapter. Pinecone, memory and pgvector adapters remain interchangeable; SQL rechecks scope, model identity and snapshot hashes after vector retrieval.
+
+Framework calls run in an explicit tracing-disabled context. No LangSmith account/key is required, and student prompts/passages are not exported to hosted tracing even if ordinary tracing environment flags are present. Local workflow records contain fixed node names, completion/failure status and controlled reason codes, not input/output snapshots. DiscoveryRun.usage and program-message metadata retain those small records.
+
+**Durability boundary:** Prisma still owns leases, usage reservations, job states, conversations and approval records. These graphs do not add checkpoints, replay paid nodes after a crash, or use LangGraph interrupts to approve changes. The existing proposal service remains the sole student-plan write authority after explicit approval. This refactor requires no new database migration, Pinecone index, model setting or service secret.
+
+Run `npm run demo:workflows` for an offline demonstration with labeled synthetic fixtures and no provider/database calls. `npm run demo:workflows -- --mermaid` prints diagrams generated from the actual compiled graphs. See [workflow walkthrough](13-LANGGRAPH-LANGCHAIN.md) for the code map and demonstration steps.
 
 ## Key decisions
 | Decision | Choice | Why | Trade-off |
@@ -72,7 +76,7 @@ Tool definitions are written once (JSON Schema) and translated by each adapter. 
 
 ## Replit pilot deployment
 
-The current pilot uses one Fastify server to serve the compiled React app and `/api` on `PORT`, binding `0.0.0.0`. Production generates a PostgreSQL Prisma client and runs versioned migrations at startup; SQLite remains the local/Codespaces default. Access codes gate new visitors and are bound to each student at onboarding. Private phrases with single-use recovery codes and hashed HttpOnly cookie sessions restore the same profile on other devices; unlinked legacy profiles can be upgraded in You. Persistent daily student and shared monthly AI quotas are enforced before provider calls. See `DEPLOY-REPLIT.md` for publishing and `docs/06-API.md` for the API contract.
+The current pilot uses one Fastify server to serve the compiled React app and `/api` on `PORT`, binding `0.0.0.0`. Production generates a PostgreSQL Prisma client; Replit applies its schema diff during Publish, SQLite remains the local/Codespaces default. Access codes gate new visitors and are bound to each student at onboarding. Private phrases with single-use recovery codes and hashed HttpOnly cookie sessions restore the same profile on other devices; unlinked legacy profiles can be upgraded in You. Persistent daily student and shared monthly AI quotas are enforced before provider calls. See `DEPLOY-REPLIT.md` for publishing and `docs/06-API.md` for the API contract.
 
 ## Longer-term production path *(proposed)*
 - **Auth:** Clerk / Auth.js / Supabase Auth; age gate; verified parental consent flows where required.
@@ -112,7 +116,7 @@ The vector-store interface isolates Pinecone, optional pgvector, and the SQLite/
 
 Ingestion embeds bounded batches, writes a new vector generation, swaps the authoritative chunk rows transactionally, then deletes old vectors. This is recoverable cross-service work, not a distributed transaction. A monthly reconciliation removes vectors with no database chunk. The server checks index dimension and cosine metric before enabling questions; a mismatch or missing optional configuration disables discovery/questions while catalog features work. Provider outages are retried for readiness after a minute; no discovery/extraction SDK retry can silently multiply the bounded paid calls.
 
-Program questions use a dedicated read-only agent loop: initial retrieval plus at most two rephrases, at most three model rounds. Vector queries filter opportunityId, and SQL checks opportunityId, scope and the current source snapshot hash again. Changed pages cannot serve old chunks while re-embedding is pending. The final answer accepts only verbatim excerpts mapped to returned chunk IDs (up to 120 quoted words), with links and source-check dates. Unsupported output takes the no-answer path. Eligibility and cost remain code decisions. A checklist button creates an `add_application_requirements` proposal; approval revalidates its evidence hash in the transaction before merging steps, preserving completed work, notes and student dates.
+Program questions use a read-only LangGraph workflow: initial retrieval plus at most two rephrases, at most three JSON model drafts through a LangChain runnable. Vector queries filter opportunityId, and SQL checks opportunityId, scope and the current source snapshot hash again. Changed pages cannot serve old chunks while re-embedding is pending. The final answer accepts only verbatim excerpts mapped to returned chunk IDs (up to 120 quoted words), with links and source-check dates. Unsupported output takes the no-answer path. Eligibility and cost remain code decisions. A checklist button creates an `add_application_requirements` proposal; approval revalidates its evidence hash in the transaction before merging steps, preserving completed work, notes and student dates.
 
 A minute timer and the owner-authenticated `/internal/jobs/run` share a persistent global lease and heartbeat. Each invocation refreshes up to 25 due students, processes one shared discovery group and one due source re-check, within monthly reservations and per-run limits. Interrupted groups keep their 30-day cooldown instead of silently paying again. Autoscale deployments need an external scheduled trigger for unattended discovery; a server timer alone cannot wake a sleeping deployment. See DEPLOY-REPLIT.md.
 
