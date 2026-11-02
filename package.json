@@ -18,6 +18,7 @@
     "build": "node scripts/prisma-production.mjs && npm run build --workspace apps/api && npm run build --workspace apps/web",
     "setup": "node scripts/setup.mjs",
     "db:demo": "npm run db:demo --workspace apps/api",
+    "cleanup:samples": "node --import tsx scripts/cleanup-samples.mjs",
     "ollama:setup": "node scripts/setup-ollama.mjs",
     "ollama:start": "node scripts/start-ollama.mjs",
     "start": "node scripts/start-production.mjs",

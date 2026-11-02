@@ -9,6 +9,7 @@ import { accessCode } from '../lib/access.js';
 import { calendarView } from '../lib/calendars.js';
 import { audit } from '../lib/audit.js';
 import { sampleWeek } from '../lib/sample.js';
+import { env } from '../lib/env.js';
 
 import { noteInterestChange,queueDiscovery } from '../discovery/refresh.js';
 import { Region } from '../domain/regions.js';
@@ -36,7 +37,7 @@ export default async function routes(app: FastifyInstance) {
     });
     if (b.credentials) await startSession(s.id, reply);
     if (b.goal?.trim()) await prisma.goal.create({ data: { studentId: s.id, title: b.goal.trim(), priority: 'high' } });
-    if (b.sampleWeek) await prisma.event.createMany({ data: sampleWeek(s.id) });
+    if (env.demoMode && b.sampleWeek) await prisma.event.createMany({ data: sampleWeek(s.id) });
     await audit(s.id, 'student', 'Finished setup');
     void queueDiscovery(s.id).catch(()=>{});
     return reply.code(201).send({ ...serializeStudent(s), ...(setup ? { recoveryCode: setup.recoveryCode } : {}) });

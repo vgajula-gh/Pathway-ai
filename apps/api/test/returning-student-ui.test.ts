@@ -9,7 +9,7 @@ vi.mock('../../web/src/lib/api', () => ({
   access: { get: () => state.code, set: (code: string) => { state.code = code; }, clear: () => { state.code = null; } }
 }));
 vi.mock('../../web/src/lib/theme', () => ({ THEMES: [['dusk', 'Dusk', 'moon']], applyTheme: vi.fn(), nextTheme: vi.fn() }));
-vi.mock('../../web/src/components/ui', () => ({ toast: vi.fn() }));
+vi.mock('../../web/src/components/ui', async () => ({ ...await vi.importActual('../../web/src/components/ui'), toast: vi.fn() }));
 vi.mock('../../web/src/pages/Today', () => ({ default: () => 'Dashboard' }));
 vi.mock('../../web/src/pages/Explore', () => ({ default: () => null }));
 vi.mock('../../web/src/pages/Buddy', () => ({ default: () => null }));

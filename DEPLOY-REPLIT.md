@@ -230,4 +230,22 @@ Shared discovery and source re-check attempts also reserve one request against t
 
 Sync this update and republish using the existing build/run commands. The new server dependencies install through npm ci. Keep your existing OpenAI/Claude/Ollama, Pinecone and scheduling settings: this refactor requires **no new service key, Pinecone index or database migration**. General Buddy and the existing student approval flow continue to work as before. LangGraph orchestrates opportunity discovery and program questions; LangChain handles program documents, scoped retrieval and the prompt/model bridge. The existing daily/monthly limits, background budgets and catalog-only fallback still apply.
 
+## Sample data and intentional demos
+
+Set DEMO_MODE=false in the published app (the default). Startup keeps sourced news and words, and does not create sample opportunities or offer a sample calendar during onboarding. Previously stored sample calendars are hidden from schedule views while their records are retained. DEMO_MODE=true is an explicit local/demo option; sample opportunities and calendar events remain labeled Sample.
+
+To inspect old sample opportunities, run the following from the project root with DATABASE_URL set to the database you intend to inspect:
+
+```sh
+npm run cleanup:samples
+```
+
+This is a preview. Check the printed database hostname/name or SQLite path; a Replit environment label alone does not establish which database is selected. The command never prints connection credentials. To remove the eligible records after reviewing that target:
+
+```sh
+npm run cleanup:samples -- --apply
+```
+
+Cleanup removes unused sample opportunity pages, chunks, vectors and derived sample picks. It preserves any opportunity referenced by a saved/application record, feedback, goal or active proposal, including Interested items and their notes/checklists. It does not delete accounts, calendars, events, goals, news or student-authored records. Vector-deletion failures retain the corresponding database records and are reported. The command is idempotent and never runs automatically.
+
 No LangSmith account or key is needed. Hosted workflow tracing is explicitly disabled for student privacy; small stage/status/reason records are available in program-message metadata and DiscoveryRun usage. `npm run demo:workflows` is an optional developer demonstration with synthetic fixtures and no paid provider calls. Live search/Pinecone setup remains the same as above.

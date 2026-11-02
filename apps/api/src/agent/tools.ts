@@ -9,6 +9,7 @@ import { addDays, dkey, fmtLocal, parseLocal, sod } from '../domain/time.js';
 import { checkSessions, dayCapacity, expand, findConflicts, freeSlots, downtime } from '../domain/schedule.js';
 import { scoreOpportunity } from '../domain/scoring.js';
 import { RESOURCES } from '../data/resources.js';
+import { env } from '../lib/env.js';
 
 export interface ToolEvent { tool: string; label: string }
 export interface ToolDef { name: string; description: string; input_schema: Record<string, unknown>; run: (input: any, studentId: string, events: ToolEvent[], proposalIds: string[]) => Promise<unknown> }
@@ -34,7 +35,7 @@ export const TOOLS: ToolDef[] = [
   { name: 'search_opportunities', description: 'Search the opportunity catalog. Eligibility is checked by code. Records include fit factors and verification status; unverified deadlines are unknown.',
     input_schema: { type: 'object', properties: { query: { type: 'string' } } },
     async run(i, sid, ev) {
-      const { events, rules, ctx } = await loadContext(sid); const all = (await prisma.opportunity.findMany()).map(toOpp);
+      const { events, rules, ctx } = await loadContext(sid); const all = (await prisma.opportunity.findMany({ where: env.demoMode ? {} : { isSample: false, source: { not: 'seed' } } })).map(toOpp);
       let weekFree = 0; for (let d = 0; d < 7; d++) weekFree += dayCapacity(events, rules, addDays(sod(new Date()), d)).available;
       const q = String(i.query || '').toLowerCase().split(/\W+/).filter(w => w.length > 2);
       const hits = all.filter(o => !q.length || q.some(w => (o.name + ' ' + o.category + ' ' + o.tags.join(' ')).toLowerCase().includes(w)));

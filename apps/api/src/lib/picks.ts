@@ -6,6 +6,7 @@ import { addDays, sod } from '../domain/time.js';
 import { dayCapacity } from '../domain/schedule.js';
 import { bucketFor, costLabel, selectPicks } from '../domain/picks.js';
 import { scoreOpportunity } from '../domain/scoring.js';
+import { env } from './env.js';
 export const toOpp = (o: Awaited<ReturnType<typeof prisma.opportunity.findMany>>[number]) => ({
   ...o,
   cost:
@@ -21,7 +22,7 @@ export async function personalPicks(studentId: string, rebuild = false) {
   const { events, rules, ctx } = await loadContext(studentId);
   let freeMin = 0;
   for (let d = 0; d < 7; d++) freeMin += dayCapacity(events, rules, addDays(sod(new Date()), d)).available;
-  const opps = (await prisma.opportunity.findMany()).map(toOpp);
+  const opps = (await prisma.opportunity.findMany({ where: env.demoMode ? {} : { isSample: false, source: { not: 'seed' } } })).map(toOpp);
   // Serialize replacement with the student row. Retry conflicting refreshes on PostgreSQL.
   for (let attempt = 0; ; attempt++)
     try {

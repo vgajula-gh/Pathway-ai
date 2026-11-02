@@ -4,7 +4,7 @@ import { CalendarHelp } from '../components/Calendars';
 import { api, session } from '../lib/api';
 import { SignInResult } from '../lib/types';
 import { PhraseFields, validPhrase } from './SignIn';
-import { toast } from '../components/ui';
+import { toast, useLoad } from '../components/ui';
 
 const INTERESTS = ['AI', 'Coding', 'Robotics', 'Engineering', 'Science', 'Medicine', 'Space', 'Math', 'Business', 'Entrepreneurship', 'Art', 'Writing', 'Music', 'Sports', 'Volunteering', 'Climate', 'Debate'];
 
@@ -12,9 +12,10 @@ const INTERESTS = ['AI', 'Coding', 'Robotics', 'Engineering', 'Science', 'Medici
 export default function Onboarding({ onDone, onCancel }: { onDone: (s: SignInResult) => void; onCancel?: () => void }) {
   const [step, setStep] = useState(0), [busy, setBusy] = useState(false);
   const [calendarUrl, setCalendarUrl] = useState('');
+  const config = useLoad(() => api<{demoMode:boolean}>('/api/config'), []);
   const [f, setF] = useState({ phrase: '', confirmPhrase: '', name: '', region: '', grade: 10, interests: [] as string[], goal: '', aiConsent: true, studyStart: '16:00', studyEnd: '21:00', downtimeStart: '21:00', downtimeEnd: '23:00', sampleWeek: true });
   const set = (k: keyof typeof f, v: unknown) => setF(x => ({ ...x, [k]: v }));
-  const finish = async () => { const { phrase, confirmPhrase, ...profile } = f; setBusy(true); try { const student = await api<SignInResult>('/api/students', { body: { ...profile, credentials: { phrase, confirmPhrase }, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone } }); session.set(student.id); if (calendarUrl.trim()) { try { await api('/api/calendars', { body: { label: 'School calendar', url: calendarUrl.trim() } }); } catch { toast('Your profile is ready. You can finish linking your calendar in You.'); } } setCalendarUrl(''); onDone(student); } catch (e) { toast((e as Error).message); setBusy(false); } };
+  const finish = async () => { const { phrase, confirmPhrase, ...profile } = f; setBusy(true); try { const student = await api<SignInResult>('/api/students', { body: { ...profile, sampleWeek: !!config.data?.demoMode && f.sampleWeek, credentials: { phrase, confirmPhrase }, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone } }); session.set(student.id); if (calendarUrl.trim()) { try { await api('/api/calendars', { body: { label: 'School calendar', url: calendarUrl.trim() } }); } catch { toast('Your profile is ready. You can finish linking your calendar in You.'); } } setCalendarUrl(''); onDone(student); } catch (e) { toast((e as Error).message); setBusy(false); } };
   const next = () => (step === 7 ? finish() : setStep(step + 1));
   const ok = step === 2 ? f.name.trim().length > 0 : step !== 7 || validPhrase(f.phrase, f.confirmPhrase);
   const cta = ['Get started', 'Continue', 'Continue', 'Continue', f.goal.trim() ? 'Continue' : 'Skip for now', 'Continue', calendarUrl.trim() ? 'Continue' : 'Skip for now', 'Create account and start my day'][step];
@@ -35,7 +36,7 @@ export default function Onboarding({ onDone, onCancel }: { onDone: (s: SignInRes
         <div className="chips">{['Build my first AI app', 'Enter a competition', 'Start volunteering', 'Raise my grades'].map(g => <button key={g} className="chip" onClick={() => set('goal', g)}>{g}</button>)}</div></>}
       {step === 5 && <><h1>Protect your time.</h1><p className="sub">I’ll only suggest study in your window, and never touch your downtime.</p>
         <div className="rows" style={{ marginTop: 22 }}>{([['studyStart', 'Study from'], ['studyEnd', 'Until'], ['downtimeStart', 'Downtime from'], ['downtimeEnd', 'Until']] as const).map(([k, l]) => <div className="frow" key={k}><label htmlFor={k}>{l}</label><input id={k} type="time" value={f[k]} onChange={e => set(k, e.target.value)} /></div>)}</div>
-        <label className="card" style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 14 }}><span style={{ flex: 1 }}><b>Explore with a sample week</b><br /><span className="muted small">Pretend classes, clubs and a test, clearly labeled. Scan your real schedule anytime.</span></span><input type="checkbox" className="switch" checked={f.sampleWeek} onChange={e => set('sampleWeek', e.target.checked)} /></label></>}
+        {config.data?.demoMode && <label className="card" style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 14 }}><span style={{ flex: 1 }}><b>Explore with a sample week</b><br /><span className="muted small">Pretend classes, clubs and a test, clearly labeled. Scan your real schedule anytime.</span></span><input type="checkbox" className="switch" checked={f.sampleWeek} onChange={e => set('sampleWeek', e.target.checked)} /></label>}</>}
       {step === 7 && <><h1>Keep your journey with you</h1><p className="sub">Create a private phrase to open your dashboard on any device.</p><PhraseFields phrase={f.phrase} confirmPhrase={f.confirmPhrase} onChange={set} /></>}
       {step === 6 && <><h1>Add your calendar?</h1><p className="sub">Optional. Bring classes and dates into Pathway without typing them again.</p><label htmlFor="onboard-calendar">Private iCal link</label><input id="onboard-calendar" className="field" type="password" autoComplete="off" maxLength={4096} value={calendarUrl} onChange={e => setCalendarUrl(e.target.value)} /><CalendarHelp /></>}
       <div className="grow" />

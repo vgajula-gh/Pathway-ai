@@ -13,13 +13,14 @@ import { createProposal, serializeProposal } from '../lib/proposals.js';
 import { addDays, dkey, fmtLocal, parseLocal, sod } from '../domain/time.js';
 import { dayCapacity, freeSlots } from '../domain/schedule.js';
 import { scoreOpportunity } from '../domain/scoring.js';
+import { env } from '../lib/env.js';
 
 
 
 async function scored(studentId: string) {
   const { events, rules, ctx } = await loadContext(studentId);
   let weekFree = 0; for (let d = 0; d < 7; d++) weekFree += dayCapacity(events, rules, addDays(sod(new Date()), d)).available;
-  const [opps, saved] = await Promise.all([prisma.opportunity.findMany(), prisma.savedOpportunity.findMany({ where: { studentId } })]);
+  const [opps, saved] = await Promise.all([prisma.opportunity.findMany({ where: env.demoMode ? {} : { isSample: false, source: { not: 'seed' } } }), prisma.savedOpportunity.findMany({ where: { studentId } })]);
   return opps.map(toOpp).map(o => ({ ...o, verified: !!o.sourceCheckedAt, status: saved.find(s => s.opportunityId === o.id)?.status || null, fit: scoreOpportunity(o, ctx, weekFree) }));
 }
 

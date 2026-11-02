@@ -8,6 +8,7 @@ import { loadContext } from '../lib/context.js';
 import { toOpp, personalPicks } from '../lib/picks.js';
 import { scoreOpportunity } from '../domain/scoring.js';
 import { bucketFor } from '../domain/picks.js';
+import { env } from '../lib/env.js';
 export const refreshDays = () => setting('REFRESH_INTERVAL_DAYS', 30, 365) || 30;
 async function transaction<T>(fn: (tx: Prisma.TransactionClient) => Promise<T>) {
   for (let attempt = 0; ; attempt++)
@@ -99,7 +100,7 @@ export async function shortBuckets(studentId: string) {
   let free = 0;
   for (let d = 0; d < 7; d++) free += dayCapacity(events, rules, addDays(sod(new Date()), d)).available;
   const [opps, saved, feedback] = await Promise.all([
-    prisma.opportunity.findMany(),
+    prisma.opportunity.findMany({ where: env.demoMode ? {} : { isSample: false, source: { not: 'seed' } } }),
     prisma.savedOpportunity.findMany({ where: { studentId } }),
     prisma.opportunityFeedback.findMany({ where: { studentId } }),
   ]);
