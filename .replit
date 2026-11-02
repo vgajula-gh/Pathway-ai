@@ -48,3 +48,8 @@ outputType = "webview"
 [postMerge]
 path = "scripts/post-merge.sh"
 timeoutMs = 300000
+
+[userenv]
+
+[userenv.shared]
+DISCOVERY_MONTHLY_BUDGET = "30"
