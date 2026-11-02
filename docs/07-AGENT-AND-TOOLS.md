@@ -38,7 +38,7 @@ The HTTP boundary reserves persistent AI usage before Buddy, extraction, coach, 
 
 ## GPT-5 nano response budget
 
-Hosted `gpt-5-nano` (including dated snapshots) uses low reasoning effort and 4,096 completion tokens of additional headroom for each model call, because reasoning and visible output share the completion allowance. This is a maximum, not a fixed charge. Other models and Ollama keep their existing limits. Incomplete or empty responses return a friendly 502 rather than Buddy's generic empty-answer fallback; truncated tool calls are not executed. No automatic retry is added. Server diagnostics include only model, finish reason and reasoning-token count, never student text or credentials. Live provider quality/availability still needs deployment verification.
+Hosted `gpt-5-nano` (including dated snapshots) uses low reasoning effort and 4,096 completion tokens of additional headroom for each model call, because reasoning and visible output share the completion allowance. This is a maximum, not a fixed charge. Other models and Ollama do not receive this additional reasoning headroom. Incomplete or empty responses return a friendly 502 rather than Buddy's generic empty-answer fallback; truncated tool calls are not executed. No automatic retry is added. Server diagnostics include only model, finish reason and reasoning-token count, never student text or credentials. Live provider quality/availability still needs deployment verification.
 
 
 ## Student-scoped retrieval and checklist proposals
@@ -56,3 +56,10 @@ Checklist buttons build source-backed proposals carrying titles/URLs, cited dead
 Discovery uses `discovery/graph.ts`; program questions use `knowledge/question-graph.ts`. `knowledge/retriever.ts` is a LangChain BaseRetriever, `knowledge/documents.ts` uses LangChain Documents/textsplitters, and `knowledge/answer-chain.ts` composes PromptTemplate with the unchanged provider-neutral JSON interface. General Buddy still uses the existing typed provider tool loop.
 
 Program-message metadata includes `workflow: {engine: "langgraph", steps: [{node,status,reason?}]}`. Shared discovery stores equivalent steps in DiscoveryRun.usage.workflow. These contain controlled stage/status/reason labels, no prompts or raw passages. Hosted LangSmith tracing is explicitly disabled; this does not introduce an external tracing integration. Graph errors do not trigger automatic paid retries. Student proposals/approval/verification remain in the existing Prisma service and are tested unchanged.
+
+
+## Opportunity extraction output contract
+
+The optional provider-neutral JSONSchema argument to LLM.json enables strict schema output in the hosted OpenAI adapter for opportunity extraction. Other JSON callers retain their existing format. Null evidence is removed locally and never establishes a fact; Zod and deterministic official-source checks still decide whether a program can be verified. Compact quotes and a bounded 4096-token text budget apply to extraction, plus nano's existing reasoning headroom. No automatic hosted retry or loose-JSON fallback is introduced.
+
+Typed output failures distinguish missing model, malformed JSON, incomplete output and refusal; local schema failures retain only safe field paths/codes. SDK timeouts and connection failures are identified independently of generic Error.name. Keys, provider messages, prompts and rejected values are excluded. New run records include requested provider/model identities; historical models remain unknown. The owner check command uses one synthetic request and local verification without database/vector access.

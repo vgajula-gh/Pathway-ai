@@ -4,6 +4,7 @@ export interface ToolSpec { name: string; description: string; input_schema: Rec
 export interface ChatTurn { role: 'user' | 'assistant'; content: string }
 export interface ImageInput { mediaType: 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif'; base64: string }
 export interface ToolResult { content: string; isError?: boolean }
+export interface JSONSchema { name: string; schema: Record<string, unknown> }
 export interface RunToolsOptions {
   system: string; history: ChatTurn[]; tools: ToolSpec[]; maxRounds: number; maxTokens?: number;
   exec: (name: string, input: unknown) => Promise<ToolResult>;
@@ -13,7 +14,7 @@ export interface LLM {
   /** Tool-use loop: the model may call tools up to maxRounds times; returns the final text. */
   runTools(opts: RunToolsOptions): Promise<string>;
   /** JSON-only answer, parsed defensively (optionally with images). */
-  json<T>(system: string, prompt: string, images?: ImageInput[], maxTokens?: number): Promise<T>;
+  json<T>(system: string, prompt: string, images?: ImageInput[], maxTokens?: number, schema?: JSONSchema): Promise<T>;
   /** Plain text answer. */
   text(system: string, prompt: string, maxTokens?: number): Promise<string>;
 }

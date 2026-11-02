@@ -12,7 +12,7 @@ import { discoveryAvailability } from '../src/discovery/availability.js';
 const originalDisabled = env.aiDisabled;
 const configured = {
   NODE_ENV: 'production', DATABASE_URL: 'postgresql://unused/test', DISCOVERY_ENABLED: 'true',
-  AI_DISABLED: 'false', LLM_PROVIDER: 'openai', SEARCH_PROVIDER: 'openai', OPENAI_API_KEY: 'private-test-key',
+  AI_DISABLED: 'false', LLM_PROVIDER: 'openai', OPENAI_MODEL:'gpt-5-nano', SEARCH_PROVIDER: 'openai', OPENAI_API_KEY: 'private-test-key',
   EMBEDDING_PROVIDER: 'openai', EMBEDDING_MODEL: 'text-embedding-3-small', EMBEDDING_DIMENSION: '1536',
   VECTOR_STORE: 'pinecone', PINECONE_API_KEY: 'private-vector-key', PINECONE_INDEX: 'programs',
 };
@@ -96,4 +96,8 @@ it('keeps SQLite on the local memory store even when Pinecone is selected but un
   expect((await initializeKnowledge())?.store.kind).toBe('memory');
   expect(remote.describeIndex).not.toHaveBeenCalled();
   expect(fetch).not.toHaveBeenCalled();
+});
+it('explains a missing extraction model before a paid search and accepts an explicit override',()=>{
+  expect(configurationIssue({...configured,OPENAI_MODEL:'',AI_MODEL_EXTRACTION:''},false)).toMatchObject({code:'extraction_not_configured',settings:['AI_MODEL_EXTRACTION','OPENAI_MODEL']});
+  expect(configurationIssue({...configured,OPENAI_MODEL:'',AI_MODEL_EXTRACTION:'gpt-4.1-mini'},false)).toBeNull();
 });

@@ -53,7 +53,7 @@ components:
       properties:
         code:
           type: string
-          enum: [ai_consent_required, discovery_disabled, ai_unavailable, search_not_configured, embedding_not_configured, vector_not_configured, pinecone_authorization_failed, pinecone_index_not_found, index_metric_mismatch, index_dimension_mismatch, vector_unavailable]
+          enum: [ai_consent_required, discovery_disabled, ai_unavailable, search_not_configured, extraction_not_configured, embedding_not_configured, vector_not_configured, pinecone_authorization_failed, pinecone_index_not_found, index_metric_mismatch, index_dimension_mismatch, vector_unavailable]
         message: { type: string }
         settings: { type: array, items: { type: string } }
     DiscoveryStatus:

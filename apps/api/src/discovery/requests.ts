@@ -6,7 +6,7 @@ import { interestGroups } from './groups.js';
 import { discoveryConfigured,setting } from './config.js';
 import {catalogCoverage,publicCatalogCoverage} from './catalog.js';
 import { transaction,stateIn,refreshDays } from './refresh.js';
-import { failureMessage,FailureInfo } from './failures.js';
+import { failureMessage,FailureInfo,operationalFailure } from './failures.js';
 
 type Binding={key:string;since:string;cached?:boolean};
 const pending=['queued','running'];
@@ -133,7 +133,7 @@ export async function settleSearchRequests(studentId?:string) {
     const complete=runs.filter((r):r is NonNullable<typeof r>=>!!r);
     let ids=[...new Set(complete.flatMap(r=>snapshot(r.usage).savedIds||[]))];
     const failures=complete.flatMap(r=>snapshot(r.usage).failures||[]);
-    const failed=complete.length<bindings.length||complete.some(r=>r.status!=='complete')||!ids.length&&failures.some(f=>!['deadline_passed','missing_evidence'].includes(f.code));
+    const failed=complete.length<bindings.length||complete.some(r=>r.status!=='complete')||!ids.length&&failures.some(operationalFailure);
     const limited=groups.some(g=>['limited','limited_manual'].includes(g.status));
     let status=!bindings.length?'cached':ids.length?'complete':limited?'limited':failed?'failed':'empty';
     if(['cached','complete','empty'].includes(status))try{ids=(await personalPicks(request.studentId,true)).map(p=>p.id);}catch{status='failed';}
@@ -149,7 +149,8 @@ export async function settleSearchRequests(studentId?:string) {
         if(current.cycleStartedAt&&+state.cycleStartedAt===+current.cycleStartedAt)
           await tx.pickRefreshState.update({where:{studentId:request.studentId},data:current.manualSlot==='bonus'?{extraUsed:true}:{manualUsed:{increment:1}}});
       }
-      const error=failures.length?failureMessage(failures[0]):failed?'The search could not finish. Please try again.':'';
+      const failure=failed?failures.find(operationalFailure)||failures[0]:failures[0];
+      const error=failure?failureMessage(failure):failed?'The search could not finish. Please try again.':'';
       await tx.opportunitySearchRequest.update({where:{id:request.id},data:{status,resultIds:JSON.stringify(ids),finishedAt:new Date(),countedAt:successful&&current.manualSlot?new Date():null,error}});
     });
   }
