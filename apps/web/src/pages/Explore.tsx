@@ -32,7 +32,9 @@ export default function Explore({ me, ask, setMe }: { me: Student; ask: (t: stri
   if (!data) return <section aria-label="Opportunity search"><h1>Opportunity search</h1>{error?<p role="alert">{error} <button className="btn" onClick={reload}>Try again</button></p>:<p role="status">Loading your interests… <Typing/></p>}</section>;
   const status = async (id: string, s: 'saved' | 'dismissed' | 'none', reason?: string) => { try {await api(`/api/opportunities/${id}/status`, { body: { status: s, reason } }); toast(s === 'saved' ? 'Added to Interested' : s === 'dismissed' ? 'Hidden' : 'Removed'); reload();return true;}catch(e){toast((e as Error).message);return false;} };
   const prep = async (id: string) => { try { setReview(await api<Proposal>(`/api/opportunities/${id}/prep`, { method: 'POST' })); setOpen(null); } catch (e) { toast((e as Error).message); } };
-  const visible=[...data.picks,...data.recommended.filter(o=>!o.status&&!o.fit.excluded&&!data.picks.some(p=>p.id===o.id))];
+  const candidates=[...new Map([...data.recommended,...data.picks].map(o=>[o.id,o])).values()].filter(o=>!o.status&&!o.fit.excluded);
+  const visible=(['free','paid'] as const).flatMap(bucket=>candidates.filter(o=>o.bucket===bucket)
+    .sort((a,b)=>(b.fit.score??0)-(a.fit.score??0)).slice(0,5));
   const hasResults=!!data.search?.startedAt||visible.length>0||data.finding;
   const compared = data.recommended.filter(o => cmp.includes(o.id));
   return (
@@ -42,7 +44,7 @@ export default function Explore({ me, ask, setMe }: { me: Student; ask: (t: stri
       <p className="label">Opportunity search</p>
       <h1 className="display">Explore opportunities</h1>
       <div className="interest-chips" aria-label="Your interests">{me.interests.map(i=><span className="factor" key={i}>{i}</span>)}</div>
-      <p className="note">Only past deadlines hide results. Eligibility, location, cost and application details are shown for you to check.</p>
+      <p className="note">Showing up to 5 Free and 5 Paid or cost-unconfirmed options, ranked for you. Past deadlines are excluded; check eligibility, location, cost and application details.</p>
       <p className="muted small">Region: {me.region==='virtual'?'Virtual only':me.region||'Not set'}</p>
       <button className="link" onClick={()=>setEditing(true)}>Edit interests and preferences</button>
       {editing&&<DiscoveryPreferencesEditor me={me} onSaved={student=>{setMe?.(student);reload();}} onClose={()=>setEditing(false)}/>}
@@ -50,7 +52,7 @@ export default function Explore({ me, ask, setMe }: { me: Student; ask: (t: stri
       <button className="link" disabled={!data.canAskAll} onClick={()=>ask('What should I know about my opportunities?','my_opportunities')}>Ask about my opportunities</button>
       {hasResults&&!data.finding&&me.interests.length>0&&!visible.length&&data.discoveryEnabled&&!data.error&&!data.limited&&<p className="card">No unexpired results are available yet. Try another search when your allowance is available.</p>}
       {error&&<p role="alert">{error} <button className="link" onClick={reload}>Try again</button></p>}
-      <div className="sec" style={{ marginTop: 18 }}>{hasResults&&(['free', 'paid'] as const).map(bucket => <details key={bucket} className="fold" open><summary>{bucket === 'free' ? 'Free' : 'Paid or cost unconfirmed'} ({visible.filter(o=>o.bucket===bucket).length})</summary>{!data.finding&&visible.filter(o=>o.bucket===bucket).length<3&&<p className="note">Only {visible.filter(o=>o.bucket===bucket).length} {bucket} results available right now — fewer than three is okay. You can edit your preferences or search for more when your allowance is available.</p>}{visible.filter(o=>o.bucket===bucket).map(o => (
+      <div className="sec" style={{ marginTop: 18 }}>{hasResults&&(['free', 'paid'] as const).map(bucket => <details key={bucket} className="fold" open><summary>{bucket === 'free' ? 'Free' : 'Paid or cost unconfirmed'} ({visible.filter(o=>o.bucket===bucket).length})</summary>{!data.finding&&visible.filter(o=>o.bucket===bucket).length<5&&<p className="note">Only {visible.filter(o=>o.bucket===bucket).length} {bucket==='free'?'Free':'Paid or cost-unconfirmed'} options available right now. We’ll show up to 5 when more are available.</p>}{visible.filter(o=>o.bucket===bucket).map(o => (
         <div className="opp" key={o.id}>
           <button className="main" onClick={() => setOpen(o)}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><span className="emo">{CEMO[o.category] || '✨'}</span><span className={`fit ${o.fit.fit}`}>{o.fit.eligibility.status==='eligible'?FIT_LABEL[o.fit.fit!]:'Review details'}</span></div>
             <h3>{o.name}</h3><p className="muted small">{o.organizer} · {o.opportunityType||o.category}</p><p className="small">{o.deadline ? `Deadline ${o.deadline} · ${o.countdown?.label||'Confirm on the official site'}` : 'Deadline not confirmed — check the program page'}</p><p className="small">{o.costLabel}</p>{o.financialAidNote && <p className="small">{o.financialAidNote}</p>}{o.feeFlag && <p className="note">Check fees carefully on the official site.</p>}<p className="tiny">{o.verified && o.verifiedAt ? `Verified ${new Date(o.verifiedAt).toLocaleDateString()}` : `Needs checking${o.sourceReadAt?' · Page read '+new Date(o.sourceReadAt).toLocaleDateString():''}`}{o.isStretch ? ' · Try something new' : ''}</p><p className="note">{o.fit.eligibility.checks.join('; ')}</p><p className="muted small" style={{ marginTop: 4 }}>{o.fit.why}</p>

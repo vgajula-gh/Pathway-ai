@@ -100,3 +100,9 @@ See [Explore simplification](15-EXPLORE-SIMPLIFICATION.md).
 - Empty searches preserve manual allowance; previous empty charges restore once without paid-counter refunds. Explicit cooldown and three unsuccessful attempts/group/UTC day prevent uncontrolled repetition.
 - Estimated-spend admission is atomic across concurrent runs; settlement releases unused holds exactly once, preserves history and recovers when caps rise. Unknown paid usage retains estimates, never a fabricated zero.
 - Owner test/diagnostics report source mode, actual tools/tokens, estimates and candidate outcomes without private profiles/keys or paid GET side effects. Explore shows plain-language completion reasons and cooldown/spend blockers with existing links visible.
+
+## Explore five-per-group display cap
+
+- A library with 43 Paid or cost-unconfirmed options and more than five Free options shows the five highest-fit options in each group, ten cards maximum, without duplicate IDs.
+- Smaller groups show the actual available count. Unknown cost stays in Paid or cost-unconfirmed; saved/dismissed and expired entries remain excluded from discovery cards.
+- Saving/dismissing can reveal the next stored result without a new paid search. Search targets, limits, source verification and Interested progress are unchanged.
