@@ -1,5 +1,7 @@
 # 07 · Agent & Tool Contracts
 
+Current Explore policy: [Explore simplification](15-EXPLORE-SIMPLIFICATION.md) supersedes older active-only/eligible/source-fresh admission, separate watchlist, cost-hint quotas and six-card visibility rules below. Only a confirmed past deadline hides a result. Other details remain warnings/ranking factors. SQL stores search links before enrichment; unreadable details produce visible unconfirmed results. Source evidence, privacy, proposals, knowledge scope and AI limits remain enforced. This simplification adds no schema migration.
+
 **One orchestrating agent ("Buddy")** with tool use on **Claude or OpenAI** (`LLM_PROVIDER`). The loop lives in each adapter (`apps/api/src/agent/llm/anthropic.ts`, `openai.ts`); `buddy.ts` supplies the prompt, history and tool executor. Max 6 tool rounds per turn. System prompt: `agent/prompts.ts`.
 
 ## Tools (all deterministic code)
@@ -67,3 +69,9 @@ Typed output failures distinguish missing model, malformed JSON, incomplete outp
 ## Versioned Opportunity Scout
 
 Research and extraction use Markdown assets copied to the API build and Zod-generated closed schemas. Research may call a web tool; extraction selects numbered literal source passage IDs and cannot set facts/verification/ranking. All vendor SDK imports remain in agent/llm. Private goals/projects/time/max cost never enter shared web research or embeddings. One JSON format repair is allowed per search, without another web tool; provider retries remain disabled. Scout qualification is source-based, accepts supported high-school audiences, permits explicitly labeled partial active candidates and separates future openings. The search tool/Buddy retain warnings and exact citations. Proposals/approval remain mandatory for plan changes. See [Scout design](14-OPPORTUNITY-SCOUT.md).
+
+## Research evidence first
+
+Scout research may use a bounded multi-search tool and return optional program reports plus short source quotations. These are untrusted assertions. Deterministic matching against actually fetched source text establishes facts; provider quotations alone never gain Verified/Free or create synthetic source pages. Default research_evidence mode and its Scout rechecks make no extraction AI request. Optional fetch_and_extract uses roughly 12,000 relevant characters and preserves original citation IDs. The existing one format repair/request remains tool-free. All vendor SDKs stay in agent/llm. Missing years are never inferred; only confirmed expiration hides a result.
+
+Estimated discovery funds are reserved with shared request counters before paid work; concurrent runs cannot claim the same estimated balance. A failed/empty search preserves the student slot, with explicit retry cooldown/daily limits. Provider attempts and unknown outcomes remain counted. Estimates are not invoices or a hard provider-wide billing cap. See [current sourcing](08-OPPORTUNITY-AND-NEWS-SOURCING.md).

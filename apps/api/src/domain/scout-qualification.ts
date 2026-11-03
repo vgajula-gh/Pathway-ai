@@ -21,6 +21,15 @@ function literal(value:string,quote:string) {
   }
   return false;
 }
+/** Punctuation variants may identify the same name; never invent a missing
+ * year or accept one generic word as proof of program identity. */
+export function supportedProgramName(name:string,quote:string) {
+  if(literal(name,quote))return true;
+  const words=(s:string)=>normalizeEvidence(s).replace(/[^\p{L}\p{N}]+/gu,' ').trim().split(/\s+/);
+  const meaningful=words(name).filter(w=>!['a','an','the','and','of','for','program'].includes(w));
+  const source=new Set(words(quote));
+  return meaningful.length>=2&&meaningful.every(w=>source.has(w));
+}
 export function confirmedDate(value:string|null,quote:string,kind:'deadline'|'opening'|'activity'|'date'='date') {
   if(!value)return null;
   const date=new Date(value+'T12:00:00Z');if(!Number.isFinite(+date)||date.toISOString().slice(0,10)!==value)return null;
@@ -28,7 +37,7 @@ export function confirmedDate(value:string|null,quote:string,kind:'deadline'|'op
   const patterns=[value,`(?:${names[month-1]}|${names[month-1].slice(0,3)})\\.?\\s+0?${day}(?:st|nd|rd|th)?[,]?\\s+${year}`,`0?${day}(?:st|nd|rd|th)?\\s+(?:${names[month-1]}|${names[month-1].slice(0,3)})\\.?[,]?\\s+${year}`,`0?${month}/0?${day}/${year}`];
   for(const pattern of patterns)for(const m of quote.matchAll(new RegExp(`\\b(?:${pattern})\\b`,'gi'))) {
     const around=quote.slice(Math.max(0,m.index!-100),m.index!+m[0].length+50);
-    if(kind==='date'||(kind==='deadline'?/deadline|apply by|applications? (?:are )?due|submissions? (?:are )?due|entries (?:are )?due|registration (?:closes|ends)|submit by/i:kind==='opening'?/applications? open|registration opens|opening|opens (?:on|for)/i:/activity|meeting|volunteer|session|event|club/i).test(around))return value;
+    if(kind==='date'||(kind==='deadline'?/deadline|apply by|applications? (?:are )?due|submissions? (?:are )?due|entries (?:are )?due|registration (?:closes|ends)|submit by|applications? (?:are )?accepted until|last day|\bcloses?\b/i:kind==='opening'?/applications? open|registration opens|opening|opens (?:on|for)/i:/activity|meeting|volunteer|session|event|club/i).test(around))return value;
   }
   return null;
 }
@@ -50,16 +59,17 @@ export function freeParticipation(quote:string) {
 }
 
 /** Model facts are assertions. Only selected literal passages establish public program facts. */
-export function qualifyScout(facts:ScoutFacts,pages:Page[],trusted:Set<string>,now=new Date()):Qualification {
+export function qualifyScout(facts:ScoutFacts,pages:Page[],trusted:Set<string>,now=new Date(),lead?:{name:string|null;url:string}):Qualification {
   const reasons:QualificationReason[]=[],notes:string[]=[],add=(field:string,reason:string)=>{if(!reasons.some(r=>r.field===field&&r.reason===reason))reasons.push({field,reason});};
   if(!pages.length||pages.some(p=>!Number.isFinite(+new Date(p.checkedAt))))return {disposition:'excluded',reasons:[{field:'source',reason:'unverifiable'}]};
   const resolved=resolveEvidence(facts,sourcePassages(pages));
   const evidence:Record<string,{sourceUrl:string;quote:string}>={};
   const quote=(field:keyof ScoutFacts)=>resolved[field]?.quote||'';
   const keep=(field:keyof ScoutFacts)=>{if(resolved[field])evidence[field]=resolved[field];};
-  const text=(field:keyof ScoutFacts):string|null=>{const value=facts[field];if(typeof value==='string'&&value&&literal(value,quote(field))){keep(field);return value;}return null;};
+  const text=(field:keyof ScoutFacts):string|null=>{const value=facts[field];if(typeof value==='string'&&value&&(field==='name'?supportedProgramName(value,quote(field)):literal(value,quote(field)))){keep(field);return value;}return null;};
   const list=(field:'skills'|'tags'|'requirements')=>{const values=facts[field]?.filter(v=>literal(v,quote(field)))||[];if(values.length)keep(field);return values;};
-  const name=text('name'),organizer=text('organizer');
+  const evidencedName=text('name'),name=evidencedName||lead?.name||pages[0].pageTitle||facts.name,organizer=text('organizer');
+  if(!evidencedName){add('name','not_stated');notes.push('Program name comes from the search result; details are not confirmed');}
   if(!name)add('name',facts.name?'value_not_supported':'not_stated');
   if(!organizer)notes.push('Organizer not confirmed');
   const domain=new URL(pages[0].sourceUrl).hostname.replace(/^www\./,'').toLowerCase();
@@ -80,6 +90,7 @@ export function qualifyScout(facts:ScoutFacts,pages:Page[],trusted:Set<string>,n
   if(restrictedSchoolYear){add('gradeRange','not_stated');notes.push('Check the specific school-year requirement on the program page');}
   const collegeOnly=/\b(?:college|undergraduate|graduate|adult)[ -]only\b|\b(?:only|exclusively) (?:for|to) (?:college|undergraduate|graduate|adult)\b/i.test(pages[0].text);
   if(collegeOnly)add('schoolLevel','not_eligible');
+  if(collegeOnly)notes.push('The page lists college/adult-only eligibility; check whether you can apply');
   if(gradeConflict){gradeMin=null;gradeMax=null;add('gradeRange','value_not_supported');}
   if(!grades&&!hs){add('gradeMin','not_stated');notes.push('Check grade eligibility');}
   let minAge:number|null=null;
@@ -103,6 +114,7 @@ export function qualifyScout(facts:ScoutFacts,pages:Page[],trusted:Set<string>,n
   const today=now.toISOString().slice(0,10);
   if(deadline&&deadline<today)add('deadline','past_deadline');
   if(applicationStatus==='closed')add('applicationStatus','closed');
+  if(applicationStatus==='closed')notes.push('Applications are reported closed; confirm the current cycle');
   const active=applicationStatus!=='closed'&&(!openingDate||openingDate<=today)&&(!deadline||deadline>=today)&&(opportunityType==='competition'?!!deadline&&deadline>today:
     ['club','volunteering'].includes(opportunityType)?['open','rolling'].includes(applicationStatus)||!!activityDate&&activityDate>=today:
       !!deadline&&deadline>today||['open','rolling'].includes(applicationStatus));
@@ -131,9 +143,12 @@ export function qualifyScout(facts:ScoutFacts,pages:Page[],trusted:Set<string>,n
   const tags=list('tags'),skills=list('skills'),requirements=list('requirements');
   const sourceReadAt=new Date(Math.min(...pages.map(p=>+new Date(p.checkedAt))));
   if(+sourceReadAt>+now+60000||+now-+sourceReadAt>30*86400000)add('source','not_current');
-  const hard=!name||collegeOnly||reasons.some(r=>['past_deadline','closed'].includes(r.reason))||!active&&!upcoming||reasons.some(r=>r.field==='source');
-  const uncertain=!reviewed||!grades&&!hs||gradeConflict||restrictedSchoolYear||minAge!=null;
-  const disposition:Qualification['disposition']=hard?'excluded':upcoming?'watchlist':uncertain?'needs_verification':'verified';
+  if(!active&&!upcoming)notes.push('Application status or deadline is not confirmed; check the program page');
+  if(upcoming)notes.push(`Applications open ${openingDate}; check the program page`);
+  if(listing)notes.push('Search/listing page — check the linked program details');
+  const hard=!!deadline&&deadline<today;
+  const uncertain=!reviewed||!grades&&!hs||gradeConflict||restrictedSchoolYear||minAge!=null||!evidencedName||collegeOnly||!active||reasons.some(r=>r.field==='source');
+  const disposition:Qualification['disposition']=hard?'excluded':uncertain?'needs_verification':'verified';
   const supported={schoolLevel:hs?'high_school':'unknown',city,state,currency,costMin,costMax,additionalCosts:extra,hoursMin,hoursMax,openingDate,
     parentConsent:parentConsent?true:null,parentActionDetails:parentConsent?text('parentActionDetails'):null,projectBased:projectBased?true:null,portfolioValue:projectBased?facts.portfolioValue:'unknown'};
   if(disposition==='excluded')return {disposition,reasons};

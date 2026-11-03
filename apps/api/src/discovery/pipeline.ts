@@ -24,11 +24,11 @@ export type PipelineDependencies = {
   extract: typeof extract;
   ingest?: (id: string, budget: RunBudget) => Promise<void>;
 };
-export async function storeCandidate(data: VerifiedOpportunity & {sourceReadAt?:Date|null;scoutFacts?:string;qualificationNotes?:string;promptVersion?:string}, pages: Page[], group: Group) {
+export async function storeCandidate(data: VerifiedOpportunity & {sourceReadAt?:Date|null;scoutFacts?:string;qualificationNotes?:string;promptVersion?:string}, pages: Page[], group: Group, leadId?:string) {
   // Do not silently attribute opportunities to this group's age/region when pages omit them.
   const existing = (await prisma.opportunity.findMany()).find(
     (o) =>
-      identity(o.officialDomain || new URL(o.url).hostname, o.name) ===
+      o.id===leadId||o.url===data.url||identity(o.officialDomain || new URL(o.url).hostname, o.name) ===
       identity(data.officialDomain, data.name),
   );
   const id =
@@ -38,6 +38,8 @@ export async function storeCandidate(data: VerifiedOpportunity & {sourceReadAt?:
   const discoveredFor = JSON.stringify([
     ...new Set([...j<string[]>(existing?.discoveredFor, []), group.key]),
   ]);
+  // A failed/missing extraction must not erase a previously confirmed deadline.
+  if(!data.deadline&&existing?.deadline)data={...data,deadline:existing.deadline,evidence:JSON.stringify({...j<Record<string,unknown>>(data.evidence,{}),...(j<Record<string,unknown>>(existing.evidence,{}).deadline?{deadline:j<Record<string,unknown>>(existing.evidence,{}).deadline}:{})})};
   await prisma.$transaction(async (tx) => {
     await tx.opportunity.upsert({
       where: { id },

@@ -43,11 +43,11 @@ it('accepts a broad region and rejects arbitrary addresses',async()=>{
  expect((await app.inject({method:'PATCH',url:'/api/me',headers:headers(),payload:{region:'123 Main Street'}})).statusCode).toBe(422);
  }finally{await app.close();}
 });
-it('shows announced openings separately from active cards without a provider call',async()=>{
+it('shows announced openings among visible results without a provider call',async()=>{
  await db.opportunity.update({where:{id:'opp0'},data:{verificationStatus:'watchlist',promptVersion:'scout-v1',sourceReadAt:new Date(),scoutFacts:JSON.stringify({schoolLevel:'high_school',openingDate:'2030-06-01'})}});
  const app=await buildApp();app.log.level='silent';try{
   const response=await app.inject({url:'/api/opportunities',headers:headers()});expect(response.statusCode).toBe(200);
-  expect(response.json().watchlist).toMatchObject([{id:'opp0',openingDate:'2030-06-01'}]);expect(response.json().recommended.map((o:any)=>o.id)).not.toContain('opp0');
+  expect(response.json().watchlist).toEqual([]);expect(response.json().recommended.map((o:any)=>o.id)).toContain('opp0');
   expect(await db.opportunitySearchRequest.count({where:{studentId:id}})).toBe(0);
  }finally{await app.close();}
 });

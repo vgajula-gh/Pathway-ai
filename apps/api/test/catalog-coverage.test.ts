@@ -27,9 +27,9 @@ it('fills a bucket shortfall using the least-covered interest instead of queryin
  const coverage=plan([...art.filter(o=>o.costType==='free'),opportunity('robot','robotics','free'),opportunity('paid','art','paid')]);
  expect(coverage.missingInterests).toEqual([]);expect(coverage.groups.map(g=>[g.group.topic,g.buckets])).toEqual([['robotics',['paid']]]);
 });
-it('does not count dismissed, saved, wrong-grade or wrong-region matches as coverage',()=>{
+it('keeps grade/region mismatches in coverage while respecting saved/dismissed choices',()=>{
  const bad=[opportunity('saved','robotics','free'),{...opportunity('grade','robotics','paid'),gradeMin:11},{...opportunity('region','robotics','paid'),region:['CA'],format:'In person'}];
- expect(plan([...art,...bad],student,new Set(['saved'])).missingInterests).toEqual(['robotics']);
+ expect(plan([...art,...bad],student,new Set(['saved'])).missingInterests).toEqual([]);
 });
 it('normalizes topic matching and honors disabled result buckets without paid work',()=>{
  expect(plan(art.map(o=>({...o,tags:['  ART!  ']})),{...student,interests:[' Art ']}).complete).toBe(true);

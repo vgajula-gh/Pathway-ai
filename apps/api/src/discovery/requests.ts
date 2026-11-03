@@ -10,6 +10,7 @@ import { failureMessage,FailureInfo,operationalFailure,primaryFailure } from './
 import {searchDiagnostics} from './diagnostics.js';
 import {discoveryPreferences} from '../domain/discovery-preferences.js';
 import {dkey,wallNow} from '../domain/time.js';
+import {researchRetry} from './retries.js';
 
 type Binding={key:string;since:string;cached?:boolean};
 const pending=['queued','running'];
@@ -47,6 +48,7 @@ export async function enqueueSearch(studentId:string,kind:'initial'|'manual'|'mo
       if(explicit)throw new HttpError(503,"Opportunity web search isn't available right now. Existing programs are still available.");
       return {requested:false,catalog};
     }
+    if(explicit){const retry=await researchRetry(tx,coverage.groups.map(g=>g.group.key),now);if(!retry.available)throw new HttpError(429,'No search allowance was used. Try again after '+retry.nextAvailableAt+'. Existing results are still available.');}
     const monthly=await monthlySearchAllowance(tx,now);
     const previous=await tx.opportunitySearchRequest.findFirst({where:{studentId,signature,createdAt:{gte:new Date(+now-refreshDays()*86400000)}},orderBy:{createdAt:'desc'}});
     const resuming=previous?.status==='limited'&&!monthly.limited;
@@ -58,7 +60,7 @@ export async function enqueueSearch(studentId:string,kind:'initial'|'manual'|'mo
       if(previous&&!resuming)return {requested:false,catalog};
     }
     // Decide under the student lock; concurrent clicks cannot both claim an initial search.
-    const completed=explicit&&kind==='initial'?await tx.opportunitySearchRequest.findFirst({where:{studentId,status:{in:['cached','complete','empty']}},select:{id:true}}):null;
+    const completed=explicit&&kind==='initial'?await tx.opportunitySearchRequest.findFirst({where:{studentId,status:{in:['cached','complete']}},select:{id:true}}):null;
     const requestKind=(resuming&&previous.kind==='manual')||completed?'manual':kind;
     const state=await stateIn(tx,studentId,now);
     let manualSlot:string|null=null;
@@ -106,7 +108,7 @@ export async function boundRuns(bindings:Binding[]) {
 }
 
 /** Another student's run may have filled this gap since it was queued. Check before spending. */
-export async function neededGroupBuckets(key:string) {
+export async function neededGroupBuckets(key:string,keepRunning=false) {
   const requests=await prisma.opportunitySearchRequest.findMany({where:{status:{in:pending}}});
   const buckets=new Set<'free'|'paid'>();
   for(const request of requests) {
@@ -119,6 +121,7 @@ export async function neededGroupBuckets(key:string) {
       await prisma.opportunitySearchRequest.updateMany({where:{id:request.id,status:{in:pending}},data:{status:'cancelled',finishedAt:new Date()}});
       continue;
     }
+    if(keepRunning){buckets.add('free');continue;}
     const coverage=await catalogCoverage(request.studentId);
     const needed=coverage.groups.find(g=>g.group.key===key);
     if(needed)needed.buckets.forEach(b=>buckets.add(b));
@@ -148,7 +151,7 @@ export async function settleSearchRequests(studentId?:string) {
       await tx.student.update({where:{id:owner.id},data:{updatedAt:new Date()}});
       const current=await tx.opportunitySearchRequest.findUnique({where:{id:request.id}});
       if(!current||!pending.includes(current.status))return;
-      const successful=status==='complete'||status==='empty';
+      const successful=status==='complete';
       if(successful&&current.manualSlot&&!current.countedAt) {
         const state=await stateIn(tx,request.studentId,new Date());
         if(current.cycleStartedAt&&+state.cycleStartedAt===+current.cycleStartedAt)
@@ -173,10 +176,12 @@ export async function searchState(studentId:string) {
   const {diagnostics,failures}=searchDiagnostics(runs.filter((r):r is NonNullable<typeof r>=>!!r));
   const allowed=['searching','reading_sources','checking_facts','indexing'];
   const finding=pending.includes(request.status),limited=!finding&&monthlyAllowance.limited;
-  const phase=finding?running&&allowed.includes(value?.phase||'')?value!.phase!:'queued':limited?'limited':request.status==='limited'?'idle':request.status;
+  const partial=request.status==='complete'&&runs.some(r=>r&&snapshot(r.usage).phase==='partial');
+  const phase=finding?running&&allowed.includes(value?.phase||'')?value!.phase!:'queued':limited?'limited':request.status==='limited'?'idle':partial?'partial':request.status;
   const ids=j<string[]>(request.resultIds,[]);
+  const retry=await researchRetry(prisma,request.status==='empty'||request.status==='failed'?bindings.map(b=>b.key):[]);
   const primary=primaryFailure(failures),error=request.status==='failed'?(primary?failureMessage(primary):request.error):null;
-  const detail=limited?monthlyLimitMessage(monthlyAllowance):request.status==='limited'?'Search allowance is available again.':error||request.error||null;
-  return {finding,limited,monthlyAllowance,diagnostics,error,resultIds:ids,
+  const detail=limited?monthlyLimitMessage(monthlyAllowance):request.status==='limited'?'Search allowance is available again.':partial?'Search results are available. Some program details could not be confirmed.':error||request.error||null;
+  return {finding,limited,monthlyAllowance,diagnostics,error,resultIds:ids,retry,
     search:{phase,found:ids.length,detail,startedAt:request.createdAt.toISOString(),finishedAt:request.finishedAt?.toISOString()||null}};
 }

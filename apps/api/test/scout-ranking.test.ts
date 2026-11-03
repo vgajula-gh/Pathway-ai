@@ -33,12 +33,12 @@ describe('personal Scout ranking',()=>{
   expect(eligibility(opp('x',{costType:'paid',scoutFacts:JSON.stringify({currency:'USD',costMin:100,costMax:200})}),s).status).toBe('not_eligible');
   expect(eligibility(opp('x',{costType:'unknown'}),s).checks).toContain('Check total cost against your maximum');
  });
- it('uses public city centroids for approximate radius filtering and never guesses unknown cities',()=>{
+ it('uses public city centroids for approximate radius warnings and never guesses unknown cities',()=>{
   const boston={city:'Boston',state:'MA'},nyc={city:'New York',state:'NY'};
   expect(cityDistanceMiles(boston,nyc)).toBeGreaterThan(170);expect(cityDistanceMiles(boston,boston)).toBe(0);
   expect(cityDistanceMiles(boston,{city:'No Such City',state:'MA'})).toBeNull();
   const s={...student,discovery:discoveryPreferences({...boston,radiusMiles:50})};
-  const fit=scoreOpportunity(opp('far',{format:'In person',scoutFacts:JSON.stringify(nyc)}),s,600);expect(fit.excluded).toBe(true);
+  const fit=scoreOpportunity(opp('far',{format:'In person',scoutFacts:JSON.stringify(nyc)}),s,600);expect(fit.excluded).toBe(false);expect(fit.eligibility.checks.join()).toContain('outside your');
  });
  it('puts verified programs first, limits category repetition when alternatives exist, and excludes unsafe stretches',()=>{
   const candidates=[opp('partial',{verificationStatus:'needs_verification',sourceCheckedAt:null}),...['a','b','c'].map(id=>opp(id,{category:'Competition'})),opp('club',{category:'Club'}),opp('stretch',{tags:['music'],skills:[],feeFlag:true})];
@@ -50,9 +50,9 @@ describe('personal Scout ranking',()=>{
   const picks=selectPicks(candidates,student,600,new Set(),{free:0,paid:1},[],['too much time','too far']);expect(picks[0].opportunityId).toBe('a');
   expect(selectPicks(candidates,student,600,new Set(['a']),{free:0,paid:1})[0].opportunityId).toBe('b');
  });
- it('keeps at most one outside-interest Scout pick even when several connect with a private goal',()=>{
+ it('allows outside-interest results and marks only one optional stretch badge',()=>{
   const s={...student,goals:['Explore music'],discovery:discoveryPreferences({})};
   const catalog=Array.from({length:6},(_,i)=>opp('music-'+i,{tags:['music'],skills:[],costType:i<3?'free':'paid'}));
-  const picks=selectPicks(catalog,s,600,new Set());expect(picks).toHaveLength(1);expect(picks[0].isStretch).toBe(true);
+  const picks=selectPicks(catalog,s,600,new Set());expect(picks).toHaveLength(6);expect(picks.filter(p=>p.isStretch)).toHaveLength(1);
  });
 });

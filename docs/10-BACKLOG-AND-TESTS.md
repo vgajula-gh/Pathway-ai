@@ -7,7 +7,7 @@ Status key: ✅ in this kit · 🟡 partial · ⬜ to build
 |---|---|---|---|
 | P0-1 | Onboarding without integrations | ✅ | Complete 6 screens with no calendar/email; student created; provenance recorded |
 | P0-2 | My Day rings + next step | ✅ | Rings show minutes/steps; contributors sheet explains; Later hides until tomorrow; Why shows source + data used |
-| P0-3 | Opportunity Scout (sample) | ✅ | Ineligible grade excluded with reason; each card shows factors; unverified label visible |
+| P0-3 | Opportunity Scout (sample) | ✅ | Grade mismatches warned; past deadlines excluded; each card shows factors; unverified label visible |
 | P0-4 | Prep reminder approval | ✅ | Proposal shows actions/data/effect; Approve → VERIFIED; reminder in timeline; goal + 2 steps in Grow |
 | P0-5 | Revalidation on approve | ✅ | Add a conflicting event before approving → FAILED with reason, nothing applied |
 | P0-6 | Idempotency | ✅ | Same actions cannot execute twice |
@@ -80,3 +80,23 @@ Opportunity Gap Finder · Opportunity Creator (design your own project/club) · 
 ## Opportunity Scout acceptance
 
 Covered by scout-foundation, scout-providers, scout-runner, scout-qualification, scout-ranking, scout-integration, scout-ui and scout-diagnostics tests plus discovery/knowledge API and Explore UI suites: public/private input separation; actual source→six-cards→second-student reuse; one-network-stage durability/no paid replay; 3-batch/16-lead/one-repair bounds; grade/date/cost/watchlist evidence; optional preferences, radius, strict online, weighted factors and feedback; safe partial Buddy preparation/scope; protected read-only diagnostics and explicit funded sample job. Preserve all existing access-code, AI-cap, sign-in, calendar, proposals, Today and export tests. Final checks include types, production build and a PostgreSQL upgrade/start smoke check; real provider/Pinecone/phone acceptance remains a Replit owner check. See [14-OPPORTUNITY-SCOUT.md](14-OPPORTUNITY-SCOUT.md).
+
+## Explore expiration-only acceptance
+
+- Search links are stored before enrichment; six unreadable extractions retain six unverified cards with honest unknown cost/deadline.
+- Only a confirmed past deadline hides a result. Grade, area, format, cost, source age/review and closed/unknown status become warnings, never false eligibility claims.
+- All unexpired results display beyond the primary 3+3 picks; both cost groups open, with unknown costs explicitly labeled.
+- Redirect/title enrichment updates one record; missing extraction preserves known deadlines. Previously stored rejected leads recover without paid work, while expired leads remain excluded.
+- Existing consent, privacy, secure-fetch, quotas, saved/dismissed choices, crash protection, Today, sign-in, calendar and approval tests remain passing. Provider fixtures do not prove live provider search quality.
+
+See [Explore simplification](15-EXPLORE-SIMPLIFICATION.md).
+
+## Evidence-first acceptance
+
+- Configurable bounded multi-search returns optional detail reports without losing good links to malformed metadata; SDK usage records observed web tools and tokens.
+- Ten returned programs with four HTTP403 sites, two redirects, a PDF and three ordinary pages produce ten visible links, five confirmed records, three primary Free/three Paid-or-cost-unconfirmed picks and zero extraction AI calls. Source rechecks for these Scout records also avoid extraction.
+- Missing years, unsupported quotations and unreviewed redirects cannot establish facts or Verified. Robots/private-network protections remain enforced. Alternate literal deadline/name phrasing works.
+- Optional extraction uses relevant literal passages with stable IDs and at most 90 seconds; research has a separate bounded 150-second allowance.
+- Empty searches preserve manual allowance; previous empty charges restore once without paid-counter refunds. Explicit cooldown and three unsuccessful attempts/group/UTC day prevent uncontrolled repetition.
+- Estimated-spend admission is atomic across concurrent runs; settlement releases unused holds exactly once, preserves history and recovers when caps rise. Unknown paid usage retains estimates, never a fabricated zero.
+- Owner test/diagnostics report source mode, actual tools/tokens, estimates and candidate outcomes without private profiles/keys or paid GET side effects. Explore shows plain-language completion reasons and cooldown/spend blockers with existing links visible.

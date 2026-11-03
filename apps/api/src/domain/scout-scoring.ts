@@ -16,7 +16,8 @@ export function publicScoutFacts(o:Pick<Opp,'scoutFacts'>):PublicScoutFacts {try
 const aliases:Record<string,string>={ai:'artificial intelligence',ml:'machine learning',coding:'programming','computer science':'programming',cs:'programming',robotic:'robotics'};
 export const topicKey=(s:string)=>{const n=normalizeTopic(s);return aliases[n]||n;};
 export function matchedInterests(o:Opp,s:StudentContext) {
-  const terms=[...o.tags,...o.skills].map(topicKey);
+  let searched:string[]=[];try{searched=JSON.parse(o.discoveredFor||'[]').map((key:string)=>key.split('|')[0]);}catch{}
+  const terms=[...o.tags,...o.skills,...searched].map(topicKey);
   return s.interests.filter(i=>{const key=topicKey(i);return key.length>1&&terms.some(t=>t===key||t.split(' ').length>1&&(` ${t} `).includes(` ${key} `));});
 }
 export function scoutPreferenceChecks(o:Opp,s:StudentContext) {
@@ -51,12 +52,12 @@ export function scoutScore(o:Opp,s:StudentContext,freeMin:number,e:{status:strin
   const factors:Factor[]=[
     {key:'Interests',state:matched.length?'ok':'mid',text:matched.length?`Matches ${matched.slice(0,2).join(', ')}`:'Outside your listed interests'},
     {key:'Eligibility',state:e.status==='eligible'?'ok':'mid',text:e.status==='eligible'?`Source includes high-school grade ${s.grade}`:`Check: ${e.checks.join('; ')}`},
-    {key:'Timing',state:days!=null&&days<7?'mid':'ok',text:o.deadline?`Official deadline ${o.deadline}${days!=null&&days<7?' — little time to prepare':''}`:'Applications open or rolling; confirm timing on the site'},
+    {key:'Timing',state:days==null||days<7?'mid':'ok',text:o.deadline?`Official deadline ${o.deadline}${days!=null&&days<7?' — little time to prepare':''}`:'Deadline not confirmed — check application timing on the program page'},
     {key:'Project',state:goalHit&&f.projectBased?'ok':'mid',text:goalHit?`Connects with your goals${p.personalProject?' or personal project':''}${f.projectBased?' through a source-described project':''}`:f.projectBased?'Includes a source-described project':'Project work is not confirmed'},
     {key:'Location',state:local.online?'ok':local.distance!=null?'ok':'mid',text:local.online?'Online participation available':local.distance!=null?`About ${local.distance} miles between city centers; check the actual venue`:'Location or distance not confirmed'},
     {key:'Time',state:values.time===1?'ok':values.time===0?'no':'mid',text:f.hoursMax!=null?`${f.hoursMin??f.hoursMax}–${f.hoursMax} hours/week; about ${Math.round(available)}h available`:'Weekly hours not confirmed — check the commitment'},
     {key:'Cost',state:o.costType==='free'?'ok':'mid',text:o.cost},
-    {key:'Source',state:verified?'ok':'mid',text:verified?`Source verified ${o.sourceCheckedAt!.toISOString().slice(0,10)}`:`Page read${o.sourceReadAt?' '+new Date(o.sourceReadAt).toISOString().slice(0,10):''}; check flagged details`},
+    {key:'Source',state:verified?'ok':'mid',text:verified?`Source verified ${o.sourceCheckedAt!.toISOString().slice(0,10)}`:o.sourceReadAt?`Page read ${new Date(o.sourceReadAt).toISOString().slice(0,10)}; check flagged details`:'Search link only — program details have not been confirmed'},
   ];
   const why=matched.length?`Suggested for your interest in ${matched.slice(0,2).join(' and ')}${goalHit?' and its connection to your goals or project':''}.`:goalHit?'Connects with your goals or project.':'A chance to explore another interest.';
   return {id:o.id,excluded:false as const,eligibility:e,score,fit:score>=0.65?'strong':score>=0.45?'good':'look',factors,why,matched,goalHit,breakdown};

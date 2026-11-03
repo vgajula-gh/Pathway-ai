@@ -3,6 +3,7 @@ import {neededGroupBuckets,boundRuns,settleSearchRequests} from '../discovery/re
 import {advanceScout,newScoutState,scoutUsage,restoreScoutBudget,type ScoutState} from './runner.js';
 import {PROMPT_VERSION,type PublicSearchContext} from './prompts.js';
 import {scoutSettings} from './settings.js';
+import {researchRetry} from '../discovery/retries.js';
 
 /** A live request authorizes public research. Group coalescing never copies private profiles. */
 export async function advanceOrStartScout(groupKeys?:string[]) {
@@ -10,7 +11,7 @@ export async function advanceOrStartScout(groupKeys?:string[]) {
     ...(groupKeys?{OR:[{groupKey:{in:groupKeys}},{groupLinks:{some:{groupKey:{in:groupKeys}}}}]}:{})},orderBy:{startedAt:'asc'}});
   if(running) {
     const state=j<ScoutState>(running.state,{} as ScoutState);
-    const needed=await Promise.all((state.groupKeys||[]).map(k=>neededGroupBuckets(k)));
+    const needed=await Promise.all((state.groupKeys||[]).map(k=>neededGroupBuckets(k,true)));
     if(!needed.some(b=>b.length)&&!state.diagnostic) {
       state.stopRequested=true;
       await prisma.discoveryRun.update({where:{id:running.id},data:{state:JSON.stringify(state)}});
@@ -23,6 +24,8 @@ export async function advanceOrStartScout(groupKeys?:string[]) {
   for(const primary of queued) {
     const firstBuckets=await neededGroupBuckets(primary.key);
     if(!firstBuckets.length){await prisma.discoveryGroup.update({where:{key:primary.key},data:{status:'idle',pendingBuckets:'[]',error:''}});continue;}
+    const retry=await researchRetry(prisma,[primary.key]);
+    if(!retry.available){await prisma.discoveryGroup.update({where:{key:primary.key},data:{status:'error',pendingBuckets:'[]',error:'Search can retry after '+retry.nextAvailableAt}});continue;}
     const requests=(await prisma.opportunitySearchRequest.findMany({where:{status:{in:['queued','running']}},orderBy:{createdAt:'asc'}}))
       .filter(r=>j<{key:string;cached?:boolean}[]>(r.groupBindings,[]).some(b=>b.key===primary.key&&!b.cached));
     let intent:typeof requests[number]|undefined,used:any[]=[],remaining=0;
@@ -38,11 +41,12 @@ export async function advanceOrStartScout(groupKeys?:string[]) {
     const intentKeys=j<{key:string;cached?:boolean}[]>(intent.groupBindings,[]).filter(b=>!b.cached).map(b=>b.key);
     const context=j<Partial<PublicSearchContext>>(primary.context,{}),groups=[primary],buckets=new Set(firstBuckets);
     for(const other of queued) {
-      if(groups.length>=2)break;
+      if(groups.length>=(scoutSettings().researchCalls<=2?3:2))break;
       if(other.key===primary.key||!intentKeys.includes(other.key)||other.gradeBand!==primary.gradeBand||other.region!==primary.region)continue;
       const otherContext=j<Partial<PublicSearchContext>>(other.context,{});
       if((context.city||'')!==(otherContext.city||'')||(context.format||'both')!==(otherContext.format||'both'))continue;
       const needs=await neededGroupBuckets(other.key);if(!needs.length)continue;
+      if(!(await researchRetry(prisma,[other.key])).available)continue;
       groups.push(other);needs.forEach(b=>buckets.add(b));
     }
     const {reserveRun}=await import('../discovery/jobs.js');

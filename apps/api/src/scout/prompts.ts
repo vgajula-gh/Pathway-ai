@@ -9,7 +9,7 @@ export function publicSearchContext(input:PublicSearchContext):PublicSearchConte
   // An allowlist prevents accidentally forwarding names, private goals or a whole profile.
   const clean=(v:unknown,max=80)=>typeof v==='string'?v.normalize('NFKC').replace(/[\u0000-\u001f]/g,' ').trim().slice(0,max):'';
   const list=(v:unknown,max:number)=>Array.isArray(v)?[...new Set(v.filter(x=>typeof x==='string').map(x=>clean(x)).filter(Boolean))].slice(0,max):[];
-  return {today:clean(input.today,10),gradeBand:clean(input.gradeBand,10),interests:list(input.interests,20),focusInterests:list(input.focusInterests,2),
+  return {today:clean(input.today,10),gradeBand:clean(input.gradeBand,10),interests:list(input.interests,20),focusInterests:list(input.focusInterests,3),
     region:clean(input.region),city:clean(input.city),state:clean(input.state,2),format:['online','in_person','both'].includes(input.format||'')?input.format:'both',
     buckets:input.buckets.filter(b=>b==='free'||b==='paid').slice(0,2),excludeUrls:(input.excludeUrls||[]).slice(0,30).filter(v=>{try{const u=new URL(v);return u.protocol==='https:'&&!u.username&&!u.password;}catch{return false;}})};
 }

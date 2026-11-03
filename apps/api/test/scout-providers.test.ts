@@ -27,7 +27,7 @@ it.each(['openai','anthropic'])('requests bounded %s web research and captures m
  const result=await search.research!(context,6);
  expect(result.text).toContain('Example Robotics');expect(result.usage.provider).toBe(provider);expect(result.usage.inputTokens).toBeGreaterThan(0);
  const request=(provider==='openai'?sdk.responses:sdk.messages).mock.calls[0][0];
- expect(request.model).toBe('research-model');expect(JSON.stringify(request)).toContain('business');expect(sdk.options[0]).toMatchObject({maxRetries:0,timeout:60000});
+ expect(request.model).toBe('research-model');expect(JSON.stringify(request)).toContain('business');expect(sdk.options[0]).toMatchObject({maxRetries:0,timeout:150000});
 });
 it('repairs invalid JSON once without another web search and records both calls',async()=>{
  const provider={research:vi.fn(async()=>({text:'invalid JSON text',citations:[],usage:{provider:'openai' as const,model:'research-model',inputTokens:10,outputTokens:5,responseId:'resp'}}))},calls=vi.fn(async()=>{});
@@ -82,4 +82,29 @@ it('distinguishes rejected web research from rejected format repair, preserving 
  try{await research(provider,context,6,true,async()=>{});}catch(e:any){info=e.info;}
  const {diagnostics}=searchDiagnostics([{id:'error',usage:JSON.stringify({failures:[info]})}]);
  expect(diagnostics.failures[0]).toMatchObject({operation:'repair',providerCode:'invalid_json_schema',providerParam:'response_format',httpStatus:400});expect(JSON.stringify(diagnostics)).not.toContain('private');expect(sdk.chat).toHaveBeenCalledOnce();
+});
+it('recovers literal search links from unreadable prose without another model request',async()=>{
+ const provider={research:vi.fn(async()=>({text:'Found [Coding Studio](https://example.edu/studio), but this response is not JSON.',citations:[],usage:{provider:'openai' as const,model:'test',inputTokens:1,outputTokens:1,responseId:null}}))};
+ const result=await research(provider,context,6,false,async()=>{});expect(result.output.candidates[0]).toMatchObject({name:'Coding Studio',officialUrl:'https://example.edu/studio',costHint:'unknown'});expect(sdk.chat).not.toHaveBeenCalled();
+});
+it('keeps actual provider citations even when the final response was truncated',async()=>{
+ sdk.responses.mockResolvedValue({id:'partial',status:'incomplete',output:[{type:'message',content:[{type:'output_text',text:'Here are the program links, unfinished',annotations:[{type:'url_citation',url:'https://example.edu/program',title:'Example Program'}]}]}],usage:{input_tokens:10,output_tokens:5}});
+ const result=await research({research:openaiSearch().research!},context,6,false,async()=>{});
+ expect(result.output.candidates[0]).toMatchObject({name:'Example Program',officialUrl:'https://example.edu/program'});expect(sdk.responses).toHaveBeenCalledOnce();expect(sdk.chat).not.toHaveBeenCalled();
+});
+
+it('allows bounded multi-search research and records observed web tool calls',async()=>{
+ vi.stubEnv('SCOUT_MAX_TOOL_CALLS','4');sdk.responses.mockResolvedValue({id:'research',output:[{type:'web_search_call'},{type:'web_search_call'},{type:'message',content:[{type:'output_text',text:JSON.stringify(leads),annotations:[]}]}],usage:{input_tokens:200,output_tokens:100}});
+ const result=await openaiSearch().research!(context,6);expect(sdk.responses.mock.calls[0][0]).toMatchObject({max_tool_calls:4,tools:[{search_context_size:'medium'}]});expect(result.usage.webSearches).toBe(2);
+ await anthropicSearch().research!(context,6);expect(sdk.messages.mock.calls[0][0].tools[0].max_uses).toBe(4);
+});
+it('preserves valid links and research quotes when other optional details are malformed',()=>{
+ const result=researchOutput(JSON.stringify({candidates:[{...leads.candidates[0],details:{organizer:'Example',deadline:42,costType:'free',evidence:[{field:'costType',quote:'Participation is free.',sourceUrl:'https://example.edu/robotics'},{field:'deadline',quote:'unsafe',sourceUrl:'http://example.edu'}]}}]}));
+ expect(result.candidates[0].details).toMatchObject({organizer:'Example',deadline:null,costType:'free',applicationStatus:'unknown'});expect(result.candidates[0].details!.evidence).toHaveLength(1);
+});
+
+it('caps optional extraction at 90 seconds and honors a shorter caller deadline',async()=>{
+ const f=scoutFixture();sdk.chat.mockResolvedValue({choices:[{finish_reason:'stop',message:{content:JSON.stringify(f.facts)}}]});
+ await extractScout([f.page],120000);expect(sdk.options.at(-1).timeout).toBe(90000);
+ await extractScout([f.page],2000);expect(sdk.options.at(-1).timeout).toBe(2000);
 });

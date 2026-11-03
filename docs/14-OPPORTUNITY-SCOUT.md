@@ -1,5 +1,7 @@
 # Opportunity Scout rebuild
 
+Current Explore policy: [Explore simplification](15-EXPLORE-SIMPLIFICATION.md) supersedes older active-only/eligible/source-fresh admission, separate watchlist, cost-hint quotas and six-card visibility rules below. Only a confirmed past deadline hides a result. Other details remain warnings/ranking factors. SQL stores search links before enrichment; unreadable details produce visible unconfirmed results. Source evidence, privacy, proposals, knowledge scope and AI limits remain enforced. This simplification adds no schema migration.
+
 ## Review findings and scope
 
 The reported production request searched five interests, fetched 21 program pages and extracted 20 candidates. Verification rejected all 20 (overlapping name/organizer, numeric-grade, format and domain issues; two expired deadlines). Nothing reached catalog persistence or Pinecone. A separate extraction timeout and the shared monthly cap also occurred. Search was connected; an empty vector index did not establish that search never happened.

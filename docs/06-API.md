@@ -1,5 +1,7 @@
 # 06 · API Reference (v0)
 
+Current Explore policy: [Explore simplification](15-EXPLORE-SIMPLIFICATION.md) supersedes older active-only/eligible/source-fresh admission, separate watchlist, cost-hint quotas and six-card visibility rules below. Only a confirmed past deadline hides a result. Other details remain warnings/ranking factors. SQL stores search links before enrichment; unreadable details produce visible unconfirmed results. Source evidence, privacy, proposals, knowledge scope and AI limits remain enforced. This simplification adds no schema migration.
+
 Base URL `http://localhost:8787`. JSON in/out. Auth: HttpOnly account-session cookie; `x-student-id` is a migration fallback for unlinked legacy browser profiles only. Errors: `{ error, details? }` with 401/403/404/409/415/422/429/502/503.
 
 | Method | Path | Purpose |
@@ -139,3 +141,19 @@ Owner-only `GET /internal/diagnostics` uses JOBS_SECRET Bearer authentication. O
 Owner-only `POST /internal/diagnostics/test-scout` has strict `{mode:"configuration"|"fixture"|"live"|"advance",runId?}`. Configuration/default and fixture return200 without provider calls/catalog writes. Live reserves normal shared usage, queues at most one public coding candidate and returns202/runId; no live call is started until bounded advance/authorized worker. One research plus one extraction request maximum; no format repair in this small test. Repeated live requests reuse an active diagnostic job. Advance requires that diagnostic runId and processes one network stage under the shared lease. Missing/invalid owner Secret →503/401; missing setup →503; cap →429; arbitrary run →404. No student-supplied context or ID allowlist is accepted. See [Scout](14-OPPORTUNITY-SCOUT.md).
 
 Research-error diagnostics additionally expose optional `operation`, controlled `providerCode` and an allowlisted `providerParam`. Schema issues use specific safe paths such as `candidates.item.officialUrl`; raw provider messages/rejected values are excluded. Older rows remain unchanged. Research lead envelopes/optional metadata are normalized locally without inventing facts; valid siblings survive an invalid URL. OpenAI format repair uses an HTTPS pattern rather than unsupported `format: uri`, with full URL validation still on the server. Caps/retries/qualification and database contracts are unchanged.
+
+## Explore partial-results API update
+
+`GET /api/opportunities` returns primary `picks` plus the complete unexpired `recommended` library with bucket, costLabel, canAsk and knowledgeStatus fields. The UI deduplicates picks and excludes explicit saved/dismissed choices from discovery cards. `watchlist` remains an empty compatibility array; future openings display among normal results with warnings. Authenticated list reads can recover up to 100 previously rejected/error research leads using stored public data only, excluding known expiry, without provider calls or usage changes.
+
+`search.phase=partial` means usable links remain with unconfirmed details or enrichment errors. A settled successful partial search uses its normal successful-search allowance. Failed research with no usable links remains a failure. Six relevant unexpired links can satisfy catalog coverage despite unknown prices; public interests still guide search gaps. No new schema or Secret is required. See [current contract](15-EXPLORE-SIMPLIFICATION.md).
+
+## Evidence-first Scout follow-up
+
+Default `SCOUT_SOURCE_MODE=research_evidence` saves optional AI-researched reports with safe leads, then confirms literal quotes from one fetched page without another extraction AI request. Unsupported reports never become structured facts or Verified/Free. Optional fetch_and_extract mode retains bounded source extraction. Only confirmed past deadlines hide results; source failures keep links visible. Source rechecks for new Scout records also avoid extraction in evidence-first mode.
+
+The default is two funded research batches with up to five web tools per request, up to three focus interests per batch. Existing `DISCOVERY_MONTHLY_BUDGET` and `AI_MONTHLY_LIMIT` values are preserved. `monthlyAllowance.reasons` additionally accepts `discovery_monthly_spend`, based on a transactionally reserved estimated dollar balance. The separate anonymous ledger reuses AIUsage; no schema change. Limits read fresh deployment settings without paid calls or usage resets.
+
+Discovery responses may include `retry:{available,nextAvailableAt}` for failed/empty groups. Explicit retry waits one hour with three unsuccessful group attempts per UTC day. Neither failed nor empty results debit the student's successful-search slot. Earlier current-cycle empty charges restore once with an audit event; paid counters remain intact. Library reuse bypasses paid-work cooldowns/caps.
+
+Student diagnostics add nullable `webSearches`, `inputTokens`, `outputTokens`, `estimatedCostUsd` and `verifiedCandidates`. These report observed metadata; absent historical values remain null. Owner diagnostics add per-call observed tools/tokens, stored estimates, mode, source outcomes and monthly spending including pending reservations. The owner live test queues one public candidate and reports `maxProviderRequests:1` in evidence-first mode (up to five tool calls within that request), or 2 with optional extraction; configuration/fixture modes remain free, and reads never start provider work. See [sourcing](08-OPPORTUNITY-AND-NEWS-SOURCING.md) for estimate caveats and unchanged source/privacy/approval rules.

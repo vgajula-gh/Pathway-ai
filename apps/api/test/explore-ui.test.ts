@@ -8,9 +8,17 @@ let renderer:ReactTestRenderer;
 const opportunity=(id:string,bucket:string)=>({id,name:id,bucket,costLabel:bucket==='free'?'Free':'Cost not confirmed — check the official site',category:'Program',fit:{fit:'good',factors:[],eligibility:{checks:[]}},canAsk:false});
 beforeEach(()=>{state.api.mockReset();state.reload.mockReset();state.api.mockResolvedValue({ok:true});state.data={picks:[opportunity('free-one','free'),opportunity('paid-one','paid')],recommended:[],excluded:[],discoveryEnabled:false,sampleData:false,interestedCount:0,refresh:{available:true,remaining:1,nextAvailableAt:'2030-01-01T00:00:00.000Z'},finding:false,search:{phase:'complete',found:2,detail:null,startedAt:'2026-11-02T12:00:00Z'}};});
 afterEach(()=>{if(renderer)act(()=>renderer.unmount());});
-it('keeps the Paid bucket computed but collapsed for a free-only student, with honest unknown-cost labels',async()=>{
- await act(async()=>{renderer=create(createElement(Explore,{me:{budget:'free',interests:['Robotics']} as any,ask:vi.fn()}));});const buckets=renderer.root.findAllByType('details');expect(buckets[0].props.open).toBe(true);expect(buckets[1].props.open).toBe(false);expect(JSON.stringify(renderer.toJSON())).toContain('Show paid or cost-unconfirmed options');expect(JSON.stringify(renderer.toJSON())).toContain('Cost not confirmed');
+it('shows all cost buckets for a free-preferring student with honest unknown-cost labels',async()=>{
+ await act(async()=>{renderer=create(createElement(Explore,{me:{budget:'free',interests:['Robotics']} as any,ask:vi.fn()}));});const buckets=renderer.root.findAllByType('details');expect(buckets[0].props.open).toBe(true);expect(buckets[1].props.open).toBe(true);expect(JSON.stringify(renderer.toJSON())).toContain('Paid or cost unconfirmed');expect(JSON.stringify(renderer.toJSON())).toContain('Cost not confirmed');
  expect(renderer.root.findAllByType('button').find(b=>b.children.join('')==='Search for more')!.props.disabled).toBe(true);expect(renderer.root.findAllByType('button').some(b=>b.children.join('')==='Ask about this program')).toBe(false);
+});
+it('shows every unexpired search link beyond the primary three cost-unconfirmed picks, including during a partial search',async()=>{
+ state.data.picks=Array.from({length:3},(_,i)=>opportunity('primary-'+i,'paid'));
+ state.data.recommended=[...state.data.picks,...Array.from({length:3},(_,i)=>opportunity('extra-'+i,'paid'))];
+ state.data.search.phase='partial';state.data.discoveryEnabled=true;
+ await act(async()=>{renderer=create(createElement(Explore,{me:{budget:'free',interests:['Coding']} as any,ask:vi.fn()}));});
+ expect(renderer.root.findAllByType('h3').map(h=>h.children.join(''))).toEqual(['primary-0','primary-1','primary-2','extra-0','extra-1','extra-2']);
+ expect(JSON.stringify(renderer.toJSON())).toContain('Some details could not be confirmed');
 });
 it('records a dismissal reason before asking the server for the replacement',async()=>{
  await act(async()=>{renderer=create(createElement(Explore,{me:{budget:'any',interests:['Robotics']} as any,ask:vi.fn()}));});await act(async()=>{renderer.root.findAllByType('button').find(b=>b.children.join('')==='Not for me')!.props.onClick();});await act(async()=>{await renderer.root.findAllByType('button').find(b=>b.children.join('')==='cost')!.props.onClick();});expect(state.api).toHaveBeenCalledWith('/api/opportunities/free-one/status',{body:{status:'dismissed',reason:'cost'}});expect(state.reload).toHaveBeenCalledTimes(1);
@@ -50,7 +58,7 @@ it('shows Interested only after a student has saved a program',async()=>{
 });
 it('shows honest empty, no-interest and partial bucket states without sample titles',async()=>{
  state.data={...state.data,picks:[],discoveryEnabled:true};const props={me:{budget:'free',interests:[]} as any,ask:vi.fn()};await act(async()=>{renderer=create(createElement(Explore,props));});expect(JSON.stringify(renderer.toJSON())).toContain('Add an interest');expect(renderer.root.findAllByType('button').find(b=>b.children.join('')==='Search for more')!.props.disabled).toBe(true);
- await act(async()=>renderer.update(createElement(Explore,{...props,me:{...props.me,interests:['Art']}})));expect(JSON.stringify(renderer.toJSON())).toContain('No active opportunities found');expect(JSON.stringify(renderer.toJSON())).toContain('Only ');expect(JSON.stringify(renderer.toJSON())).not.toContain('Sample data');
+ await act(async()=>renderer.update(createElement(Explore,{...props,me:{...props.me,interests:['Art']}})));expect(JSON.stringify(renderer.toJSON())).toContain('No unexpired results');expect(JSON.stringify(renderer.toJSON())).toContain('Only ');expect(JSON.stringify(renderer.toJSON())).not.toContain('Sample data');
 });
 it('provides a real retry after failed search and an accessible progress state during search',async()=>{
  state.data={...state.data,discoveryEnabled:true,error:'Official pages could not be read.'};const props={me:{budget:'any',interests:['Art']} as any,ask:vi.fn()};await act(async()=>{renderer=create(createElement(Explore,props));});expect(renderer.root.findAllByType('button').some(b=>b.children.join('')==='Try again')).toBe(true);expect(JSON.stringify(renderer.toJSON())).toContain('does not use your search allowance');state.data={...state.data,finding:true,error:null,picks:[]};await act(async()=>renderer.update(createElement(Explore,props)));expect(renderer.root.findByProps({className:'search-status'}).props['aria-busy']).toBe(true);expect(JSON.stringify(renderer.toJSON())).not.toContain('free-one');
@@ -80,7 +88,7 @@ it('reloads current allowance after a rejected refresh instead of leaving an app
 it('offers an explicit first search without making a request or claiming an empty search result on entry',async()=>{
  state.data={...state.data,discoveryEnabled:true,picks:[],search:{phase:'idle',found:0,detail:null,startedAt:null}};
  await act(async()=>{renderer=create(createElement(Explore,{me:{budget:'any',interests:['Art']} as any,ask:vi.fn()}));});
- expect(state.api).not.toHaveBeenCalled();expect(JSON.stringify(renderer.toJSON())).not.toContain('No active opportunities found');expect(renderer.root.findAllByType('details')).toHaveLength(0);
+ expect(state.api).not.toHaveBeenCalled();expect(JSON.stringify(renderer.toJSON())).not.toContain('No unexpired results');expect(renderer.root.findAllByType('details')).toHaveLength(0);
  const button=renderer.root.findAllByType('button').find(b=>b.children.join('')==='Search for opportunities')!;expect(button.props.disabled).toBe(false);
  await act(async()=>button.props.onClick());expect(state.api).toHaveBeenCalledWith('/api/opportunities/refresh',{method:'POST'});
 });
@@ -98,4 +106,15 @@ it('saves optional preferences without starting web research or a plan write',as
  act(()=>renderer.root.findByProps({id:'scout-project'}).props.onChange({target:{value:'A robotics prototype'}}));
  await act(async()=>renderer.root.findByType('form').props.onSubmit({preventDefault(){}}));
  expect(state.api).toHaveBeenCalledOnce();expect(state.api).toHaveBeenCalledWith('/api/me',expect.objectContaining({method:'PATCH',body:expect.objectContaining({discoveryPreferences:expect.objectContaining({personalProject:'A robotics prototype'})})}));expect(setMe).toHaveBeenCalledOnce();
+});
+
+it('explains an estimated spending cap and an explicit retry cooldown without hiding results',async()=>{
+ const props={me:{budget:'any',interests:['Coding']} as any,ask:vi.fn()};state.data={...state.data,discoveryEnabled:true,limited:true,monthlyAllowance:{limited:true,reasons:['discovery_monthly_spend'],resetsAt:'2030-02-01T00:00:00Z'}};
+ await act(async()=>{renderer=create(createElement(Explore,props));});expect(JSON.stringify(renderer.toJSON())).toContain('estimated budget');expect(JSON.stringify(renderer.toJSON())).toContain('free-one');
+ state.data={...state.data,limited:false,search:{...state.data.search,phase:'failed'},error:'Search could not finish',retry:{available:false,nextAvailableAt:'2030-01-01T13:00:00Z'}};
+ await act(async()=>renderer.update(createElement(Explore,props)));expect(JSON.stringify(renderer.toJSON())).toContain('No search allowance was used');expect(renderer.root.findAllByType('button').find(b=>b.children.join('')==='Try again')!.props.disabled).toBe(true);
+});
+it('shows plain-language page confirmation failures after completion while preserving all links',async()=>{
+ state.data.diagnostics={searchAttempts:1,candidates:{found:10,filtered:0,queued:10},verifiedCandidates:5,steps:{fetch:{completed:5,failed:4},extract:{completed:0,failed:0},verify:{completed:5,failed:0}},programsSaved:10,failures:[{stage:'fetch',code:'http_error',count:4},{stage:'verify',code:'deadline_passed',count:1}]};
+ await act(async()=>{renderer=create(createElement(Explore,{me:{budget:'any',interests:['Coding']} as any,ask:vi.fn()}));});const text=JSON.stringify(renderer.toJSON());expect(text).toContain('10');expect(text).toContain('5 confirmed');expect(text).toContain('4 page checks could not finish');expect(text).toContain('1 past-deadline results hidden');expect(text).toContain('free-one');
 });

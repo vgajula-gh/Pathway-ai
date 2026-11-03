@@ -1,5 +1,7 @@
 # 04 · Architecture
 
+Current Explore policy: [Explore simplification](15-EXPLORE-SIMPLIFICATION.md) supersedes older active-only/eligible/source-fresh admission, separate watchlist, cost-hint quotas and six-card visibility rules below. Only a confirmed past deadline hides a result. Other details remain warnings/ranking factors. SQL stores search links before enrichment; unreadable details produce visible unconfirmed results. Source evidence, privacy, proposals, knowledge scope and AI limits remain enforced. This simplification adds no schema migration.
+
 ## Overview
 ```mermaid
 flowchart LR
@@ -135,3 +137,9 @@ Source discovery prefers direct current/upcoming HTML pages, filters known downl
 The versioned Scout path uses `scout/runner.ts` (LangGraph) with SQL checkpoints: research → leads → candidate → fetch → extract → qualify/store → finish. One network/model stage per foreground call; cheap transitions run together. Paid stages persist in-flight claims and do not replay uncertain outcomes after crashes. `scout/scheduler.ts` coalesces up to two public focus interests, bounded to three funded batches and a sixteen-lead request pool. `domain/scout-qualification.ts` checks literal passage evidence; `domain/scout-scoring.ts` applies private preferences and deterministic weights. Legacy extraction/recheck compatibility remains for older catalog rows.
 
 Reviewed active programs may be Verified; active source-backed partial candidates remain Needs checking with `sourceReadAt` and null `sourceCheckedAt`. Catalog, picks, Buddy scope and knowledge preparation apply the same distinction. Unknown numeric grades are not inferred from a cited high-school audience. Unannounced/expired/closed programs do not fill active slots. ResearchCandidate retains public leads, pages/assertions and all qualification reasons for protected owner diagnostics. New migrations are additive; see [Scout design](14-OPPORTUNITY-SCOUT.md).
+
+## Evidence-first Scout update
+
+Default graph: research (up to five web tools) → persist all safe leads/reports → one fetched-page confirmation → deterministic facts/qualification → next candidate. No extraction AI node runs in research_evidence mode; unknown/blocked results remain visible. Optional fetch_and_extract retains its extraction node, with relevant-passages input and a 90-second cap. Persist the mode per job so existing in-flight jobs keep their original contract. Two batches can coalesce three focus groups each, covering five interests. Paid call claims, shared worker leases and no uncertain replay remain authoritative.
+
+Estimated-dollar reservations use anonymous month keys in existing AIUsage and reservation metadata in DiscoveryRun.usage. Serializable reservations protect concurrent admission; terminal compare-and-set settlement releases unused estimated funds once. No schema migration is added. Request counts, observed web-tool calls, token estimates and dollar estimates are distinct. Empty/failed searches preserve manual slots; explicit retries have a one-hour/shared daily bound. See [sourcing](08-OPPORTUNITY-AND-NEWS-SOURCING.md).

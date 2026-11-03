@@ -35,10 +35,16 @@ components:
         available: { type: boolean }
         remaining: { type: integer, minimum: 0 }
         nextAvailableAt: { type: string, format: date-time, description: Rolling successful-search allowance resets here; failures are not debited }
+    SearchRetryAvailability:
+      type: object
+      description: Explicit failed/empty retries wait one hour, with at most three unsuccessful shared-group attempts per UTC day; reading does not start work
+      properties:
+        available: { type: boolean }
+        nextAvailableAt: { type: [string, 'null'], format: date-time }
     SearchProgress:
       type: object
       properties:
-        phase: { enum: [idle, queued, searching, reading_sources, checking_facts, indexing, cached, complete, empty, failed, limited, cancelled] }
+        phase: { enum: [idle, queued, searching, reading_sources, checking_facts, indexing, cached, complete, partial, empty, failed, limited, cancelled] }
         found: { type: integer, minimum: 0 }
         detail: { type: [string, 'null'] }
         startedAt: { type: [string, 'null'], format: date-time }
@@ -49,12 +55,12 @@ components:
       description: Read-only current shared allowance, independent of the last request and the student rolling-cycle allowance. No provider call or counter reset.
       properties:
         limited: { type: boolean }
-        reasons: { type: array, uniqueItems: true, items: { enum: [discovery_monthly_limit, ai_monthly_limit] } }
+        reasons: { type: array, uniqueItems: true, items: { enum: [discovery_monthly_limit, ai_monthly_limit, discovery_monthly_spend] } }
         resetsAt: { type: string, format: date-time, description: Next UTC calendar-month boundary }
     CatalogCoverage:
       type: object
       required: [complete, free, paid, missingInterests]
-      description: Current active eligible good matches, excluding saved/dismissed items. Complete means every selected interest is covered and the combined Free/Paid targets are met; reuse requires no paid allowance.
+      description: Relevant unexpired links, excluding saved/dismissed choices. Six links can meet total coverage despite unknown costs; every selected interest must be represented. Other qualification checks are warnings. Reuse uses no paid allowance.
       properties:
         complete: { type: boolean }
         free: { type: integer, minimum: 0 }
@@ -82,6 +88,12 @@ components:
         runs: { type: integer, minimum: 0 }
         searchAttempts: { type: integer, minimum: 0 }
         httpAttempts: { type: integer, minimum: 0, description: Includes robots requests, redirects and supporting pages }
+        webSearches: { type: [integer, 'null'], minimum: 0, description: Observed web tool calls; missing historical usage stays unknown }
+        inputTokens: { type: [integer, 'null'], minimum: 0 }
+        outputTokens: { type: [integer, 'null'], minimum: 0 }
+        estimatedCostUsd: { type: [number, 'null'], minimum: 0, description: Owner-configured estimates, not an invoice or provider-wide billing cap }
+        verifiedCandidates: { type: [integer, 'null'], minimum: 0 }
+
         candidates:
           type: [object, 'null']
           properties:
@@ -153,6 +165,7 @@ components:
         search: { $ref: '#/components/schemas/SearchProgress' }
         resultIds: { type: array, items: { type: string } }
         refresh: { $ref: '#/components/schemas/RefreshAvailability' }
+        retry: { $ref: '#/components/schemas/SearchRetryAvailability' }
     KnowledgeCitation:
       type: object
       properties:
@@ -169,7 +182,7 @@ components:
         picks: { type: array, items: { $ref: '#/components/schemas/Opportunity' } }
         watchlist:
           type: array
-          description: Announced future openings, separate from active picks; up to six source-fresh matching programs
+          description: Deprecated compatibility array, now empty. Future openings display among normal results with warnings.
           items:
             allOf:
               - { $ref: '#/components/schemas/Opportunity' }
@@ -194,6 +207,7 @@ components:
         search: { $ref: '#/components/schemas/SearchProgress' }
         resultIds: { type: array, items: { type: string } }
         refresh: { $ref: '#/components/schemas/RefreshAvailability' }
+        retry: { $ref: '#/components/schemas/SearchRetryAvailability' }
     AccountCredentials:
       type: object
       required: [phrase, confirmPhrase]
@@ -264,7 +278,7 @@ components:
         costLabel: { type: string }
         financialAidNote: { type: [string, 'null'] }
         feeFlag: { type: boolean }
-        verificationStatus: { description: Active source-backed picks may be verified or needs_verification; announced future openings are a separate watchlist, enum: [verified, needs_verification, watchlist, new_find, stale, expired] }
+        verificationStatus: { description: Only confirmed past deadlines hide results; unconfirmed links remain needs_verification. Historical watchlist/stale states do not hide a result, enum: [verified, needs_verification, watchlist, new_find, stale, expired] }
         verifiedAt: { type: [string, 'null'], format: date-time }
         sourceCheckedAt: { type: [string, 'null'], format: date-time }
         sourceReadAt: { type: [string, 'null'], format: date-time, description: Reading alone does not confer Verified }

@@ -15,6 +15,17 @@ export function sourcePassages(pages:Page[]):SourcePassage[] {
     return result;
   });
 }
+/** Keep original IDs and complete literal slices, prioritizing useful facts
+ * instead of sending tens of thousands of characters to a small model. */
+export function relevantPassages(pages:Page[],maxChars=12000):SourcePassage[] {
+  const all=sourcePassages(pages),selected=new Set<string>();let chars=0;
+  const score=(p:SourcePassage)=>Number(p.id.endsWith('-s0'))*3+
+    (p.text.match(/\beligib\w*|\bgrades?\b|high.school|\bages?\b|deadline|apply by|\bdue\b|\bfees?\b|tuition|cost|free|applications?|registration|requirements?|rolling|opens?|closes?/gi)||[]).length;
+  for(const p of [...all].sort((a,b)=>score(b)-score(a)||all.indexOf(a)-all.indexOf(b))) {
+    if(chars+p.text.length>maxChars)continue;selected.add(p.id);chars+=p.text.length;
+  }
+  return all.filter(p=>selected.has(p.id));
+}
 export function resolveEvidence(facts:ScoutFacts,passages:SourcePassage[]) {
   const byId=new Map(passages.map(p=>[p.id,p]));
   return Object.fromEntries(Object.entries(facts.evidence).flatMap(([field,ids])=>{

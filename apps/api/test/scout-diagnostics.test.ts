@@ -13,7 +13,8 @@ import {primaryFailure} from '../src/discovery/failures.js';
 const previous={...env},secret='owner-diagnostic-secret-'.repeat(3),headers={authorization:'Bearer '+secret};
 beforeAll(async()=>{writeFileSync(join(dir,'test.db'),'');await promisify(execFile)(process.execPath,['../../node_modules/prisma/build/index.js','migrate','deploy','--schema','prisma/schema.prisma'],{env:{...process.env,DATABASE_URL:url}});},30000);
 beforeEach(async()=>{
- vi.unstubAllEnvs();vi.stubEnv('JOBS_SECRET',secret);vi.stubEnv('OPENAI_API_KEY','sk-private-do-not-print');vi.stubEnv('LLM_PROVIDER','openai');vi.stubEnv('SEARCH_PROVIDER','openai');vi.stubEnv('OPENAI_MODEL','gpt-4.1-mini');vi.stubEnv('DISCOVERY_ENABLED','true');vi.stubEnv('AI_DISABLED','false');vi.stubEnv('AI_MONTHLY_LIMIT','100');vi.stubEnv('DISCOVERY_MONTHLY_BUDGET','10');
+ vi.stubEnv('SCOUT_SOURCE_MODE','fetch_and_extract');
+ vi.unstubAllEnvs();vi.stubEnv('SCOUT_SOURCE_MODE','fetch_and_extract');vi.stubEnv('JOBS_SECRET',secret);vi.stubEnv('OPENAI_API_KEY','sk-private-do-not-print');vi.stubEnv('LLM_PROVIDER','openai');vi.stubEnv('SEARCH_PROVIDER','openai');vi.stubEnv('OPENAI_MODEL','gpt-4.1-mini');vi.stubEnv('DISCOVERY_ENABLED','true');vi.stubEnv('AI_DISABLED','false');vi.stubEnv('AI_MONTHLY_LIMIT','100');vi.stubEnv('DISCOVERY_MONTHLY_BUDGET','10');
  env.aiDisabled=false;env.provider='openai';env.openaiModel='gpt-4.1-mini';env.accessCodes=[];
  await db.discoveryRun.deleteMany();await db.discoveryUsage.deleteMany();await db.discoveryGroup.deleteMany();await db.aIUsage.deleteMany();await db.jobLease.deleteMany();await db.student.deleteMany();await db.opportunity.deleteMany();
  const fixture=scoutFixture('Public Coding Studio');
@@ -71,4 +72,13 @@ it('reports repeated qualification failures before an incidental timeout, while 
  const verify={stage:'verify' as const,code:'missing_evidence' as const};
  expect(primaryFailure([verify,verify,{stage:'extract',code:'timeout'}])).toEqual(verify);
  expect(primaryFailure([verify,verify,{stage:'extract',code:'provider_authorization'}])?.code).toBe('provider_authorization');
+});
+
+it('runs a research-evidence owner test with one research request, no extraction and complete cost diagnostics',async()=>{
+ vi.stubEnv('SCOUT_SOURCE_MODE','research_evidence');const app=await buildApp();app.log.level='silent';expect(app.initialConfig.connectionTimeout).toBe(180000);try{
+  const start=(await app.inject({method:'POST',url:'/internal/diagnostics/test-scout',headers,payload:{mode:'live'}})).json();expect(start.maxProviderRequests).toBe(1);const id=start.result.runId;
+  for(let n=0;n<5;n++){const result=(await app.inject({method:'POST',url:'/internal/diagnostics/test-scout',headers,payload:{mode:'advance',runId:id}})).json();if(result.result.done)break;}
+  expect(external.research).toHaveBeenCalledOnce();expect(external.extract).not.toHaveBeenCalled();
+  const report=(await app.inject({url:'/internal/diagnostics?runId='+id,headers})).json();expect(report.runs[0]).toMatchObject({sourceMode:'research_evidence',outcomes:{needs_verification:1}});expect(report.runs[0].calls).toHaveLength(1);expect(report.runs[0].calls[0]).toHaveProperty('estimatedCost');expect(report.monthly.spend.costIsEstimate).toBe(true);expect(report.configuration.settings.webToolCalls).toBe(5);
+ }finally{await app.close();}
 });

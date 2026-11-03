@@ -84,18 +84,19 @@ it('coalesces first visits across students and never starts a paid run from a st
  await Promise.all([queueDiscovery(studentId),queueDiscovery(studentId)]);expect(await db.opportunitySearchRequest.count()).toBe(1);expect(await db.discoveryRun.count()).toBe(0);
  expect((await refreshStatus(studentId)).remaining).toBe(1);
 });
-it('charges a manual allowance only once after a successful search, including an honest empty result',async()=>{
+it('keeps the manual allowance intact after an empty search while counting the paid attempt',async()=>{
  const {enqueueSearch,settleSearchRequests}=await import('../src/discovery/requests.js');
  await enqueueSearch(studentId,'manual');expect((await refreshStatus(studentId)).remaining).toBe(1);
  await runJobs();await settleSearchRequests(studentId);await settleSearchRequests(studentId);
- expect((await refreshStatus(studentId)).remaining).toBe(0);expect((await db.opportunitySearchRequest.findFirstOrThrow()).status).toBe('empty');
+ expect((await refreshStatus(studentId)).remaining).toBe(1);expect((await db.opportunitySearchRequest.findFirstOrThrow()).status).toBe('empty');
  expect((await db.discoveryUsage.findFirstOrThrow()).runs).toBe(1);
 });
 it('does not debit a failed search, keeps global paid attempts counted and permits explicit retry',async()=>{
  const {enqueueSearch}=await import('../src/discovery/requests.js');remote.discover.mockRejectedValueOnce(new Error('provider failed with private details'));
  await enqueueSearch(studentId,'manual');await runJobs();const request=await db.opportunitySearchRequest.findFirstOrThrow();expect(request.status).toBe('failed');expect(request.error).not.toContain('private');expect(request.countedAt).toBeNull();expect((await refreshStatus(studentId)).remaining).toBe(1);
  expect((await db.discoveryUsage.findFirstOrThrow()).runs).toBe(1);await queueDiscovery(studentId);expect(await db.opportunitySearchRequest.count()).toBe(1);
- await enqueueSearch(studentId,'manual');expect(await db.opportunitySearchRequest.count()).toBe(2);
+ await expect(enqueueSearch(studentId,'manual')).rejects.toThrow('Try again after');
+ await enqueueSearch(studentId,'manual',new Date(Date.now()+3601000));expect(await db.opportunitySearchRequest.count()).toBe(2);
 });
 it('reuses a full active catalog on both first use and explicit Search again without web work',async()=>{
  for(let i=0;i<3;i++)await db.opportunity.create({data:{id:'free'+i,name:'Free '+i,organizer:'Org',source:'discovery',isSample:false,verificationStatus:'verified',verifiedAt:new Date(),sourceCheckedAt:new Date(),category:'Program',url:'https://example.edu',gradeMin:9,gradeMax:12,format:'Virtual',cost:'Free',costType:'free',costVerifiedAt:new Date(),commitment:'Low',skills:'[]',tags:'["robotics"]',deadline:'2030-12-01',evidence:JSON.stringify({deadline:{sourceUrl:'https://example.edu',quote:'Apply by 2030-12-01'}})}});
@@ -146,7 +147,7 @@ it('resumes blocked manual intent with the manual allowance intact until success
  await queueDiscovery(studentId);
  const pending=await db.opportunitySearchRequest.findFirstOrThrow({where:{status:'queued'}});
  expect(pending).toMatchObject({kind:'manual',manualSlot:'base'});expect((await refreshStatus(studentId)).remaining).toBe(1);
- await runJobs();expect(remote.discover).toHaveBeenCalledTimes(1);expect((await refreshStatus(studentId)).remaining).toBe(0);
+ remote.discover.mockResolvedValueOnce(['paid0']);await runJobs();expect(remote.discover).toHaveBeenCalledTimes(1);expect((await refreshStatus(studentId)).remaining).toBe(0);
  expect((await db.discoveryUsage.findFirstOrThrow()).runs).toBe(1);
 });
 it('never replays a paid provider failure automatically after the owner raises a cap',async()=>{
@@ -233,10 +234,12 @@ it('rechecks a queued gap before funding it and settles a newly complete shared 
  expect(remote.discover).not.toHaveBeenCalled();expect(await db.discoveryRun.count()).toBe(0);expect((await db.discoveryUsage.findFirst())?.runs||0).toBe(0);expect(await db.aIUsage.count()).toBe(0);expect((await refreshStatus(studentId)).remaining).toBe(1);
  expect(await searchState(studentId)).toMatchObject({finding:false,search:{phase:'cached',found:6}});
 });
-it('keeps expired, closed and unverified records from preventing a necessary missing-bucket search',async()=>{
+it('reuses closed/unverified results and searches only when expired dates leave a shortfall',async()=>{
  await fillFree();await db.opportunity.update({where:{id:'free0'},data:{applicationStatus:'closed'}});await db.opportunity.update({where:{id:'free1'},data:{sourceCheckedAt:new Date(Date.now()-31*86400000)}});await db.opportunity.update({where:{id:'free2'},data:{verificationStatus:'unverified'}});
  const {enqueueSearch}=await import('../src/discovery/requests.js');
- expect(await enqueueSearch(studentId,'initial')).toMatchObject({requested:true,catalog:{complete:false,free:0}});
+ expect(await enqueueSearch(studentId,'initial')).toMatchObject({requested:false,catalog:{complete:true,free:3}});
+ await db.opportunity.updateMany({where:{id:{in:['free0','free1']}},data:{deadline:'2000-01-01'}});
+ expect(await enqueueSearch(studentId,'manual',new Date(),{explicit:true})).toMatchObject({requested:true,catalog:{complete:false,free:1}});
  expect(JSON.parse((await db.discoveryGroup.findFirstOrThrow()).pendingBuckets)).toEqual(['free']);
 });
 it('cancels unfunded queued work when consent is withdrawn or the student changes interests',async()=>{
@@ -294,4 +297,38 @@ it('reports all historical failures for the authenticated request without anothe
   expect((await db.discoveryRun.findUniqueOrThrow({where:{id:run.id}})).usage).toBe(JSON.stringify(oldUsage));
   expect((await db.discoveryUsage.findFirstOrThrow()).runs).toBe(1);expect((await refreshStatus(studentId)).remaining).toBe(1);
  }finally{await app.close();}
+});
+
+it('reserves estimated spending atomically for concurrent runs and reports the separate spend cap',async()=>{
+ vi.stubEnv('SCOUT_WEB_SEARCH_PRICE_USD','0.1');vi.stubEnv('SCOUT_INPUT_PRICE_PER_MILLION','0');vi.stubEnv('SCOUT_OUTPUT_PRICE_PER_MILLION','0');vi.stubEnv('DISCOVERY_MONTHLY_SPEND_USD','0.5');
+ const runs=await Promise.all([reserveRun('cost-one','discovery'),reserveRun('cost-two','discovery')]);expect(runs.filter(Boolean)).toHaveLength(1);expect((await db.discoveryUsage.findFirstOrThrow()).runs).toBe(1);
+ const {monthlySearchAllowance}=await import('../src/discovery/monthly-allowance.js');expect((await monthlySearchAllowance(db)).reasons).toEqual(['discovery_monthly_spend']);
+ expect((await db.aIUsage.findUniqueOrThrow({where:{key:'discovery-spend:'+new Date().toISOString().slice(0,7)}})).count).toBe(5000);
+});
+it('preserves historical estimated spending and recovers after a raised cap without resetting counters',async()=>{
+ const month=new Date().toISOString().slice(0,7);await db.discoveryUsage.create({data:{month,estimatedCost:24.9,runs:2}});
+ expect(await reserveRun('budget','discovery')).toBeNull();expect(await db.aIUsage.count()).toBe(0);
+ vi.stubEnv('DISCOVERY_MONTHLY_SPEND_USD','50');expect(await reserveRun('budget','discovery')).not.toBeNull();expect((await db.discoveryUsage.findUniqueOrThrow({where:{month}})).runs).toBe(3);
+ expect((await db.aIUsage.findUniqueOrThrow({where:{key:'discovery-spend:'+month}})).count).toBeGreaterThan(249000);
+});
+it('restores an earlier empty-result manual charge exactly once without refunding paid usage',async()=>{
+ await useManualRefresh(studentId);const state=await db.pickRefreshState.findUniqueOrThrow({where:{studentId}});
+ await db.opportunitySearchRequest.create({data:{studentId,kind:'manual',signature:'test',status:'empty',manualSlot:'base',cycleStartedAt:state.cycleStartedAt,countedAt:new Date()}});
+ const month=new Date().toISOString().slice(0,7);await db.discoveryUsage.create({data:{month,runs:7}});
+ for(let n=0;n<2;n++)expect((await refreshStatus(studentId)).remaining).toBe(1);
+ expect((await db.discoveryUsage.findFirstOrThrow()).runs).toBe(7);expect(await db.auditEvent.count({where:{studentId,event:'Restored search allowance for empty results'}})).toBe(1);
+});
+it('bounds unsuccessful shared-group retries by cooldown and UTC day without starting provider work',async()=>{
+ const {researchRetry}=await import('../src/discovery/retries.js');const key='retry-topic';
+ for(const hour of ['01','03'])await db.discoveryRun.create({data:{groupKey:key,kind:'discovery',status:'complete',usage:'{"savedIds":[]}',startedAt:new Date('2030-01-01T'+hour+':00:00Z'),finishedAt:new Date('2030-01-01T'+hour+':10:00Z')}});
+ expect(await researchRetry(db,[key],new Date('2030-01-01T03:11:00Z'))).toEqual({available:false,nextAvailableAt:'2030-01-01T04:10:00.000Z'});
+ expect((await researchRetry(db,[key],new Date('2030-01-01T04:11:00Z'))).available).toBe(true);
+ await db.discoveryRun.create({data:{groupKey:key,kind:'discovery',status:'failed',usage:'{"savedIds":[]}',startedAt:new Date('2030-01-01T05:00:00Z'),finishedAt:new Date('2030-01-01T05:10:00Z')}});
+ expect(await researchRetry(db,[key],new Date('2030-01-01T08:00:00Z'))).toEqual({available:false,nextAvailableAt:'2030-01-02T00:00:00.000Z'});
+ expect((await researchRetry(db,[key],new Date('2030-01-02T00:01:00Z'))).available).toBe(true);expect(remote.discover).not.toHaveBeenCalled();
+});
+
+it('keeps a zero estimated-spend cap disabled even when configured price estimates are zero',async()=>{
+ vi.stubEnv('DISCOVERY_MONTHLY_SPEND_USD','0');vi.stubEnv('SCOUT_WEB_SEARCH_PRICE_USD','0');vi.stubEnv('SCOUT_INPUT_PRICE_PER_MILLION','0');vi.stubEnv('SCOUT_OUTPUT_PRICE_PER_MILLION','0');
+ expect(await reserveRun('disabled','discovery')).toBeNull();expect(await db.discoveryRun.count()).toBe(0);expect(await db.aIUsage.count()).toBe(0);
 });

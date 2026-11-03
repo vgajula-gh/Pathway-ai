@@ -5,7 +5,7 @@ export interface ChatTurn { role: 'user' | 'assistant'; content: string }
 export interface ImageInput { mediaType: 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif'; base64: string }
 export interface ToolResult { content: string; isError?: boolean }
 export interface JSONSchema { name: string; schema: Record<string, unknown> }
-export interface LLMUsage {provider:'openai'|'anthropic'|'ollama';model:string;inputTokens:number|null;outputTokens:number|null;responseId:string|null}
+export interface LLMUsage {provider:'openai'|'anthropic'|'ollama';model:string;inputTokens:number|null;outputTokens:number|null;responseId:string|null;webSearches?:number|null}
 export interface RunToolsOptions {
   system: string; history: ChatTurn[]; tools: ToolSpec[]; maxRounds: number; maxTokens?: number;
   exec: (name: string, input: unknown) => Promise<ToolResult>;

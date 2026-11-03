@@ -1,5 +1,5 @@
 import {ResearchJSON} from './schema.js';
-import {researchOutput,type ResearchProvider} from './providers.js';
+import {researchOutput,citedLeads,type ResearchProvider} from './providers.js';
 import {scoutPrompt,type PublicSearchContext} from './prompts.js';
 import {extractionLLM} from '../agent/llm/extraction.js';
 import type {LLMUsage} from '../agent/llm/types.js';
@@ -12,6 +12,8 @@ export async function research(provider:ResearchProvider,context:PublicSearchCon
   await onCall(response.usage,'research');
   try{return {output:researchOutput(response.text),repaired:false,query:scoutPrompt(context,count)};}
   catch(error) {
+    const fallback=citedLeads(response,count);
+    if(fallback.candidates.length)return {output:fallback,repaired:false,query:scoutPrompt(context,count)};
     if(!(error instanceof DiscoveryFailure)||!['invalid_json','invalid_schema'].includes(error.info.code)||!repairAllowed)throw error;
     if(Date.now()>=deadlineAt)throw new DiscoveryFailure({stage:'search',code:'run_limit'});
     await beforeRepair?.();

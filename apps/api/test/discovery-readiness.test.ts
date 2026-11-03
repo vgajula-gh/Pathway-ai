@@ -98,6 +98,10 @@ it('keeps SQLite on the local memory store even when Pinecone is selected but un
   expect(fetch).not.toHaveBeenCalled();
 });
 it('explains a missing extraction model before a paid search and accepts an explicit override',()=>{
-  expect(configurationIssue({...configured,OPENAI_MODEL:'',AI_MODEL_EXTRACTION:''},false)).toMatchObject({code:'extraction_not_configured',settings:['AI_MODEL_EXTRACTION','OPENAI_MODEL']});
-  expect(configurationIssue({...configured,OPENAI_MODEL:'',AI_MODEL_EXTRACTION:'gpt-4.1-mini'},false)).toBeNull();
+  expect(configurationIssue({...configured,SCOUT_SOURCE_MODE:'fetch_and_extract',OPENAI_MODEL:'',AI_MODEL_EXTRACTION:''},false)).toMatchObject({code:'extraction_not_configured',settings:['AI_MODEL_EXTRACTION','OPENAI_MODEL']});
+  expect(configurationIssue({...configured,SCOUT_SOURCE_MODE:'fetch_and_extract',OPENAI_MODEL:'',AI_MODEL_EXTRACTION:'gpt-4.1-mini'},false)).toBeNull();
+});
+
+it('does not require a separate extraction model in research-evidence mode',()=>{
+ expect(configurationIssue({...configured,SCOUT_SOURCE_MODE:'research_evidence',OPENAI_MODEL:'',AI_MODEL_EXTRACTION:''},false)).toBeNull();
 });

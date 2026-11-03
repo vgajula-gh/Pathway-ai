@@ -2,13 +2,13 @@ import type {Page} from '../discovery/pages.js';
 import {extractionLLM} from '../agent/llm/extraction.js';
 import {ScoutFacts,FactsJSON} from './schema.js';
 import {extractionSystem} from './prompts.js';
-import {sourcePassages} from './passages.js';
+import {relevantPassages} from './passages.js';
 import {DiscoveryFailure} from '../discovery/failures.js';
 import type {LLMUsage} from '../agent/llm/types.js';
 
-export async function extractScout(pages:Page[],timeoutMs=30000):Promise<{facts:ScoutFacts;usage:LLMUsage|null}> {
+export async function extractScout(pages:Page[],timeoutMs=90000):Promise<{facts:ScoutFacts;usage:LLMUsage|null}> {
   const llm=extractionLLM({timeoutMs});
-  const output=await llm.json(extractionSystem(),JSON.stringify({passages:sourcePassages(pages)}),[],4096,FactsJSON);
+  const output=await llm.json(extractionSystem(),JSON.stringify({passages:relevantPassages(pages)}),[],4096,FactsJSON);
   const result=ScoutFacts.safeParse(output);
   if(!result.success) {
     const allowed=new Set([...Object.keys(ScoutFacts.shape),...Object.keys(ScoutFacts.shape.evidence.shape)]);
