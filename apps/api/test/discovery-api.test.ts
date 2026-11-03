@@ -52,3 +52,44 @@ it('discovers for shared groups, targets short buckets and deduplicates official
  const ids=await discover(group,['free'],new RunBudget(),{search:{search},fetch,extract});await discover(group,['free'],new RunBudget(),{search:{search},fetch,extract});
  expect(ids).toHaveLength(1);expect(await db.opportunity.count({where:{name:'Example Robotics'}})).toBe(1);expect(await db.sourcePage.count()).toBe(1);expect(search.mock.calls[0][0]).toContain('free no participation fee');expect(search.mock.calls[0][0]).not.toContain('Private student');
 });
+it('stores source-backed grade variants and returns three Free and three Paid picks for two students',async()=>{
+ await db.opportunity.deleteMany();
+ const {discover}=await import('../src/discovery/pipeline.js');
+ const {RunBudget}=await import('../src/discovery/config.js');
+ const {Extraction}=await import('../src/discovery/extraction.js');
+ const {readable}=await import('../src/discovery/pages.js');
+ // Source/provider boundaries use synthetic fixtures; SQL, verification, selection and API are real.
+ const fixtures=Array.from({length:6},(_,i)=>{
+  const name=`Example Coding Robotics ${i}`,sourceUrl=`https://example.edu/robotics-${i}`;
+  const grades=i<3?'Open to 9th–12th graders.':'Open to grades 9, 10, 11, and 12.';
+  const cost=i<3?'Participation is free.':'The program fee is $50.';
+  const page={...readable(`<main>${name} is organized by Example. ${grades} ${cost} Virtual. Apply by December 1, 2030. Coding and Robotics.</main>`,sourceUrl),checkedAt:new Date()};
+  const facts=Extraction.parse({
+   ...Object.fromEntries(Object.keys(Extraction.shape).map(k=>[k,null])),name,organizer:'Example',gradeMin:9,gradeMax:12,costType:i<3?'free':'paid',costAmount:i<3?null:'$50',format:'Virtual',deadline:'2030-12-01',tags:['Coding','Robotics'],
+   evidence:Object.fromEntries(['name','organizer','gradeMin','gradeMax','costType','costAmount','format','deadline','tags'].map(field=>[field,{sourceUrl,quote:['gradeMin','gradeMax'].includes(field)?grades:['costType','costAmount'].includes(field)?cost:page.text}])),
+  });
+  return {page,facts};
+ });
+ const search=vi.fn(async(query:string)=>({urls:fixtures.slice(query.includes('free no participation fee')?0:3,query.includes('free no participation fee')?3:6).map(f=>f.page.sourceUrl),tokens:0}));
+ const fetch=vi.fn(async(url:string)=>fixtures.find(f=>f.page.sourceUrl===url)!.page);
+ const extract=vi.fn(async(pages:typeof fixtures[number]['page'][])=>fixtures.find(f=>f.page.sourceUrl===pages[0].sourceUrl)!.facts);
+ const ingest=vi.fn(async()=>{}),group={key:'coding|9-10|NC',topic:'coding',gradeBand:'9-10',region:'NC'};
+ const deps={search:{search},fetch,extract,ingest};
+ expect(await discover(group,['free'],new RunBudget(),deps)).toHaveLength(3);
+ expect(await discover(group,['paid'],new RunBudget(),deps)).toHaveLength(3);
+ expect(await db.opportunity.count({where:{verificationStatus:'verified'}})).toBe(6);
+ expect(await db.sourcePage.count()).toBe(6);expect(ingest).toHaveBeenCalledTimes(6);
+ const app=await buildApp();app.log.level='silent';try{
+  const studentB=await db.student.create({data:{name:'Second student',grade:10,interests:'["coding"]',region:'NC',budget:'free'}});
+  for(const studentId of [id,studentB.id]) {
+   const h={'x-student-id':studentId};
+   const refresh=await app.inject({method:'POST',url:'/api/opportunities/refresh',headers:h});
+   expect(refresh.statusCode).toBe(202);expect(refresh.json()).toMatchObject({usedSharedCatalog:true,requested:false});
+   const list=await app.inject({url:'/api/opportunities',headers:h});expect(list.statusCode).toBe(200);
+   const picks=list.json().picks;
+   expect(picks.filter((p:any)=>p.bucket==='free')).toHaveLength(3);expect(picks.filter((p:any)=>p.bucket==='paid')).toHaveLength(3);
+   expect(picks.every((p:any)=>p.verificationStatus==='verified'&&!p.isSample)).toBe(true);
+  }
+  expect(search).toHaveBeenCalledTimes(2);expect(extract).toHaveBeenCalledTimes(6);
+ }finally{await app.close();}
+});

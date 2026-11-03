@@ -3,6 +3,7 @@ import {safeModelId} from './config.js';
 import {Extraction} from './extraction.js';
 import {knownFailureCode,type FailureInfo,type FailureStage} from './failures.js';
 import {sourceTypes} from './source-urls.js';
+import {verificationFields,verificationReasons} from '../domain/opportunity-evidence.js';
 
 const stages=new Set(['search','robots','fetch','extract','verify','store','index']);
 const fields=new Set([...Object.keys(Extraction.shape),'sourceUrl','quote','field','item','output']);
@@ -18,6 +19,9 @@ function cleanFailure(value:unknown):FailureInfo|null {
     return typeof i.field==='string'&&i.field.length<=150&&i.field.split('.').every(p=>fields.has(p))&&issueCodes.has(i.code)?[{field:i.field,code:i.code as string}]:[];
   }):[];
   return {stage:f.stage as FailureStage,code:f.code,
+    ...(Array.isArray(f.verification)?{verification:f.verification.slice(0,10).flatMap((value:unknown)=>{
+      const i=record(value);return verificationFields.includes(i.field)&&verificationReasons.includes(i.reason)?[{field:i.field,reason:i.reason}]:[];
+    })}:{}),
     ...(sourceTypes.includes(f.mediaType)?{mediaType:f.mediaType}:{}),
     ...(['gzip','br','deflate','identity','other'].includes(f.contentEncoding)?{contentEncoding:f.contentEncoding}:{}),
     ...(issues.length?{issues}:{}),

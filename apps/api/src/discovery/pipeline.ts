@@ -7,7 +7,7 @@ import { RunBudget, discoveryConfigured } from './config.js';
 import { getSearch } from './search/index.js';
 import { extract } from './extraction.js';
 import { fetchOfficialPage, Page } from './pages.js';
-import { verifyOpportunity } from '../domain/opportunity-verification.js';
+import { verifyCandidate } from './verification.js';
 import { identity, interestGroups } from './groups.js';
 export const trustedDomains = () =>
   new Set([
@@ -82,7 +82,7 @@ export async function discover(
       search,
       fetch: deps?.fetch || fetchOfficialPage,
       extract: deps?.extract || extract,
-      verify: (facts, pages) => verifyOpportunity(facts, pages, trustedDomains()),
+      verify: (facts, pages) => verifyCandidate(facts, pages, trustedDomains()),
       save: storeCandidate,
       ingest: deps?.ingest,
     },

@@ -1,6 +1,7 @@
 import type { Extracted } from '../discovery/extraction.js';
 import type { Page } from '../discovery/pages.js';
 import { explicitApplicationStatus, opportunityKind } from './opportunity-active.js';
+import {gradeRangeInQuote,OpportunityEvidenceError,type VerificationIssue} from './opportunity-evidence.js';
 const normalized = (s: string) => s.normalize('NFKC').toLowerCase().replace(/\s+/g, ' ').trim();
 export function factEvidence(raw: Extracted, pages: Page[], field: keyof Extracted) {
   const e = raw.evidence[field];
@@ -43,16 +44,25 @@ function dateInQuote(value: string, quote: string) {
     ).test(quote) || new RegExp(`\\b${month}/${day}/${year}\\b`).test(quote)
   );
 }
-export function verifyOpportunity(
+export function assessOpportunity(
   raw: Extracted,
   pages: Page[],
   trustedDomains: Set<string>,
   now = new Date(),
 ) {
   const evidence: Extracted['evidence'] = {};
+  const unsupported=new Map<keyof Extracted,VerificationIssue['reason']>();
+  const evidenceReason=(field:keyof Extracted):VerificationIssue['reason']=>{
+    const e=raw.evidence[field];
+    if(raw[field]==null||raw[field]==='unknown'||!e)return 'not_stated';
+    if(!pages.some(p=>p.sourceUrl===e.sourceUrl))return 'source_not_fetched';
+    return factEvidence(raw,pages,field)?'value_not_supported':'quote_not_found';
+  };
+  const issue=(field:Extract<VerificationIssue['field'],keyof Extracted>):VerificationIssue=>({field,reason:unsupported.get(field)||evidenceReason(field)});
   const value = <K extends keyof Extracted>(field: K): Extracted[K] | null => {
     const v = raw[field],
       e = factEvidence(raw, pages, field);
+    unsupported.set(field,evidenceReason(field));
     if (v == null || !e) return null;
     if (
       typeof v === 'string' &&
@@ -62,10 +72,9 @@ export function verifyOpportunity(
       return null;
     if (Array.isArray(v) && !v.every((x) => normalized(e.quote).includes(normalized(x)))) return null;
     if (typeof v === 'number') {
-      const gradeMatch = e.quote.match(/grades?\s+(\d{1,2})\s*(?:[-–—]|through|to)\s*(\d{1,2})/i);
-      const single = e.quote.match(/grade\s+(\d{1,2})\b/i);
-      if (field === 'gradeMin' && v !== Number(gradeMatch?.[1] || single?.[1])) return null;
-      if (field === 'gradeMax' && v !== Number(gradeMatch?.[2] || single?.[1])) return null;
+      const grades = gradeRangeInQuote(e.quote);
+      if (field === 'gradeMin' && v !== grades?.min) return null;
+      if (field === 'gradeMax' && v !== grades?.max) return null;
       if (
         field === 'minAge' &&
         !new RegExp(`(?:age[d]?\\s*|at least\\s*)${v}\\b|\\b${v}\\s*(?:years? old|\\+)`, 'i').test(e.quote)
@@ -77,7 +86,7 @@ export function verifyOpportunity(
   };
   const name = value('name'),
     organizer = value('organizer');
-  if (!name || !organizer) throw new Error('Program name or organizer lacks page evidence');
+  if (!name || !organizer) throw new OpportunityEvidenceError([...(!name?[issue('name')]:[]),...(!organizer?[issue('organizer')]:[])]);
   const domain = new URL(pages[0].sourceUrl).hostname.replace(/^www\./, '').toLowerCase();
   const trusted =
     [...trustedDomains].some((d) => domain === d || domain.endsWith('.' + d)) ||
@@ -100,13 +109,13 @@ export function verifyOpportunity(
   let deadline: string | null = null;
   const de = factEvidence(raw, pages, 'deadline');
   if (raw.deadline && de && dateInQuote(raw.deadline, de.quote)) {
-    if (raw.deadline < now.toISOString().slice(0, 10)) throw new Error('Program deadline has passed');
+    if (raw.deadline < now.toISOString().slice(0, 10)) throw new OpportunityEvidenceError([{field:'deadline',reason:'past_deadline'}],'Program deadline has passed');
     deadline = raw.deadline;
     evidence.deadline = de;
   }
   const gradeMin = value('gradeMin'),
     gradeMax = value('gradeMax');
-  if (gradeMin != null && gradeMax != null && gradeMin > gradeMax) throw new Error('Invalid grade range');
+  if (gradeMin != null && gradeMax != null && gradeMin > gradeMax) throw new OpportunityEvidenceError([{field:'gradeRange',reason:'invalid_grade_range'}],'Invalid grade range');
   const costAmount = costType === 'paid' ? value('costAmount') : null;
   const amount = Number(costAmount?.match(/\$\s*([\d,]+)/)?.[1]?.replace(/,/g, ''));
   const feeFlag = !trusted && (costType === 'unknown' || amount >= 500);
@@ -130,7 +139,23 @@ export function verifyOpportunity(
     !!format &&
     active &&
     !feeFlag;
-  return {
+  const verification:VerificationIssue[]=[
+    ...(!trusted?[{field:'officialDomain',reason:'unreviewed_domain'} as const]:[]),
+    ...(gradeMin==null?[issue('gradeMin')]:[]),
+    ...(gradeMax==null?[issue('gradeMax')]:[]),
+    ...(!format?[issue('format')]:[]),
+  ];
+  if(!active) {
+    if(applicationStatus==='closed')verification.push({field:'applicationStatus',reason:'closed'});
+    else if(opportunityType==='competition')verification.push(deadline?{field:'deadline',reason:'not_current'}:issue('deadline'));
+    else {
+      verification.push(issue('applicationStatus'));
+      verification.push(['club','volunteering'].includes(opportunityType)
+        ?activityDate?{field:'activityDate',reason:'not_current'}:issue('activityDate')
+        :deadline?{field:'deadline',reason:'not_current'}:issue('deadline'));
+    }
+  }
+  return {verification,opportunity:{
     name,
     organizer,
     opportunityType,
@@ -173,5 +198,9 @@ export function verifyOpportunity(
     verifiedAt: verified ? now : null,
     sourceCheckedAt: verified ? now : null,
     isSample: false,
-  };
+  }};
+}
+/** Existing callers retain the persisted facts shape; diagnostics are kept out of SQL data. */
+export function verifyOpportunity(...args:Parameters<typeof assessOpportunity>) {
+  return assessOpportunity(...args).opportunity;
 }

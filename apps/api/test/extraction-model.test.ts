@@ -14,6 +14,7 @@ const originalEnv={...env};
 import {createDiscoveryGraph} from '../src/discovery/graph.js';
 import {RunBudget} from '../src/discovery/config.js';
 import {verifyOpportunity} from '../src/domain/opportunity-verification.js';
+import {verifyCandidate} from '../src/discovery/verification.js';
 import {failureInfo,failureMessage} from '../src/discovery/failures.js';
 import type {Page} from '../src/discovery/pages.js';
 
@@ -88,7 +89,7 @@ async function runGraph() {
   const save=vi.fn(async()=> 'fixture-opportunity'),ingest=vi.fn(async()=>{}),budget=new RunBudget();
   const graph=createDiscoveryGraph({
     search:{search:async()=>({urls:[page.sourceUrl],tokens:10})},fetch:async()=>page,extract,
-    verify:(data,pages)=>verifyOpportunity(data,pages,new Set(['example.edu'])),save,ingest,
+    verify:(data,pages)=>verifyCandidate(data,pages,new Set(['example.edu'])),save,ingest,
   },budget);
   const result=await graph.invoke({group:{key:'robotics|9-10|NC',topic:'robotics',gradeBand:'9-10',region:'NC'},buckets:['free']});
   return {result,save,ingest,budget};
@@ -110,7 +111,7 @@ it('does not label a valid JSON response as verified when its evidence was inven
   sdk.create.mockResolvedValue(response(JSON.stringify({...facts(),evidence:{}})));
   const {result,save,ingest,budget}=await runGraph();
   expect(result.saved).toEqual([]);expect(save).not.toHaveBeenCalled();expect(ingest).not.toHaveBeenCalled();
-  expect(budget.failures).toContainEqual({stage:'verify',code:'missing_evidence'});
+  expect(budget.failures).toContainEqual({stage:'verify',code:'missing_evidence',verification:[{field:'name',reason:'not_stated'},{field:'organizer',reason:'not_stated'}]});
 });
 it('accepts structured nullable evidence without treating unsupported facts as verified',async()=>{
   const {extract,ExtractionJSON}=await import('../src/discovery/extraction.js');

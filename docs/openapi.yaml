@@ -102,6 +102,17 @@ components:
                 type: array
                 maxItems: 8
                 items: { type: object, properties: { field: { type: string }, code: { type: string } } }
+              verification:
+                type: array
+                maxItems: 10
+                description: Required facts that prevented verification; absent on older runs. No page text, source hosts, URLs or rejected values.
+                items:
+                  type: object
+                  required: [field, reason]
+                  additionalProperties: false
+                  properties:
+                    field: { enum: [name, organizer, officialDomain, gradeMin, gradeMax, gradeRange, format, deadline, applicationStatus, activityDate] }
+                    reason: { enum: [not_stated, source_not_fetched, quote_not_found, value_not_supported, unreviewed_domain, invalid_grade_range, not_current, closed, past_deadline] }
         models:
           type: array
           description: Requested provider/model snapshots when recorded; never inferred for older runs

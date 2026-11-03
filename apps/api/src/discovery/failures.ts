@@ -1,5 +1,6 @@
 import {AIOutputError} from '../agent/llm/output-error.js';
 import type {SourceType} from './source-urls.js';
+import {OpportunityEvidenceError,type VerificationIssue} from '../domain/opportunity-evidence.js';
 export type FailureStage = 'search' | 'robots' | 'fetch' | 'extract' | 'verify' | 'store' | 'index';
 const messages = {
   robots_blocked: 'The official website does not allow automated reading of this page.',
@@ -16,7 +17,7 @@ const messages = {
   unsupported_content: 'The official source is not a readable web page.',
   content_decoding_failed:'The official page could not be decoded. Other sources may still work.',
   insufficient_text: 'The official page has too little readable text to check its details.',
-  missing_evidence: 'The official page did not support the required program details.',
+  missing_evidence: 'Programs were found, but their official pages did not confirm the details needed to recommend them.',
   identity_mismatch: 'The fetched page could not be confirmed as the same program.',
   deadline_passed: 'The official program deadline has passed.',
   invalid_response: 'The AI response could not be used to verify program details.',
@@ -36,6 +37,7 @@ const messages = {
   service_unavailable: 'The program search service is temporarily unavailable.',
 };
 export type FailureInfo = { stage: FailureStage; code: keyof typeof messages; sourceHost?: string; httpStatus?: number;
+  verification?:VerificationIssue[];
   issues?:{field:string;code:string}[];finishReason?:'length'|'content_filter'|'empty'|'refusal';errorType?:'TypeError'|'ReferenceError'|'Error';location?:string;
   mediaType?:SourceType;contentEncoding?:'gzip'|'br'|'deflate'|'identity'|'other' };
 export class DiscoveryFailure extends Error {
@@ -45,8 +47,10 @@ export const failureMessage = (failure: FailureInfo) => Object.hasOwn(messages, 
 export const operationalFailure=(f:FailureInfo)=>!['deadline_passed','missing_evidence'].includes(f.code);
 export const knownFailureCode=(code:unknown):code is FailureInfo['code']=>typeof code==='string'&&Object.hasOwn(messages,code);
 export function primaryFailure(failures:FailureInfo[]) {
-  const relevant=failures.filter(operationalFailure),pool=relevant.length?relevant:failures;
+  const relevant=failures.filter(operationalFailure),verification=failures.filter(f=>f.stage==='verify');
+  const pool=verification.length?[...relevant,...verification]:relevant.length?relevant:failures;
   const rank=(f:FailureInfo)=>['missing_model','provider_authorization','provider_request','provider_limit'].includes(f.code)?100:
+    f.code==='run_limit'&&verification.length?15:
     ['unsupported_content','invalid_url'].includes(f.code)?5:
     ({search:70,robots:10,fetch:20,extract:80,verify:40,store:90,index:90}[f.stage]);
   return pool.reduce<FailureInfo|undefined>((best,f)=>!best||rank(f)>rank(best)?f:best,undefined);
@@ -55,6 +59,7 @@ export function primaryFailure(failures:FailureInfo[]) {
 /** Allowlisted metadata only: no raw provider errors, response bodies, URLs or prompts. */
 export function failureInfo(error: unknown, stage: FailureStage): FailureInfo {
   if (error instanceof DiscoveryFailure) return error.info;
+  if(error instanceof OpportunityEvidenceError)return {stage,code:error.verification.some(i=>i.reason==='past_deadline')?'deadline_passed':'missing_evidence',verification:error.verification};
   if(error instanceof AIOutputError)return {stage,code:error.code,...(error.finishReason?{finishReason:error.finishReason}:{})};
   const e = error as { status?: unknown; name?: unknown; code?: unknown; message?: unknown;stack?:unknown } | null;
   // OpenAI SDK subclasses inherit Error.name === "Error"; constructor identity is distinct.
