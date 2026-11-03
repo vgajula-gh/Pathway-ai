@@ -3,6 +3,7 @@ import { prisma } from './db.js';
 import { HttpError } from './auth.js';
 import { parseCalendar } from '../domain/calendars.js';
 import { fetchCalendar, publicCalendarUrl } from './calendar-fetch.js';
+import {backgroundActivity} from '../maintenance/admission.js';
 const interval = 3 * 3600 * 1000;
 function key() {
   const secret = process.env.CALENDAR_SECRET || (process.env.NODE_ENV !== 'production' ? 'local-only-calendar-secret' : '');
@@ -42,6 +43,9 @@ export async function syncCalendar(id: string, now = new Date()) {
   }
 }
 export async function syncDueCalendars() {
+  return backgroundActivity(syncDueCalendarsUnlocked);
+}
+async function syncDueCalendarsUnlocked() {
   const links = await prisma.calendarLink.findMany({ where: { syncAfter: { lte: new Date() } }, select: { id: true }, take: 20 });
   for (const link of links) await syncCalendar(link.id);
 }

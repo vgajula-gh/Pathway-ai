@@ -10,6 +10,8 @@ import { env } from './lib/env.js';
 import { HttpError } from './lib/auth.js';
 import discovery from './routes/discovery.js';
 import diagnostics from './routes/diagnostics.js';
+import maintenance from './routes/maintenance.js';
+import {installMaintenanceAdmission} from './maintenance/admission.js';
 import notifications from './routes/notifications.js';
 import calendars from './routes/calendars.js';
 import applications from './routes/applications.js';
@@ -35,6 +37,7 @@ export async function buildApp() {
     if (env.provider === 'ollama' && err instanceof Error && /APIConnection|Timeout/.test(err.name)) return reply.code(503).send({ error: 'Local AI is taking longer than expected or is unavailable. Check that Ollama is running, then try again.' });
     app.log.error(err); return reply.code(500).send({ error: 'Something went wrong' });
   });
+  installMaintenanceAdmission(app);
   app.addHook('onRequest', async req => {
     if (['POST', 'PATCH', 'DELETE'].includes(req.method) && req.headers.origin) {
       const origin = req.headers.origin;
@@ -52,6 +55,6 @@ export async function buildApp() {
       return reply.sendFile('index.html');
     });
   }
-  for (const r of [diagnostics, discovery, accounts, notifications, calendars, applications, students, events, today, opportunities, proposals, growth, ai, news]) await app.register(r);
+  for (const r of [maintenance, diagnostics, discovery, accounts, notifications, calendars, applications, students, events, today, opportunities, proposals, growth, ai, news]) await app.register(r);
   return app;
 }

@@ -24,7 +24,8 @@
     "ollama:start": "node scripts/start-ollama.mjs",
     "start": "node scripts/start-production.mjs",
     "demo:workflows": "npm run demo:workflows --workspace apps/api --",
-    "check:scout": "node --env-file-if-exists=.env scripts/check-scout.mjs"
+    "check:scout": "node --env-file-if-exists=.env scripts/check-scout.mjs",
+    "pilot:reset": "node --env-file-if-exists=.env scripts/pilot-reset.mjs"
   },
   "engines": {
     "node": ">=20"

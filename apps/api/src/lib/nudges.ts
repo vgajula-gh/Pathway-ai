@@ -6,6 +6,7 @@ import { chooseNudge, nudgeAllowed } from '../domain/nudges.js';
 import { expand } from '../domain/schedule.js';
 import { addDays, fmtLocal, sod, dkey, wallNow } from '../domain/time.js';
 import { pushConfig, sendPush } from './push.js';
+import {backgroundActivity} from '../maintenance/admission.js';
 export async function deliverNudge(studentId: string, test = false, instant = new Date()) {
   if (!pushConfig().configured) return { status: 'not-configured', accepted: 0 };
   const { student, events, rules, goals } = await loadContext(studentId);
@@ -35,6 +36,9 @@ export async function deliverNudge(studentId: string, test = false, instant = ne
 }
 let running = false;
 export async function deliverDueNudges() {
+  return backgroundActivity(deliverDueNudgesUnlocked);
+}
+async function deliverDueNudgesUnlocked() {
   if (running || !pushConfig().configured) return;
   running = true;
   try {

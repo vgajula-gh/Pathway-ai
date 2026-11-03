@@ -5,7 +5,8 @@ import { deliverDueNudges } from './lib/nudges.js';
 import { syncDueCalendars } from './lib/calendars.js';
 import { buildApp } from './app.js';
 import { env } from './lib/env.js';
-if (process.env.NODE_ENV === 'production') await seedCatalog();
+import {backgroundActivity} from './maintenance/admission.js';
+if (process.env.NODE_ENV === 'production') await backgroundActivity(seedCatalog);
 const app = await buildApp();
 if (env.aiDisabled) app.log.warn(`AI features disabled (AI_DISABLED=true or missing provider configuration)`);
 else app.log.info(`LLM provider: ${env.provider}`);
@@ -25,4 +26,4 @@ void syncDueCalendars().catch(() => app.log.warn('Calendar background sync unava
 
 void deliverDueNudges().catch(() => app.log.warn('Nudge scheduler unavailable'));
 
-void initializeKnowledge().then(()=>runJobs()).catch(()=>app.log.warn('Opportunity discovery is unavailable; catalog browsing still works'));
+void backgroundActivity(initializeKnowledge).then(()=>runJobs()).catch(()=>app.log.warn('Opportunity discovery is unavailable; catalog browsing still works'));
