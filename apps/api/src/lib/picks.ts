@@ -4,12 +4,13 @@ import { prisma, j } from './db.js';
 import { loadContext } from './context.js';
 import { addDays, sod } from '../domain/time.js';
 import { dayCapacity } from '../domain/schedule.js';
-import { bucketFor, costLabel, selectPicks } from '../domain/picks.js';
+import { bucketFor, costLabel, selectPicks,outsideInterest } from '../domain/picks.js';
 import { scoreOpportunity } from '../domain/scoring.js';
 import { env } from './env.js';
 import { countdown } from '../domain/applications.js';
 import { activeOpportunity } from '../domain/opportunity-active.js';
 import { wallNow, dkey } from '../domain/time.js';
+import {publicScoutFacts} from '../domain/scout-scoring.js';
 export const toOpp = (o: Awaited<ReturnType<typeof prisma.opportunity.findMany>>[number]) => ({
   ...o,
   cost:
@@ -20,6 +21,9 @@ export const toOpp = (o: Awaited<ReturnType<typeof prisma.opportunity.findMany>>
   skills: j<string[]>(o.skills, []),
   tags: j<string[]>(o.tags, []),
   checks: j<string[]>(o.checks, []),
+  publicFacts:publicScoutFacts(o),
+  qualificationNotes:j<{field:string;reason:string}[]>(o.qualificationNotes,[]),
+  sources:Object.entries(j<Record<string,{sourceUrl:string;quote:string}>>(o.evidence,{})).filter(([,e])=>e&&typeof e.sourceUrl==='string'&&e.sourceUrl.startsWith('https://')&&typeof e.quote==='string').map(([field,e])=>({field,url:e.sourceUrl,quote:e.quote.slice(0,1000)})),
 });
 export async function personalPicks(studentId: string, rebuild = false) {
   const { events, rules, ctx } = await loadContext(studentId);
@@ -43,7 +47,7 @@ export async function personalPicks(studentId: string, rebuild = false) {
             ...saved.map((x) => x.opportunityId),
             ...feedback.map((x) => x.opportunityId),
           ]);
-          const counts = { free: setting('FREE_PICKS', 3, 10), paid: setting('PAID_PICKS', 3, 10) };
+          const counts = { free: setting('FREE_PICKS', 3, 3), paid: setting('PAID_PICKS', 3, 3) };
           const valid = previous.filter((p) => {
             const o = opps.find((o) => o.id === p.opportunityId);
             return (
@@ -79,7 +83,7 @@ export async function personalPicks(studentId: string, rebuild = false) {
               );
             }
           // Preserving a different bucket must not reintroduce a second outside-interest pick.
-          const outside=chosen.filter(p=>{const fit=scoreOpportunity(opps.find(o=>o.id===p.opportunityId)!,ctx,freeMin);return !fit.excluded&&!fit.matched.length&&!fit.goalHit;});
+          const outside=chosen.filter(p=>{const o=opps.find(o=>o.id===p.opportunityId)!,fit=scoreOpportunity(o,ctx,freeMin);return !fit.excluded&&outsideInterest(o,fit);});
           const keepOutside=outside.find(p=>valid.some(v=>v.opportunityId===p.opportunityId))||outside[0];
           chosen.splice(0,chosen.length,...chosen.filter(p=>!outside.some(x=>x.opportunityId===p.opportunityId)||p===keepOutside));
           const missing={free:counts.free-chosen.filter(p=>p.bucket==='free').length,paid:counts.paid-chosen.filter(p=>p.bucket==='paid').length};
@@ -113,6 +117,7 @@ export async function personalPicks(studentId: string, rebuild = false) {
                 pickedAt:
                   previous.find((old) => old.opportunityId === p.opportunityId)?.pickedAt || new Date(),
                 refreshCycle: cycle,
+                scoreBreakdown:JSON.stringify((()=>{const fit=scoreOpportunity(opps.find(o=>o.id===p.opportunityId)!,ctx,freeMin);return !fit.excluded&&'breakdown' in fit?fit.breakdown:{};})()),
               })),
             });
           return chosen;

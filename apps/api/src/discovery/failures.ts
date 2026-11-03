@@ -3,6 +3,7 @@ import type {SourceType} from './source-urls.js';
 import {OpportunityEvidenceError,type VerificationIssue} from '../domain/opportunity-evidence.js';
 export type FailureStage = 'search' | 'robots' | 'fetch' | 'extract' | 'verify' | 'store' | 'index';
 const messages = {
+  interrupted:'This research step was interrupted. Completed results were kept; paid work was not repeated.',
   robots_blocked: 'The official website does not allow automated reading of this page.',
   robots_unavailable: 'The official website’s crawling rules could not be checked.',
   http_error: 'The official website returned an unsuccessful response.',
@@ -50,7 +51,7 @@ export function primaryFailure(failures:FailureInfo[]) {
   const relevant=failures.filter(operationalFailure),verification=failures.filter(f=>f.stage==='verify');
   const pool=verification.length?[...relevant,...verification]:relevant.length?relevant:failures;
   const rank=(f:FailureInfo)=>['missing_model','provider_authorization','provider_request','provider_limit'].includes(f.code)?100:
-    f.code==='run_limit'&&verification.length?15:
+    (f.code==='run_limit'||f.code==='timeout'&&verification.length>=2)&&verification.length?15:
     ['unsupported_content','invalid_url'].includes(f.code)?5:
     ({search:70,robots:10,fetch:20,extract:80,verify:40,store:90,index:90}[f.stage]);
   return pool.reduce<FailureInfo|undefined>((best,f)=>!best||rank(f)>rank(best)?f:best,undefined);

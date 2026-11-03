@@ -15,6 +15,20 @@ components:
       type: string
       description: Optional broad region; empty means unspecified
       enum: ['', virtual, AL, AK, AZ, AR, CA, CO, CT, DE, FL, GA, HI, ID, IL, IN, IA, KS, KY, LA, ME, MD, MA, MI, MN, MS, MO, MT, NE, NV, NH, NJ, NM, NY, NC, ND, OH, OK, OR, PA, RI, SC, SD, TN, TX, UT, VT, VA, WA, WV, WI, WY, DC]
+    DiscoveryPreferences:
+      type: object
+      additionalProperties: false
+      description: Optional private selection preferences; PATCH accepts partial fields. No goals/project/time/max-cost in public research or vectors.
+      properties:
+        city: { type: string, maxLength: 80, default: '' }
+        state: { type: string, description: Empty or US state abbreviation, default: '' }
+        radiusMiles: { type: number, minimum: 1, maximum: 1000, default: 50 }
+        format: { enum: [both, online, in_person], default: both }
+        goals: { type: string, maxLength: 1000, default: '' }
+        personalProject: { type: string, maxLength: 1500, default: '' }
+        hoursPerWeek: { type: [number, 'null'], minimum: 0, maximum: 168, default: null }
+        maxCost: { type: [number, 'null'], minimum: 0, maximum: 100000, default: null }
+        currency: { const: USD, default: USD }
     RefreshAvailability:
       type: object
       properties:
@@ -150,6 +164,13 @@ components:
       properties:
         catalog: { $ref: '#/components/schemas/CatalogCoverage' }
         picks: { type: array, items: { $ref: '#/components/schemas/Opportunity' } }
+        watchlist:
+          type: array
+          description: Announced future openings, separate from active picks; up to six source-fresh matching programs
+          items:
+            allOf:
+              - { $ref: '#/components/schemas/Opportunity' }
+              - { type: object, properties: { openingDate: { type: string, format: date } } }
         recommended: { type: array, items: { $ref: '#/components/schemas/Opportunity' } }
         excluded: { type: array, items: { type: object } }
         dismissed: { type: integer }
@@ -235,14 +256,20 @@ components:
         applicationStatusCheckedAt: { type: [string, 'null'], format: date-time }
         activityDate: { type: [string, 'null'], format: date }
         countdown: { type: [object, 'null'], properties: { days: { type: integer }, label: { type: string } } }
-        costType: { enum: [free, paid, unknown] }
+        costType: { enum: [free, paid, tuition_free_other_costs, unknown] }
         costAmount: { type: [string, 'null'] }
         costLabel: { type: string }
         financialAidNote: { type: [string, 'null'] }
         feeFlag: { type: boolean }
-        verificationStatus: { description: Production picks must be verified and active; samples are opt-in, enum: [verified, new_find, stale, expired] }
+        verificationStatus: { description: Active source-backed picks may be verified or needs_verification; announced future openings are a separate watchlist, enum: [verified, needs_verification, watchlist, new_find, stale, expired] }
         verifiedAt: { type: [string, 'null'], format: date-time }
         sourceCheckedAt: { type: [string, 'null'], format: date-time }
+        sourceReadAt: { type: [string, 'null'], format: date-time, description: Reading alone does not confer Verified }
+        sources:
+          type: array
+          items: { type: object, properties: { field: { type: string }, url: { type: string, format: uri }, quote: { type: string } } }
+        qualificationNotes: { type: array, items: { type: object, properties: { field: { type: string }, reason: { type: string } } } }
+        publicFacts: { type: object, description: Only deterministically supported public source facts; unknowns remain null }
         verified: { type: boolean }
         deadline: { type: [string, 'null'] }
         fit:
@@ -415,6 +442,7 @@ paths:
               properties:
                 region: { $ref: '#/components/schemas/StudentRegion' }
                 settings: { $ref: '#/components/schemas/StudentSettings' }
+                discoveryPreferences: { $ref: '#/components/schemas/DiscoveryPreferences' }
       responses: { '200': { description: OK } }
     delete: { summary: Delete all student data, responses: { '204': { description: Deleted } } }
   /api/me/export: { get: { summary: Export all data, responses: { '200': { description: JSON export } } } }
@@ -482,6 +510,37 @@ paths:
         '200': { description: Awaiting approval; no checklist mutation yet, content: { application/json: { schema: { $ref: '#/components/schemas/Proposal' } } } }
         '403': { description: Program outside the student’s current set }
         '422': { description: Missing Interested application or current evidenced requirements/deadline }
+  /internal/diagnostics:
+    get:
+      security: [{ jobsSecret: [] }]
+      summary: Read-only owner Scout configuration, usage and public research audit; no provider calls
+      parameters: [{ name: runId, in: query, schema: { type: string, maxLength: 200 }, description: Include the selected run's public fetched text and extracted assertions }]
+      responses:
+        '200': { description: Configuration presence (no Secret values), current caps/usage, public catalog counts and latest five runs or selected run }
+        '401': { description: Missing/invalid owner Bearer secret }
+        '422': { description: Unknown query fields, including query-string secrets, rejected }
+        '503': { description: Owner Secret not configured }
+  /internal/diagnostics/test-scout:
+    post:
+      security: [{ jobsSecret: [] }]
+      summary: Explicit owner configuration/fixture check or small funded public Scout job
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                mode: { enum: [configuration, fixture, live, advance], default: configuration }
+                runId: { type: string, maxLength: 200, description: Required for advancing an existing diagnostic job }
+      responses:
+        '200': { description: Configuration or clearly synthetic fixture; zero provider requests/catalog writes }
+        '202': { description: Live queues one public candidate under normal caps; advance runs one bounded stage. At most one research and one extraction request, no repair. Includes runId or skipped lock result }
+        '401': { description: Invalid/missing owner credentials }
+        '404': { description: Not an owner diagnostic run }
+        '422': { description: Invalid body or missing runId }
+        '429': { description: Shared monthly search or AI cap reached }
+        '503': { description: Missing owner Secret or search configuration }
   /internal/jobs/run:
     post:
       security: [{ jobsSecret: [] }]

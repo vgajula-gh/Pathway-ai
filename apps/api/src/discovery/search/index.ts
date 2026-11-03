@@ -5,6 +5,7 @@ export interface SearchResult {
   tokens: number;
 }
 export interface SearchProvider {
+  research?:import('../../scout/providers.js').ResearchProvider['research'];
   search(query: string): Promise<SearchResult>;
 }
 export function getSearch(): SearchProvider | null {

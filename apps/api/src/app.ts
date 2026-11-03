@@ -9,6 +9,7 @@ import { ZodError } from 'zod';
 import { env } from './lib/env.js';
 import { HttpError } from './lib/auth.js';
 import discovery from './routes/discovery.js';
+import diagnostics from './routes/diagnostics.js';
 import notifications from './routes/notifications.js';
 import calendars from './routes/calendars.js';
 import applications from './routes/applications.js';
@@ -51,6 +52,6 @@ export async function buildApp() {
       return reply.sendFile('index.html');
     });
   }
-  for (const r of [discovery, accounts, notifications, calendars, applications, students, events, today, opportunities, proposals, growth, ai, news]) await app.register(r);
+  for (const r of [diagnostics, discovery, accounts, notifications, calendars, applications, students, events, today, opportunities, proposals, growth, ai, news]) await app.register(r);
   return app;
 }

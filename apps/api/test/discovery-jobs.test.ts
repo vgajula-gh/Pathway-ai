@@ -4,6 +4,20 @@ const remote=vi.hoisted(()=>({discover:vi.fn(async(..._args:unknown[]):Promise<s
 vi.mock('../src/knowledge/preparation.js',()=>({prepareKnowledgeBatch:async()=>0,knowledgeStates:async()=>({})}));
 vi.mock('../src/knowledge/runtime.js',()=>({initializeKnowledge:async()=>({}),knowledgeUnavailable:()=>null}));
 vi.mock('../src/discovery/pipeline.js',async()=>({...await vi.importActual('../src/discovery/pipeline.js'),discover:remote.discover}));
+// Job/quota tests supply a completed research outcome through the real staged runner.
+// Source fetching, passage extraction and interrupted stages have separate integration coverage.
+vi.mock('../src/scout/runner.js',async()=>{
+ const actual=await vi.importActual<typeof import('../src/scout/runner.js')>('../src/scout/runner.js');
+ return {...actual,advanceScout:async(run:any)=>{
+  const budget=actual.restoreScoutBudget(run),state=JSON.parse(run.state),group=await db.discoveryGroup.findUniqueOrThrow({where:{key:run.groupKey}});
+  let error:unknown;
+  try{budget.savedIds=await remote.discover(group,state.context.buckets,budget);}catch(e){error=e;}
+  if(budget.candidates.found)state.stage='finish'; // This legacy fixture already supplied its completed candidate audit.
+  const updated=await db.discoveryRun.update({where:{id:run.id},data:{state:JSON.stringify(state),usage:actual.scoutUsage(budget,state)}});
+  return actual.advanceScout(updated,{provider:{search:async()=>({urls:[],tokens:0}),research:async()=>({text:'',citations:[],usage:{provider:'openai',model:'test',inputTokens:0,outputTokens:0,responseId:'test'}})},
+   research:async()=>{if(error)throw error;return {output:{candidates:[],searchThemesUsed:[]},query:'public fixture',repaired:false};}});
+ }};
+});
 vi.mock('../src/knowledge/service.js',async()=>({...await vi.importActual('../src/knowledge/service.js'),reconcileVectors:remote.reconcile}));
 const dir=mkdtempSync(join(tmpdir(),'pathway-jobs-')),url=`file:${dir}/test.db`,db=new PrismaClient({datasourceUrl:url+'?connection_limit=1'});
 vi.mock('../src/lib/db.js',()=>({get prisma(){return db;},j:(v:string,f:unknown)=>{try{return v?JSON.parse(v):f;}catch{return f;}}}));

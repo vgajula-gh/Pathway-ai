@@ -1,6 +1,7 @@
 import RegionSelect from '../components/RegionSelect';
 import Notifications from '../components/Notifications';
 import Calendars from '../components/Calendars';
+import DiscoveryPreferencesEditor from '../components/DiscoveryPreferencesEditor';
 import { useState } from 'react';
 import { api, download, session, access } from '../lib/api';
 import { AIHealth, Student } from '../lib/types';
@@ -15,7 +16,7 @@ export default function You({ me, setMe, onSignOut }: { me: Student; setMe: (s: 
   const [account, setAccount] = useState({ phrase: '', confirmPhrase: '' }), [accountError, setAccountError] = useState(''), [accountBusy, setAccountBusy] = useState(false);
   const [changingPhrase, setChangingPhrase] = useState(false), [recoveryCode, setRecoveryCode] = useState<string | null>(null);
   const health = useLoad(() => api<AIHealth>('/api/health'), []);
-  const [edit, setEdit] = useState(false), [log, setLog] = useState(false), [news, setNews] = useState(false);
+  const [edit, setEdit] = useState(false), [log, setLog] = useState(false), [news, setNews] = useState(false),[discoveryEdit,setDiscoveryEdit]=useState(false);
   const patch = async (body: Record<string, unknown>) => { try { setMe(await api<Student>('/api/me', { method: 'PATCH', body })); toast('Saved'); } catch (e) { toast((e as Error).message); } };
   const prov = (k: string) => me.provenance[k] ? `${me.provenance[k].src} · ${new Date(me.provenance[k].at).toLocaleDateString()}` : '';
   const a = me.availability;
@@ -31,6 +32,7 @@ export default function You({ me, setMe, onSignOut }: { me: Student; setMe: (s: 
       </div><p className="note">Pathway only uses what you tell it. It doesn’t guess sensitive things about you.</p></div>
       <Calendars />
       <Notifications />
+      <div className="sec"><h2>Opportunity preferences</h2><p className="note">Choose your interests, location, time and optional project goals.</p><button className="btn" onClick={()=>setDiscoveryEdit(true)}>Edit opportunity preferences</button></div>
 
       <div className="sec"><div className="sec-h"><h2>Account</h2></div>
         {recoveryCode ? <RecoveryCode code={recoveryCode} onDone={() => { setRecoveryCode(null); setChangingPhrase(false); }} /> : <>
@@ -70,6 +72,7 @@ export default function You({ me, setMe, onSignOut }: { me: Student; setMe: (s: 
         <button className="r" onClick={async () => { if (!confirm('Delete everything in Pathway? This can’t be undone.')) return; await api('/api/me', { method: 'DELETE' }); session.clear(); access.clear(); setMe(null); onSignOut?.(); }}><span className="b"><span className="t c-rose">Delete everything</span></span></button></div></div>
       {config.data?.feedbackUrl && <div className="sec"><a className="link" href={config.data.feedbackUrl} target="_blank" rel="noopener noreferrer">Send feedback</a></div>}
       {edit && <EditSheet me={me} onClose={() => setEdit(false)} onSave={async b => { await patch(b); setEdit(false); }} />}
+      {discoveryEdit&&<DiscoveryPreferencesEditor me={me} onSaved={setMe} onClose={()=>setDiscoveryEdit(false)}/>}
       {log && <AuditSheet onClose={() => setLog(false)} />}
       {news && <NewsSheet me={me} setMe={s2 => setMe(s2)} onClose={() => setNews(false)} ask={() => setNews(false)} />}
     </>

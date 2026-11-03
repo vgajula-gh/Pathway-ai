@@ -22,7 +22,7 @@ export async function catalogCoverage(studentId: string, now = new Date(), db: C
   ]);
   const active = opportunities.map(toOpp).filter(o => env.demoMode && o.isSample || activeOpportunity(o, today, now));
   return planCatalogSearch(active, ctx, free, new Set([...saved, ...feedback].map(s => s.opportunityId)), {
-    free: setting('FREE_PICKS', 3, 10), paid: setting('PAID_PICKS', 3, 10),
+    free: setting('FREE_PICKS', 3, 3), paid: setting('PAID_PICKS', 3, 3),
   });
 }
 export const publicCatalogCoverage = (coverage: Awaited<ReturnType<typeof catalogCoverage>>) => ({

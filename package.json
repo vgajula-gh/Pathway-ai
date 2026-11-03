@@ -23,7 +23,8 @@
     "ollama:setup": "node scripts/setup-ollama.mjs",
     "ollama:start": "node scripts/start-ollama.mjs",
     "start": "node scripts/start-production.mjs",
-    "demo:workflows": "npm run demo:workflows --workspace apps/api --"
+    "demo:workflows": "npm run demo:workflows --workspace apps/api --",
+    "check:scout": "node --env-file-if-exists=.env scripts/check-scout.mjs"
   },
   "engines": {
     "node": ">=20"

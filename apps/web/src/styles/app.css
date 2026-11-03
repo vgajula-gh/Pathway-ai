@@ -336,3 +336,9 @@ body[data-tab="today"] #root{padding-bottom:calc(100px + env(safe-area-inset-bot
 .opportunity-search .opp .foot { display:flex; flex-wrap:wrap; gap:8px; padding:12px; }
 .opportunity-search .opp { overflow-wrap:anywhere; }
 @media(max-width:600px) { .opportunity-search .opp .foot>* { flex:1 1 44%; text-align:center; align-content:center; } }
+
+.discovery-preferences { display: grid; gap: 10px; }
+.discovery-preferences .field { width: 100%; box-sizing: border-box; }
+.discovery-preferences textarea { min-height: 80px; resize: vertical; }
+.opportunity-search blockquote { margin: 14px 0; padding-left: 12px; border-left: 2px solid var(--peri); overflow-wrap: anywhere; }
+.opportunity-search .foot { flex-wrap: wrap; }

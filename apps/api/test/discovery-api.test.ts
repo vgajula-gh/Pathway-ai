@@ -43,6 +43,25 @@ it('accepts a broad region and rejects arbitrary addresses',async()=>{
  expect((await app.inject({method:'PATCH',url:'/api/me',headers:headers(),payload:{region:'123 Main Street'}})).statusCode).toBe(422);
  }finally{await app.close();}
 });
+it('shows announced openings separately from active cards without a provider call',async()=>{
+ await db.opportunity.update({where:{id:'opp0'},data:{verificationStatus:'watchlist',promptVersion:'scout-v1',sourceReadAt:new Date(),scoutFacts:JSON.stringify({schoolLevel:'high_school',openingDate:'2030-06-01'})}});
+ const app=await buildApp();app.log.level='silent';try{
+  const response=await app.inject({url:'/api/opportunities',headers:headers()});expect(response.statusCode).toBe(200);
+  expect(response.json().watchlist).toMatchObject([{id:'opp0',openingDate:'2030-06-01'}]);expect(response.json().recommended.map((o:any)=>o.id)).not.toContain('opp0');
+  expect(await db.opportunitySearchRequest.count({where:{studentId:id}})).toBe(0);
+ }finally{await app.close();}
+});
+it('persists and exports optional discovery preferences without changing private plans',async()=>{
+ const app=await buildApp();app.log.level='silent';try{
+  const res=await app.inject({method:'PATCH',url:'/api/me',headers:headers(),payload:{discoveryPreferences:{city:'Raleigh',state:'NC',format:'online',personalProject:'Build a small game',goals:'Learn coding',maxCost:0,hoursPerWeek:3}}});
+  expect(res.statusCode).toBe(200);expect(res.json().discoveryPreferences).toMatchObject({city:'Raleigh',radiusMiles:50,maxCost:0,hoursPerWeek:3});
+  const next=await app.inject({method:'PATCH',url:'/api/me',headers:headers(),payload:{discoveryPreferences:{hoursPerWeek:5}}});
+  expect(next.json().discoveryPreferences).toMatchObject({city:'Raleigh',personalProject:'Build a small game',hoursPerWeek:5});
+  expect((await app.inject({url:'/api/me/export',headers:headers()})).json().profile.discoveryPreferences.maxCost).toBe(0);
+  expect(await db.goal.count()).toBe(0);expect(await db.event.count()).toBe(0);
+  expect((await app.inject({method:'PATCH',url:'/api/me',headers:headers(),payload:{discoveryPreferences:{hoursPerWeek:200}}})).statusCode).toBe(422);
+ }finally{await app.close();}
+});
 it('discovers for shared groups, targets short buckets and deduplicates official programs',async()=>{
  const {discover}=await import('../src/discovery/pipeline.js');const {RunBudget}=await import('../src/discovery/config.js');const {Extraction}=await import('../src/discovery/extraction.js');
  const sourceUrl='https://example.edu/robotics',text='Example Robotics is organized by Example. Grades 9–12. Participation is free. Virtual. Apply by 2030-12-01.';

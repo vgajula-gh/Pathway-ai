@@ -60,7 +60,7 @@ export const TOOLS: ToolDef[] = [
       const hits = all.filter(o => !q.length || q.some(w => (o.name + ' ' + o.category + ' ' + o.tags.join(' ')).toLowerCase().includes(w)));
       const scored = hits.map(o => ({ o, s: scoreOpportunity(o, ctx, weekFree) }));
       ev.push({ tool: 'search_opportunities', label: `Searched opportunities (${scored.filter(x => !x.s.excluded).length} fit)` });
-      return { results: scored.filter(x => !x.s.excluded).sort((a, b) => ((b.s as any).score - (a.s as any).score)).slice(0, 8).map(({ o, s }) => ({ id: o.id, name: o.name, organizer: o.organizer, url: o.url, format: o.format, cost: o.cost, commitment: o.commitment, verified: !!o.sourceCheckedAt, deadline: o.deadline || 'unknown — confirm on source', factors: (s as any).factors })),
+      return { results: scored.filter(x => !x.s.excluded).sort((a, b) => ((b.s as any).score - (a.s as any).score)).slice(0, 8).map(({ o, s }) => ({ id: o.id, name: o.name, organizer: o.organizer, url: o.url, format: o.format, cost: o.cost, commitment: o.commitment, verified:o.verificationStatus==='verified'&&!!o.sourceCheckedAt,checks:o.checks,sourceReadAt:o.sourceReadAt, deadline: o.deadline || 'unknown — confirm on source', factors: (s as any).factors })),
         excluded: scored.filter(x => x.s.excluded).map(({ o, s }) => ({ name: o.name, reasons: s.eligibility.reasons })) };
     } },
   { name: 'get_learning_resources', description: 'Curated learning resources for topics. Only recommend URLs returned here.',

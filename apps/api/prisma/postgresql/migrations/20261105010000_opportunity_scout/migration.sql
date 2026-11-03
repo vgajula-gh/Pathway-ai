@@ -1,0 +1,14 @@
+ALTER TABLE "Student" ADD COLUMN "discoveryPreferences" TEXT NOT NULL DEFAULT '{}';
+ALTER TABLE "Opportunity" ADD COLUMN "sourceReadAt" TIMESTAMP;
+ALTER TABLE "Opportunity" ADD COLUMN "scoutFacts" TEXT NOT NULL DEFAULT '{}';
+ALTER TABLE "Opportunity" ADD COLUMN "qualificationNotes" TEXT NOT NULL DEFAULT '[]';
+ALTER TABLE "Opportunity" ADD COLUMN "promptVersion" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "StudentPick" ADD COLUMN "scoreBreakdown" TEXT NOT NULL DEFAULT '{}';
+ALTER TABLE "DiscoveryGroup" ADD COLUMN "context" TEXT NOT NULL DEFAULT '{}';
+ALTER TABLE "DiscoveryRun" ADD COLUMN "state" TEXT NOT NULL DEFAULT '{}';
+ALTER TABLE "DiscoveryRun" ADD COLUMN "promptVersion" TEXT NOT NULL DEFAULT '';
+CREATE TABLE "DiscoveryRunGroup" ("runId" TEXT NOT NULL, "groupKey" TEXT NOT NULL, PRIMARY KEY ("runId","groupKey"), FOREIGN KEY ("runId") REFERENCES "DiscoveryRun"("id") ON DELETE CASCADE ON UPDATE CASCADE);
+CREATE INDEX "DiscoveryRunGroup_groupKey_idx" ON "DiscoveryRunGroup"("groupKey");
+CREATE TABLE "ResearchCandidate" ("id" TEXT NOT NULL PRIMARY KEY,"runId" TEXT NOT NULL,"url" TEXT NOT NULL,"name" TEXT,"status" TEXT NOT NULL DEFAULT 'found',"pages" TEXT NOT NULL DEFAULT '[]',"facts" TEXT NOT NULL DEFAULT '{}',"reasons" TEXT NOT NULL DEFAULT '[]',"opportunityId" TEXT,"createdAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,"updatedAt" TIMESTAMP NOT NULL,FOREIGN KEY ("runId") REFERENCES "DiscoveryRun"("id") ON DELETE CASCADE ON UPDATE CASCADE);
+CREATE UNIQUE INDEX "ResearchCandidate_runId_url_key" ON "ResearchCandidate"("runId","url");
+CREATE INDEX "ResearchCandidate_status_idx" ON "ResearchCandidate"("status");

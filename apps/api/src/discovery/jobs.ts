@@ -1,3 +1,7 @@
+import {advanceOrStartScout} from '../scout/scheduler.js';
+import {PROMPT_VERSION} from '../scout/prompts.js';
+import {extractScout} from '../scout/extract.js';
+import {qualifyScout} from '../scout/qualify.js';
 import {reserveMonthlyAI} from '../lib/ai-limits.js';
 import {HttpError} from '../lib/errors.js';
 import { recheckDue } from '../domain/refresh.js';
@@ -5,7 +9,7 @@ import { identity, interestGroups } from './groups.js';
 import { Prisma } from '@prisma/client';
 import { prisma, j } from '../lib/db.js';
 import { RunBudget, setting, discoveryConfigured } from './config.js';
-import { discover, trustedDomains } from './pipeline.js';
+import { trustedDomains } from './pipeline.js';
 import { automaticRefreshBatch } from './refresh.js';
 import { initializeKnowledge } from '../knowledge/runtime.js';
 import { ingestKnowledge, reconcileVectors } from '../knowledge/service.js';
@@ -119,9 +123,16 @@ export async function recheckOpportunity(
       budget.extractionCalls++;
       budget.usage.tokens += Math.ceil(pages.reduce((n, p) => n + p.text.length, 0) / 3) + 6500;
       stage = 'extract';
-      const facts = await dependencies.extract(pages);
-      stage = 'verify';
-      const data = verifyOpportunity(facts, pages, trustedDomains());
+      let data;
+      if(o.promptVersion===PROMPT_VERSION) {
+        const result=await extractScout(pages);
+        if(result.usage)budget.usage.tokens+=(result.usage.inputTokens||0)+(result.usage.outputTokens||0);
+        stage='verify';const qualified=qualifyScout(result.facts,pages,trustedDomains());
+        if(!qualified.data)throw new DiscoveryFailure({stage:'verify',code:qualified.reasons.some(r=>r.reason==='past_deadline')?'deadline_passed':'missing_evidence'});
+        data=qualified.data;
+      } else {
+        const facts=await dependencies.extract(pages);stage='verify';data=verifyOpportunity(facts,pages,trustedDomains());
+      }
       if (
         identity(o.officialDomain || new URL(o.url).hostname, o.name) !==
         identity(data.officialDomain, data.name)
@@ -155,7 +166,9 @@ export async function recheckOpportunity(
         where: { id },
         data: {
           lastRecheckedAt: now,
+          ...(o.promptVersion===PROMPT_VERSION?{sourceReadAt:now}:{}),
           ...(o.verificationStatus === 'verified' ? { verifiedAt: now, sourceCheckedAt: now } : {}),
+          ...(o.applicationStatusCheckedAt?{applicationStatusCheckedAt:now}:{}),
           ...(o.costVerifiedAt ? { costVerifiedAt: now } : {}),
         },
       });
@@ -179,16 +192,18 @@ export async function recheckOpportunity(
   }
 }
 async function recoverInterrupted() {
+    const scout=await prisma.discoveryRun.findMany({where:{status:'running',promptVersion:PROMPT_VERSION},include:{groupLinks:true}});
+    const liveKeys=[...new Set(scout.flatMap(r=>[r.groupKey,...r.groupLinks.map(g=>g.groupKey)]))];
     await prisma.jobLease.updateMany({where:{key:{startsWith:'knowledge-attempt:'},owner:'running'},data:{owner:'failed'}});
     await prisma.discoveryGroup.updateMany({
-      where: { status: 'running' },
+      where: { status: 'running',key:{notIn:liveKeys} },
       data: {
         status: 'error',
         error: 'A background check was interrupted. Catalog picks are still available.',
       },
     });
     await prisma.discoveryRun.updateMany({
-      where: { status: 'running' },
+      where: { status: 'running',promptVersion:{not:PROMPT_VERSION} },
       data: {
         status: 'interrupted',
         error: 'Previous worker stopped before recording final usage',
@@ -197,63 +212,9 @@ async function recoverInterrupted() {
     });
 }
 
-async function discoverNext(groupKeys?: string[], foreground = false,deadlineAt=Infinity) {
+async function discoverNext(groupKeys?:string[],_foreground=false,deadlineAt=Infinity) {
   if(Date.now()>=deadlineAt)return 0;
-  const group = await prisma.discoveryGroup.findFirst({
-    where: {
-      ...(groupKeys ? { key: { in: groupKeys } } : {}),
-      OR: [
-        // Unfunded work resumes through a live request, preserving its student allowance.
-        { status: 'queued_manual' },
-        { status: { in: ['queued', 'limited'] }, OR: [{ lastDiscoveredAt: null }, { lastDiscoveredAt: { lte: new Date(Date.now() - 30 * 86400000) } }] },
-      ],
-    },
-    orderBy: { requestedAt: 'asc' },
-  });
-  if (!group) return 0;
-  const buckets=await neededGroupBuckets(group.key);
-  if(!buckets.length) {
-    await prisma.discoveryGroup.update({where:{key:group.key},data:{status:'idle',pendingBuckets:'[]',error:''}});
-    await settleSearchRequests();
-    return 0;
-  }
-  const run = await reserveRun(group.key, 'discovery');
-  if (!run) {
-    await prisma.discoveryGroup.update({ where: { key: group.key }, data: {
-      status: ['queued_manual', 'limited_manual'].includes(group.status) ? 'limited_manual' : 'limited',
-      error: 'Live search has reached its monthly allowance. Your current recommendations are still available.',
-    } });
-    return 0;
-  }
-  const budget = new RunBudget();
-  budget.deadlineAt=Math.min(budget.deadlineAt,deadlineAt);
-  if (foreground) budget.deadlineAt = Math.min(budget.deadlineAt,Date.now() + 60000);
-  budget.onStep = async () => {
-    await prisma.discoveryRun.update({ where: { id: run.id }, data: { usage: JSON.stringify({ ...budget.usage, models:budget.models,candidates:budget.candidates, phase: budget.phase, savedIds: budget.savedIds, workflow: budget.workflow, failures: budget.failures }) } });
-  };
-  await prisma.discoveryGroup.update({ where: { key: group.key }, data: { status: 'running', lastDiscoveredAt: new Date(), error: '' } });
-  await budget.onStep();
-  try {
-    budget.savedIds = await discover(group, buckets, budget, {
-      search: (await import('./search/index.js')).getSearch()!, fetch: fetchOfficialPage, extract, ingest:async(id,budget)=>{
-        if(!await initializeKnowledge())throw new DiscoveryFailure({stage:'index',code:'index_unavailable'});
-        await ingestKnowledge(id,budget);
-      },
-    });
-    const failure=!budget.savedIds.length&&budget.failures.some(operationalFailure)?primaryFailure(budget.failures):undefined;
-    budget.phase = budget.savedIds.length ? budget.failures.length ? 'partial' : 'complete' : failure?'failed':'empty';
-    const error=failure?failureMessage(failure):'';
-    await prisma.discoveryGroup.update({ where: { key: group.key }, data: { status: failure?'error':'idle', pendingBuckets: '[]', error } });
-    await finishRun(run, budget, failure?'failed':'complete',error);
-    return budget.savedIds.length;
-  } catch (error) {
-    if (!budget.failures.length) budget.failures.push(failureInfo(error, 'search'));
-    const message = failureMessage(budget.failures[0]);
-    budget.phase = 'failed';
-    await prisma.discoveryGroup.update({ where: { key: group.key }, data: { status: 'error', error: message } });
-    await finishRun(run, budget, 'failed', message);
-    return 0;
-  }
+  return advanceOrStartScout(groupKeys);
 }
 
 /** Request-bound work lets a visible Explore screen make progress on Autoscale. */

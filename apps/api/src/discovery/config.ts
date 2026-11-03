@@ -6,7 +6,7 @@ export const safeModelId=(value:string|undefined)=>value&&value.length<=160&&/^[
 export function discoveryModels(){
   const extraction=extractionSettings(),provider=process.env.SEARCH_PROVIDER;
   const searchProvider=provider==='openai'||provider==='anthropic'?provider:'none';
-  const searchModel=process.env.SEARCH_MODEL||(searchProvider==='openai'?'gpt-4.1-mini':searchProvider==='anthropic'?process.env.ANTHROPIC_MODEL||'claude-sonnet-5-5':undefined);
+  const searchModel=process.env.AI_MODEL_SCOUT||process.env.SEARCH_MODEL||(searchProvider==='openai'?'gpt-4.1-mini':searchProvider==='anthropic'?process.env.ANTHROPIC_MODEL||'claude-sonnet-5-5':undefined);
   return {search:{provider:searchProvider,model:safeModelId(searchModel)},extraction:{provider:extraction.provider,model:safeModelId(extraction.model)}};
 }
 export function setting(name: string, fallback: number, max = 1000) {

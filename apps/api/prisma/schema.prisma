@@ -28,6 +28,7 @@ model Student {
   location    String   @default("")   // broad area only, e.g. "Raleigh area"
   interests   String   @default("[]") // JSON string[]
   skills      String   @default("[]") // JSON string[]
+  discoveryPreferences String @default("{}")
   aiConsent   Boolean  @default(true)
   budget      String   @default("any") // "free" | "any"
   format      String   @default("any") // "virtual" | "any"
@@ -104,6 +105,10 @@ model Opportunity {
   tags            String   // JSON string[]
   checks          String   @default("[]") // JSON string[] — things to verify
   deadline        String?  // ISO date if verified, else null
+  sourceReadAt DateTime?
+  scoutFacts String @default("{}")
+  qualificationNotes String @default("[]")
+  promptVersion String @default("")
   sourceCheckedAt DateTime? // null => not verified
   applicationStatus String @default("unknown")
   applicationStatusCheckedAt DateTime?
@@ -138,6 +143,7 @@ model StudentPick {
   rank Int
   isStretch Boolean @default(false)
   pickedAt DateTime @default(now())
+  scoreBreakdown String @default("{}")
   refreshCycle String
   @@id([studentId, opportunityId])
 }
@@ -369,6 +375,7 @@ model DiscoveryGroup {
   topic String
   gradeBand String
   region String
+  context String @default("{}")
   pendingBuckets String @default("[]")
   requestedAt DateTime?
   lastDiscoveredAt DateTime?
@@ -422,6 +429,10 @@ model DiscoveryUsage {
 }
 
 model DiscoveryRun {
+  state String @default("{}")
+  promptVersion String @default("")
+  candidates ResearchCandidate[]
+  groupLinks DiscoveryRunGroup[]
   id String @id @default(cuid())
   groupKey String
   kind String
@@ -449,4 +460,29 @@ model OpportunitySearchRequest {
   createdAt DateTime @default(now())
   finishedAt DateTime?
   @@index([studentId, createdAt])
+}
+
+model DiscoveryRunGroup {
+  runId String
+  groupKey String
+  run DiscoveryRun @relation(fields:[runId],references:[id],onDelete:Cascade)
+  @@id([runId,groupKey])
+  @@index([groupKey])
+}
+
+model ResearchCandidate {
+  id String @id @default(cuid())
+  runId String
+  run DiscoveryRun @relation(fields:[runId],references:[id],onDelete:Cascade)
+  url String
+  name String?
+  status String @default("found")
+  pages String @default("[]")
+  facts String @default("{}")
+  reasons String @default("[]")
+  opportunityId String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([runId,url])
+  @@index([status])
 }
