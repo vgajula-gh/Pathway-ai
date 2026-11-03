@@ -54,13 +54,15 @@ Loading (typing dots) · empty (friendly next action) · AI off (consent) or una
 
 A slim one-line first-name greeting and student-local date, with a subtle time-of-day accent.
 
-1. **Your day at a glance:** three rings and contributor sheets; compact timeline with time, source, clashes and flexible-item completion; Due soon for Interested applications and calendar exams/deadlines in the next seven days. An open day says “Your day is open. Add a class or deadline, or link your calendar.” Add event, Link calendar and View week remain available.
+1. **Your day at a glance:** three rings and contributor sheets; compact timeline with time, source, clashes and flexible-item completion; Due soon for Interested applications and calendar exams/deadlines in the next seven days. An open day says “Your day is open. Add a class or deadline, or link your calendar.” Add event, Link calendar and the inline Today/Week toggle remain available.
 2. **Next best step:** a pending approval takes priority. Otherwise one suggestion with Do it, Later and Why this? Later sets it aside on this visit. With no suggestion, link to Explore opportunities that fit you.
 3. **Today's spark:** word and sourced news at the bottom; respect both preferences and hide the whole section when both are off.
 
 Keep the floating Talk to Buddy orb. No dummy events, goals or suggestions fill empty space.
 
 Ring details explain their source: Study planned sums today's Study blocks against the daily limit regardless of completion; Free time left counts only future unbooked study-window minutes. Protected downtime left appears separately below the rings and in the free-time contributor sheet, reduced by actual calendar overlaps with an overlap warning. Progress counts this week's goal steps. Availability is editable in You. At 8 PM with default windows and no bookings, show 1h free plus a separate 2h rest summary. Time estimates refresh every minute while visible and on return/focus using read-only requests; no AI request or allowance is used.
+
+Timeline starts on Today. Tap Week to see Monday–Sunday vertically without opening a sheet. Previous week / This week / Next week changes the displayed dates only. Today is highlighted, and each empty day says Nothing scheduled. Tap a date header to choose the default date for Add event; current week selects today initially, other weeks select Monday. Date headers and completion controls have accessible labels/pressed state and at least 44px touch targets. Writable, non-recurring Study/Reminder/Personal events can be crossed out and restored in either view; imported/recurring events have no completion control. Save failures show an error and preserve the prior state. Loading another week disables Add event until the dates are known; weekly read failures offer Try again and leave the Today toggle usable. Rings and Due soon remain anchored to today. Existing minute/focus refreshes also update the visible week without losing a valid selected date. Scan schedule and Link calendar stay accessible.
 
 ## Explore and program questions
 

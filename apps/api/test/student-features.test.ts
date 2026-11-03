@@ -58,6 +58,42 @@ it('returns uncached student-local remaining time without charging AI or mixing 
     expect(await db.aIUsage.count()).toBe(usage);
   } finally {vi.useRealTimers();await app.close();}
 });
+it('serves Monday–Sunday agenda navigation in the student timezone and shares completion with Today',async()=>{
+  const app=await buildApp();app.log.level='silent';
+  try {
+    await db.student.update({where:{id:studentId},data:{timezone:'America/New_York'}});
+    const e=await db.event.create({data:{studentId,title:'Sunday study',type:'study',start:'2030-01-06T18:00',end:'2030-01-06T19:00'}});
+    const other=await db.student.create({data:{name:'Other student',grade:10}});
+    await db.event.create({data:{studentId:other.id,title:'Private event',type:'study',start:e.start,end:e.end}});
+    const usage=await db.aIUsage.count();
+    vi.useFakeTimers({toFake:['Date']});vi.setSystemTime(new Date('2030-01-07T01:00:00Z'));
+    const res=await app.inject({url:'/api/week?weekOffset=0',headers:headers()});
+    expect(res.statusCode).toBe(200);expect(res.headers['cache-control']).toBe('no-store');
+    const days=res.json();expect(days).toHaveLength(7);
+    expect(days[0].date).toBe('2029-12-31');expect(days[6].date).toBe('2030-01-06');
+    expect(days.flatMap((d:any)=>d.events)).toHaveLength(1);
+    expect(days[6].events[0]).toMatchObject({id:e.id,type:'study',done:false,recurring:false,source:'manual',readOnly:false});
+    expect((await app.inject({url:'/api/week?weekOffset=-1',headers:headers()})).json()[0].date).toBe('2029-12-24');
+    expect((await app.inject({url:'/api/week?weekOffset=1',headers:headers()})).json()[0].date).toBe('2030-01-07');
+    // Existing rolling-date consumers keep their original API behavior.
+    expect((await app.inject({url:'/api/week?from=2030-01-04',headers:headers()})).json()[0].date).toBe('2030-01-04');
+    expect((await app.inject({url:'/api/week',headers:headers()})).json()[0].date).toBe('2030-01-06');
+    expect((await app.inject({method:'PATCH',url:'/api/events/'+e.id,headers:headers(),payload:{done:true}})).statusCode).toBe(200);
+    const today=(await app.inject({url:'/api/today',headers:headers()})).json();
+    const updated=(await app.inject({url:'/api/week?weekOffset=0',headers:headers()})).json();
+    expect(updated[6].events).toEqual(today.timeline);expect(today.timeline[0].done).toBe(true);
+    expect(await db.aIUsage.count()).toBe(usage);
+  } finally {vi.useRealTimers();await app.close();}
+});
+it('rejects invalid or ambiguous week navigation and requires student authentication',async()=>{
+  const app=await buildApp();app.log.level='silent';
+  try {
+    for(const query of ['weekOffset=no','weekOffset=1.5','weekOffset=5201','weekOffset=-5201','from=2030-02-31','from=2030-01-01&weekOffset=0']){
+      expect((await app.inject({url:'/api/week?'+query,headers:headers()})).statusCode).toBe(422);
+    }
+    expect((await app.inject({url:'/api/week?weekOffset=0'})).statusCode).toBe(401);
+  } finally {await app.close();}
+});
 it('saves, updates and isolates application metadata and never writes prep events before approval', async () => {
   const app = await buildApp(); app.log.level = 'silent';
   try {

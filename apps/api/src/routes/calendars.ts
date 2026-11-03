@@ -6,7 +6,7 @@ import { calendarView, encryptCalendarUrl, syncCalendar } from '../lib/calendars
 import { weekSummary } from '../domain/calendars.js';
 import { CalendarDate } from '../domain/applications.js';
 import { loadContext } from '../lib/context.js';
-import { dkey, parseLocal, wallNow, sod } from '../domain/time.js';
+import { dkey, parseLocal, wallNow, sod, addDays, mondayOf } from '../domain/time.js';
 import { audit } from '../lib/audit.js';
 export default async function routes(app: FastifyInstance) {
   app.get('/api/calendars', async req => { const s = await requireStudent(req); return (await prisma.calendarLink.findMany({ where: { studentId: s.id } })).map(calendarView); });
@@ -30,9 +30,12 @@ export default async function routes(app: FastifyInstance) {
     const c = await prisma.calendarLink.findFirst({ where: { id, studentId: s.id } }); if (!c) throw new HttpError(404, 'Calendar not found');
     await prisma.calendarLink.delete({ where: { id } }); await audit(s.id, 'student', 'Removed calendar and its imported events', c.label); return reply.code(204).send();
   });
-  app.get('/api/week', async req => {
-    const s = await requireStudent(req), q = z.object({ from: CalendarDate.optional() }).parse(req.query);
+  app.get('/api/week', async (req,reply) => {
+    reply.header('Cache-Control','no-store');
+    const s = await requireStudent(req), q = z.object({ from: CalendarDate.optional(), weekOffset:z.coerce.number().int().min(-5200).max(5200).optional() }).refine(q=>q.from===undefined||q.weekOffset===undefined,'Choose from or weekOffset, not both').parse(req.query);
     const { events, rules } = await loadContext(s.id);
-    return weekSummary(events, rules, sod(parseLocal(q.from || dkey(wallNow(s.timezone)))!));
+    const today=wallNow(s.timezone);
+    const from=q.weekOffset!==undefined?addDays(mondayOf(today),q.weekOffset*7):sod(parseLocal(q.from||dkey(today))!);
+    return weekSummary(events, rules, from);
   });
 }

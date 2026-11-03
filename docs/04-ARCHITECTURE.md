@@ -35,6 +35,8 @@ Student context → understand request → retrieve reliable context → evaluat
 
 `domain/remaining-time.ts` computes display-only future time from student-local `wallNow`, availability and calendar occurrences. It clips windows/events to the remaining calendar day, merges overlapping bookings, excludes protected rest from study free time, and reports remaining unbooked rest and booked rest separately. Weekly recurrences and overnight windows are included. `todayMetrics` retains full-day Study planned and weekly goal progress; the planner's full-day `dayCapacity`, free-slot search and proposal validation retain their existing semantics. GET Today is uncached and read-only; the visible client refreshes each minute and on return/focus. Insight uses the same student-local day. No schema, environment setting or paid provider call is added by these estimates.
 
+The Today Timeline toggles inline to a vertical weekly agenda. `GET /api/week?weekOffset=N` derives Monday in the student's timezone using domain time helpers; the existing rolling `from` and omitted-query behavior stay compatible. `domain/today.timelineItems` serializes the same event flags for both API views. The shared client `TimelineEvents` component handles supported completion through the existing authenticated PATCH route; no new agent writing tool or provider call is introduced. Week requests ignore obsolete responses after navigation/unmount. Today refreshes re-read the visible week, preserving a valid selected creation date. Rings retain daily meaning regardless of the selected view.
+
 ## LLM layer (provider-agnostic)
 ```
 Buddy agent · insights · schedule scan · coach
