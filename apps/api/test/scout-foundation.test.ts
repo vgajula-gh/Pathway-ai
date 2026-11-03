@@ -2,7 +2,7 @@ import {expect,it} from 'vitest';
 import {DiscoveryPreferences,discoveryPreferences} from '../src/domain/discovery-preferences.js';
 import {ScoutFacts,ResearchOutput,ResearchJSON,FactsJSON} from '../src/scout/schema.js';
 import {scoutPrompt,publicSearchContext,PROMPT_VERSION} from '../src/scout/prompts.js';
-import {sourcePassages,resolveEvidence} from '../src/scout/passages.js';
+import {sourcePassages,relevantPassages,resolveEvidence} from '../src/scout/passages.js';
 import {readable} from '../src/discovery/pages.js';
 import {interestBatches} from '../src/scout/planning.js';
 
@@ -38,4 +38,10 @@ it('constructs literal evidence only from supplied source passage IDs',()=>{
 it('covers focus interests with no more than two per bounded research call',()=>{
  expect(interestBatches(['AI','coding','Business','engineering','entrepreneurship',' AI '])).toEqual([['ai','business'],['coding','engineering'],['entrepreneurship']]);
  expect(interestBatches(['a','b','c'],1)).toEqual([['a','b']]);
+});
+
+it('bounds extraction text while retaining late eligibility/fee passages and original citation IDs',()=>{
+ const page={...readable('<main>'+('An unrelated announcement. '.repeat(550))+' Participation is free. Open to grades 9–12. Application deadline March 14, 2030.</main>','https://example.edu'),checkedAt:new Date()};
+ const selected=relevantPassages([page],1800),all=sourcePassages([page]);expect(selected.reduce((n,p)=>n+p.text.length,0)).toBeLessThanOrEqual(1800);expect(selected.map(p=>p.text).join(' ')).toContain('Participation is free');
+ for(const p of selected)expect(all.find(original=>original.id===p.id)).toEqual(p);
 });

@@ -102,3 +102,9 @@ it('preserves valid links and research quotes when other optional details are ma
  const result=researchOutput(JSON.stringify({candidates:[{...leads.candidates[0],details:{organizer:'Example',deadline:42,costType:'free',evidence:[{field:'costType',quote:'Participation is free.',sourceUrl:'https://example.edu/robotics'},{field:'deadline',quote:'unsafe',sourceUrl:'http://example.edu'}]}}]}));
  expect(result.candidates[0].details).toMatchObject({organizer:'Example',deadline:null,costType:'free',applicationStatus:'unknown'});expect(result.candidates[0].details!.evidence).toHaveLength(1);
 });
+
+it('caps optional extraction at 90 seconds and honors a shorter caller deadline',async()=>{
+ const f=scoutFixture();sdk.chat.mockResolvedValue({choices:[{finish_reason:'stop',message:{content:JSON.stringify(f.facts)}}]});
+ await extractScout([f.page],120000);expect(sdk.options.at(-1).timeout).toBe(90000);
+ await extractScout([f.page],2000);expect(sdk.options.at(-1).timeout).toBe(2000);
+});

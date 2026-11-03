@@ -43,7 +43,7 @@ it.each([undefined,''])('uses the configured nano model when AI_MODEL_EXTRACTION
   const {extract}=await import('../src/discovery/extraction.js');
   expect(await extract([page])).toMatchObject({name:'Example Robotics',gradeMin:9});
   expect(sdk.create.mock.calls[0][0]).toMatchObject({model:'gpt-5-nano',reasoning_effort:'low',max_completion_tokens:8192,response_format:{type:'json_schema',json_schema:{name:'opportunity_facts',strict:true}}});
-  expect(sdk.options[0]).toMatchObject({maxRetries:0,timeout:30000});
+  expect(sdk.options[0]).toMatchObject({maxRetries:0,timeout:90000});
 });
 it('uses the extraction override while leaving Buddy’s configured model as nano',async()=>{
   vi.stubEnv('AI_MODEL_EXTRACTION','gpt-4.1-mini');

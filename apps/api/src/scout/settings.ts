@@ -4,6 +4,7 @@ export const scoutSettings=()=>({
   researchCalls:setting('SCOUT_MAX_CALLS_PER_SEARCH',3,3),
   webToolCalls:Math.max(1,setting('SCOUT_MAX_TOOL_CALLS',5,10)),
   researchTimeoutMs:Math.max(1000,setting('SCOUT_RESEARCH_TIMEOUT_SECONDS',150,150)*1000),
+  extractionTimeoutMs:Math.max(1000,setting('SCOUT_EXTRACTION_TIMEOUT_SECONDS',90,90)*1000),
   freeCandidates:setting('SCOUT_FREE_CANDIDATES',8,16),
   paidCandidates:setting('SCOUT_PAID_CANDIDATES',8,16),
   cacheDays:setting('SCOUT_CACHE_DAYS',30,30)||30,

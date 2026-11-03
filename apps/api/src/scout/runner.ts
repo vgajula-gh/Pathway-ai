@@ -157,6 +157,7 @@ export async function advanceScout(run:Run,overrides:Partial<ScoutDependencies>=
       }
       step('fetch_official_pages','completed');
     } else if(stage==='extract'&&candidate) {
+      budget.deadlineAt=Date.now()+scoutSettings().extractionTimeoutMs;
       budget.phase='checking_facts';await claim('extract');await callStarted('extract');
       budget.check();const started=Date.now(),result=await deps.extract(pagesOf(candidate.pages),budget.deadlineAt-Date.now());
       if(result.usage)await addCall(result.usage,'extract',Date.now()-started);
