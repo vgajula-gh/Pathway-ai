@@ -35,5 +35,9 @@ export function jsonSchema(schema:z.ZodTypeAny,name:string):JSONSchema {
   const {$schema,...body}=zodToJsonSchema(schema,{$refStrategy:'none',target:'openAi'});
   return {name,schema:body};
 }
-export const ResearchJSON=jsonSchema(ResearchOutput,'opportunity_leads');
+// OpenAI strict output supports patterns, but not JSON Schema's `uri` format.
+// The provider only constrains the prefix; local ResearchOutput still validates
+// URL syntax, HTTPS, credentials and ports before a lead reaches source fetching.
+const ProviderResearch=ResearchOutput.extend({candidates:z.array(ResearchOutput.shape.candidates.element.extend({officialUrl:z.string().regex(/^https:\/\//)})).max(16)});
+export const ResearchJSON=jsonSchema(ProviderResearch,'opportunity_leads');
 export const FactsJSON=jsonSchema(ScoutFacts,'source_backed_program');

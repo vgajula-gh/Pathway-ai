@@ -1,6 +1,13 @@
 import {expect,it} from 'vitest';
 import {searchDiagnostics} from '../src/discovery/diagnostics.js';
 import {primaryFailure} from '../src/discovery/failures.js';
+import {failureInfo} from '../src/discovery/failures.js';
+
+it('drops arbitrary provider values while keeping controlled request parameters and operations',()=>{
+ const failure=failureInfo({status:400,code:'sk-private-sentinel',param:'https://private.example/token'},'search');
+ const {diagnostics}=searchDiagnostics([{id:'safe',usage:JSON.stringify({failures:[{...failure,operation:'research',providerCode:'sk-private-sentinel',providerParam:'private-param'}]})}]);
+ expect(diagnostics.failures).toEqual([{stage:'search',code:'provider_request',httpStatus:400,operation:'research',count:1}]);expect(JSON.stringify(diagnostics)).not.toContain('private');
+});
 
 it('summarizes historical workflow records without requiring new provider calls or invented candidate counts',()=>{
  const run={id:'old',usage:JSON.stringify({searches:2,pages:7,savedIds:[],workflow:[{node:'search_candidates',status:'completed'},{node:'fetch_official_pages',status:'failed'},{node:'fetch_official_pages',status:'completed'},{node:'extract_facts',status:'failed'}],failures:[{stage:'fetch',code:'unsupported_content'},{stage:'extract',code:'invalid_schema',issues:[{field:'gradeMin',code:'invalid_type'}]}]})};

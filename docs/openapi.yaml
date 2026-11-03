@@ -110,6 +110,9 @@ components:
               contentEncoding: { enum: [gzip, br, deflate, identity, other] }
               finishReason: { enum: [length, content_filter, empty, refusal] }
               httpStatus: { type: integer, minimum: 400, maximum: 599 }
+              operation: { enum: [research, repair, extract], description: Distinguishes web requests from format repair; absent on older records }
+              providerCode: { type: string, description: Controlled provider error code only; arbitrary values and messages are omitted }
+              providerParam: { type: string, description: Allowlisted rejected request parameter path only }
               errorType: { enum: [TypeError, ReferenceError, Error] }
               location: { type: string, description: Allowlisted application file and line only }
               issues:
