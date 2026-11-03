@@ -114,3 +114,11 @@ See [Explore simplification](15-EXPLORE-SIMPLIFICATION.md).
 - Ongoing/overlapping bookings, weekly recurrence, overnight events/windows, zero-duration deadlines and equal window endpoints produce nonnegative remaining quantities without duplicate subtraction. Actual downtime overlaps reduce rest and are explained in the UI.
 - API integration verifies the student's timezone across UTC midnight, isolation from another student's calendar, no-store responses and unchanged AI usage counters. UI tests verify contributor explanations, three rings, separate rest, minute refresh and hidden/return/focus behavior without paid requests.
 - No schema migration, data reset or new Secret is needed. Run all tests, typecheck and production build before publishing.
+
+## Inline Today and Week Timeline
+
+- Today opens by default without fetching a week. Week shows all seven dated groups vertically, highlights today, labels empty days and offers Previous week / This week / Next week. Rings remain daily.
+- Selecting a day supplies Add event's initial date and survives successful saves/refreshes. Current week initially selects today; other weeks select Monday. Linked calendars and schedule scans remain available.
+- Shared event rows preserve source/overlap warnings, cross out supported completed items and allow undo. Read-only, recurring and fixed-type events have no completion button; save failures preserve the prior state.
+- Domain/API/UI regressions cover chronological recurrence details, Sunday-local/Monday-UTC and New Year navigation, student isolation, matching Today/Week completion, validation/authentication, no AI usage, late-response cancellation, retryable weekly errors and selected-date creation.
+- On a phone, view changes, date selection and completion controls have 44px targets, titles wrap and the weekly agenda requires no horizontal scrolling. Run tests, typecheck and production build. No schema migration, Secret changes or reset is required.

@@ -39,4 +39,21 @@ describe('calendar import and week facts', () => {
     const week = weekSummary(events, rules, new Date(2026, 10, 1));
     expect(week).toHaveLength(7); expect(week[0].load).toBe('light'); expect(week[1]).toMatchObject({ minutes: 120, load: 'heavy', clash: true });
   });
+  it('returns chronological agenda details with completion, recurrence, sources and conflicts',()=>{
+    const rules={studyStart:'16:00',studyEnd:'21:00',downtimeStart:'21:00',downtimeEnd:'23:00',maxStudyMin:120};
+    const events=[
+      {id:'study',title:'Study',type:'study',start:'2030-01-01T18:00',end:'2030-01-01T19:00',done:true,source:'manual',recurDays:[]},
+      {id:'linked',title:'School',type:'class',start:'2030-01-01T17:00',end:'2030-01-01T18:30',readOnly:true,source:'From School',recurDays:[]},
+      {id:'weekly',title:'Club',type:'club',start:'2029-12-25T16:00',end:'2029-12-25T17:00',source:'upload',recurDays:[2]},
+      {id:'due',title:'Deadline',type:'deadline',start:'2030-01-01T20:00',end:'2030-01-01T20:00',recurDays:[]}
+    ];
+    const days=weekSummary(events,rules,new Date(2029,11,31));
+    expect(days.map(d=>d.date)).toEqual(['2029-12-31','2030-01-01','2030-01-02','2030-01-03','2030-01-04','2030-01-05','2030-01-06']);
+    expect(days[0].events).toEqual([]);
+    expect(days[1].events.map(e=>e.id)).toEqual(['weekly','linked','study','due']);
+    expect(days[1].events[0]).toMatchObject({type:'club',recurring:true,done:false,source:'upload',clash:false});
+    expect(days[1].events[1]).toMatchObject({readOnly:true,source:'From School',clash:true});
+    expect(days[1].events[2]).toMatchObject({done:true,recurring:false,clash:true});
+    expect(days[1].events[3]).toMatchObject({start:'2030-01-01T20:00',end:'2030-01-01T20:00',clash:false});
+  });
 });

@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { addDays, dkey, fmtLocal, wallNow } from './time.js';
 import { AvailabilityRules, CalEvent } from './types.js';
 import { dayCapacity, expand, findConflicts } from './schedule.js';
+import {timelineItems} from './today.js';
 
 const text = (value: unknown) => typeof value === 'string' ? value : String((value as { val?: unknown })?.val || '');
 export function parseCalendar(body: string, timezone: string, eventType = 'class', instant = new Date()) {
@@ -36,6 +37,6 @@ export function weekSummary(events: CalEvent[], rules: AvailabilityRules, from: 
     const day = addDays(from, i), occ = expand(events, day, addDays(day, 1)), cap = dayCapacity(events, rules, day);
     const window = Math.max(1, Number(rules.studyEnd.slice(0, 2)) * 60 + Number(rules.studyEnd.slice(3)) - Number(rules.studyStart.slice(0, 2)) * 60 - Number(rules.studyStart.slice(3)));
     const ratio = cap.loadMin / window;
-    return { date: dkey(day), minutes: cap.loadMin, load: ratio < 0.5 ? 'light' : ratio < 1 ? 'busy' : 'heavy', clash: findConflicts(occ).length > 0, events: occ.map(o => ({ id: o.id, title: o.title, start: fmtLocal(o.s), end: fmtLocal(o.e), source: o.source, readOnly: o.readOnly || false })) };
+    return { date: dkey(day), minutes: cap.loadMin, load: ratio < 0.5 ? 'light' : ratio < 1 ? 'busy' : 'heavy', clash: findConflicts(occ).length > 0, events: timelineItems(occ) };
   });
 }

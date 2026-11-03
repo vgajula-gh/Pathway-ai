@@ -11,6 +11,30 @@ components:
     accessCode: { type: apiKey, in: header, name: x-access-code }
     devStudent: { type: apiKey, in: header, name: x-student-id }
   schemas:
+    TimelineEvent:
+      type: object
+      required: [id, title, type, start, end, source, done, readOnly, recurring, clash]
+      description: Shared Today/Week event details; linked and recurring items have no completion control in the UI
+      properties:
+        id: { type: string }
+        title: { type: string }
+        type: { type: string }
+        start: { type: string, description: Student-local YYYY-MM-DDTHH:MM }
+        end: { type: string, description: Student-local YYYY-MM-DDTHH:MM; equal to start for a deadline marker }
+        source: { type: string }
+        done: { type: boolean }
+        readOnly: { type: boolean }
+        recurring: { type: boolean }
+        clash: { type: boolean, description: Overlaps another event under existing calendar conflict rules }
+    WeekDay:
+      type: object
+      required: [date, minutes, load, clash, events]
+      properties:
+        date: { type: string, format: date }
+        minutes: { type: integer, minimum: 0 }
+        load: { enum: [light, busy, heavy] }
+        clash: { type: boolean }
+        events: { type: array, items: { $ref: '#/components/schemas/TimelineEvent' } }
     TodayMetrics:
       type: object
       required: [focus, freeTime, progress, capacity]
@@ -377,9 +401,25 @@ paths:
         '200': { description: Calendar sync metadata with plain-language error if unavailable }
   /api/week:
     get:
-      parameters: [{ name: from, in: query, schema: { type: string, format: date } }]
+      summary: Student-local seven-day schedule for the inline weekly agenda
+      description: Read-only and uncached; no AI usage. weekOffset selects Monday–Sunday relative to the student's current week. from retains a rolling seven-day start; omitting both starts at student-local today. Choose only one parameter.
+      parameters:
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: weekOffset, in: query, schema: { type: integer, minimum: -5200, maximum: 5200 }, description: '0 = current week, -1 = previous, 1 = next' }
       responses:
-        '200': { description: Seven-day load, overlaps and day details }
+        '200':
+          description: Seven dated groups including empty days, with ordered events matching Today timeline fields
+          headers:
+            Cache-Control: { schema: { const: no-store } }
+          content:
+            application/json:
+              schema:
+                type: array
+                minItems: 7
+                maxItems: 7
+                items: { $ref: '#/components/schemas/WeekDay' }
+        '401': { description: Student sign-in required }
+        '422': { description: Invalid date or offset, or both parameters supplied }
   /api/applications:
     get:
       responses:

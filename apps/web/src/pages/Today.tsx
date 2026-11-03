@@ -1,10 +1,11 @@
 import Week from '../components/Week';
+import TimelineEvents from '../components/TimelineEvents';
 import Calendars from '../components/Calendars';
 import AddEvent from '../components/AddEvent';
 import { useEffect,useState } from 'react';
 import { api } from '../lib/api';
 import { Proposal, Student, Tab, Today as TodayData, NewsResponse } from '../lib/types';
-import { EMO, SOURCE_TAG, fmtMins, fmtTime } from '../lib/format';
+import { fmtMins } from '../lib/format';
 import { Ring, Sheet, Typing, toast, useLoad } from '../components/ui';
 import ProposalReview from '../components/ProposalReview';
 import ScanSheet from './ScanSheet';
@@ -13,11 +14,12 @@ import { NEWS_EMOJI, partOfDay } from '../lib/theme';
 
 const COLORS = { focus:'var(--peri)', freeTime:'var(--teal)', progress:'var(--peach)' } as const;
 const CLS = { focus:'c-peri', freeTime:'c-teal', progress:'c-peach' } as const;
-type Surface = null | {k:'ring';v:keyof TodayData['metrics']} | {k:'why'} | {k:'review';p:Proposal} | {k:'scan'|'add'|'calendar'|'week'};
+type Surface = null | {k:'ring';v:keyof TodayData['metrics']} | {k:'why'} | {k:'review';p:Proposal} | {k:'add';date:string} | {k:'scan'|'calendar'};
 
 export default function Today({ me, go, ask, setMe }: { me:Student; go:(t:Tab)=>void; ask:(t:string)=>void; setMe:(s:Student)=>void }) {
   const { data:d, error, reload } = useLoad(()=>api<TodayData>('/api/today'),[]);
   const news = useLoad(()=>api<NewsResponse>('/api/news'),[me.settings.newsTopics?.join(',')]);
+  const [view,setView]=useState<'today'|'week'>('today'),[selectedDate,setSelectedDate]=useState<string|null>(null);
   const [newsOpen,setNewsOpen] = useState(false), [sheet,setSheet] = useState<Surface>(null);
   const [snoozed,setSnoozed] = useState(false), [actionError,setActionError] = useState<string|null>(null);
   useEffect(()=>{
@@ -34,7 +36,6 @@ export default function Today({ me, go, ask, setMe }: { me:Student; go:(t:Tab)=>
   const ringVal=(k:keyof TodayData['metrics'])=>k==='progress' ? (m.progress.planned ? String(m.progress.done)+'/'+m.progress.planned : '—') : fmtMins(m[k].minutes);
   const close=()=>{setSheet(null);reload();};
   const openReview=async(id:string)=>{try{setSheet({k:'review',p:await api<Proposal>('/api/proposals/'+id)});}catch(e){setActionError((e as Error).message);}};
-  const toggleDone=async(id:string,done:boolean)=>{try{await api('/api/events/'+id,{method:'PATCH',body:{done:!done}});reload();}catch(e){setActionError((e as Error).message);}};
   const doIt=()=>{if(na?.ask && me.aiConsent)ask(na.ask);else if(na?.route)go('explore');else if(na?.opportunityId)go('explore');else go('buddy');};
   return <>
     <button className="orbfab" onClick={()=>go('buddy')} aria-label="Talk to Buddy"><span className="orb" aria-hidden="true" />Talk to Buddy</button>
@@ -52,17 +53,15 @@ export default function Today({ me, go, ask, setMe }: { me:Student; go:(t:Tab)=>
           <p className="note">Reserved for rest, separate from free time. Estimates use your calendar and availability settings.</p>
           {!!m.freeTime.downtimeBusy&&<p className="note c-rose">{fmtMins(m.freeTime.downtimeBusy)} of your remaining downtime overlaps calendar events.</p>}
         </div></div>
-      <div className="sec-h timeline-heading"><h3>Today’s timeline</h3><button className="link" onClick={()=>setSheet({k:'scan'})}>Scan schedule</button></div>
-      <div className="card" style={{padding:'8px 14px'}}>
-        {d.timeline.length ? <div className="tl">{d.timeline.map(o=>{
-          const flexible=!o.recurring && ['study','reminder','personal'].includes(o.type);
-          return <div key={o.id+o.start} className={'tl-i '+(o.done?'done':'')}>
-            <span className="tm">{o.end>o.start?fmtTime(o.start):'Due'}</span><span className="dot" style={{background:o.clash?'var(--rose)':'var(--peri)'}} />
-            <div><div className="tt">{EMO[o.type]} {o.title}</div><div className="tg">{o.clash && <span className="c-rose">Overlaps another event · </span>}{SOURCE_TAG[o.source] || (o.source.startsWith('From ')?o.source+' · read-only':'You added')}</div></div>
-            {flexible && !o.readOnly ? <button className={'chk '+(o.done?'on':'')} onClick={()=>toggleDone(o.id,o.done)} aria-label={o.done?'Mark not done':'Mark done'}>{o.done?'✓':''}</button>:<span />}
-          </div>;
-        })}</div>:<p className="muted">Your day is open. Add a class or deadline, or link your calendar.</p>}
-        <div className="acts today-actions"><button className={'btn '+(!d.timeline.length?'fill':'')} onClick={()=>setSheet({k:'add'})}>Add event</button><button className="btn" onClick={()=>setSheet({k:'calendar'})}>Link calendar</button><button className="link" onClick={()=>setSheet({k:'week'})}>View week</button></div>
+      <div className="sec-h timeline-heading"><h3>{view==='today'?'Today’s timeline':'Your weekly agenda'}</h3><button className="link" onClick={()=>setSheet({k:'scan'})}>Scan schedule</button></div>
+      <div className="timeline-switch" role="group" aria-label="Timeline view">
+        <button className={'chipbtn'+(view==='today'?' active':'')} aria-pressed={view==='today'} onClick={()=>setView('today')}>Today</button>
+        <button className={'chipbtn'+(view==='week'?' active':'')} aria-pressed={view==='week'} onClick={()=>{setSelectedDate(null);setView('week');}}>Week</button>
+      </div>
+      <div className="card timeline-card">
+        {view==='week'?<Week today={d.date} selectedDate={selectedDate} onSelectDate={setSelectedDate} onChanged={reload} refreshToken={d}/>
+          :d.timeline.length?<TimelineEvents events={d.timeline} onChanged={reload}/>:<p className="muted">Your day is open. Add a class or deadline, or link your calendar.</p>}
+        <div className="acts today-actions"><button className="btn fill" disabled={view==='week'&&!selectedDate} onClick={()=>setSheet({k:'add',date:view==='week'?selectedDate!:d.date})}>Add event</button><button className="btn" onClick={()=>setSheet({k:'calendar'})}>Link calendar</button></div>
       </div>
       {(!!d.dueSoon?.length || !!d.dueSoonEvents?.length) && <div className="card due-soon">
         <h3>Due soon</h3>
@@ -92,10 +91,9 @@ export default function Today({ me, go, ask, setMe }: { me:Student; go:(t:Tab)=>
     </div></div></Sheet>}
     {sheet?.k==='why' && na && <Sheet title="Why this step" onClose={()=>setSheet(null)}><h2>{na.title}</h2><p className="muted">{na.why}</p><div className="sec"><p className="label">WHERE THIS CAME FROM</p><p>{na.source}</p><p className="label">WHAT I LOOKED AT</p><p className="muted">{na.dataUsed.join(' · ')}</p></div></Sheet>}
     {sheet?.k==='review' && <ProposalReview initial={sheet.p} onClose={close} onDone={reload} />}
-    {sheet?.k==='add' && <AddEvent today={d.date} onClose={close} />}
+    {sheet?.k==='add' && <AddEvent today={sheet.date} onClose={close} />}
     {sheet?.k==='scan' && <ScanSheet aiConsent={me.aiConsent} onClose={close} />}
     {sheet?.k==='calendar' && <Sheet title="Link calendar" onClose={close}><Calendars /></Sheet>}
-    {sheet?.k==='week' && <Sheet title="Your week" onClose={close}><Week /></Sheet>}
     {newsOpen && <NewsSheet me={me} setMe={setMe} onClose={()=>setNewsOpen(false)} ask={ask} />}
   </>;
 }

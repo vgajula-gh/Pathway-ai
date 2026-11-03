@@ -7,19 +7,18 @@ import { prisma, j } from '../lib/db.js';
 import { requireStudent, HttpError } from '../lib/auth.js';
 import { loadContext } from '../lib/context.js';
 import { addDays, dkey, fmtLocal, sod } from '../domain/time.js';
-import { expand, findConflicts } from '../domain/schedule.js';
+import { expand } from '../domain/schedule.js';
 import { headline, nudges, todayMetrics } from '../domain/metrics.js';
 import { askJSON, getLLM } from '../agent/llm/index.js';
 import { BRIEF_PROMPT, BRIEF_SYSTEM } from '../agent/prompts.js';
 import { WORDS } from '../data/words.js';
-import { dueEvents, greetingPart } from '../domain/today.js';
+import { dueEvents, greetingPart, timelineItems } from '../domain/today.js';
 
 export default async function routes(app: FastifyInstance) {
   app.get('/api/today', async (req,reply) => {
     reply.header('Cache-Control','no-store');
     const s = await requireStudent(req), { events, rules, milestones, goals } = await loadContext(s.id), now = wallNow(s.timezone), today = dkey(now);
     const occ = expand(events, sod(now), addDays(sod(now), 1));
-    const clash = new Set(findConflicts(occ).filter(c => c.kind === 'overlap').flatMap(c => [c.a.id, c.b.id]));
     const brief = await prisma.dailyBrief.findUnique({ where: { studentId_date: { studentId: s.id, date: today } } });
     const pending = await prisma.agentAction.findMany({ where: { studentId: s.id, status: 'AWAITING_APPROVAL' }, orderBy: { createdAt: 'desc' } });
     const n = nudges(events, rules, milestones, now);
@@ -30,7 +29,7 @@ export default async function routes(app: FastifyInstance) {
       : null;
     const word = WORDS[Math.floor((+sod(now) - +new Date(now.getFullYear(), 0, 0)) / 864e5) % WORDS.length];
     return { greetingPart:greetingPart(now), dueSoonEvents:dueEvents(events,now), dueSoon: dueSoon(await applicationsFor(s.id, today), today), date: today, headline: headline(events, rules, now), metrics: todayMetrics(events, rules, milestones, now), brief: brief ? j(brief.data, null) : null, nextAction, nudges: n,
-      timeline: occ.map(o => ({ id: o.id, title: o.title, type: o.type, start: fmtLocal(o.s), end: fmtLocal(o.e), source: o.source, done: o.done, readOnly: o.readOnly, recurring: o.recurDays.length > 0, clash: clash.has(o.id) })),
+      timeline: timelineItems(occ),
       comingUp: expand(events, addDays(sod(now), 1), addDays(sod(now), 8)).filter(o => ['exam', 'deadline', 'competition', 'reminder'].includes(o.type)).slice(0, 4).map(o => ({ id: o.id, title: o.title, type: o.type, start: fmtLocal(o.s) })),
       pending: pending.map(p => ({ id: p.id, summary: p.summary, count: j<unknown[]>(p.actions, []).length })), word: { word: word[0], pos: word[1], meaning: word[2], example: word[3] } };
   });

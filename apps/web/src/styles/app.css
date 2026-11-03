@@ -96,6 +96,26 @@ body[data-tab="buddy"] #root{padding-bottom:calc(120px + env(safe-area-inset-bot
 .tl-i.past{opacity:.5}
 .tl::before{content:"";position:absolute;left:85px;top:18px;bottom:18px;width:1px;background:var(--line2)}
 .tl-i.done .tt{text-decoration:line-through;color:var(--text2)}
+.timeline-switch{display:flex;gap:8px;margin:0 0 12px}
+.timeline-switch button{flex:1;min-height:44px;text-align:center}
+.timeline-switch .active{background:var(--peri-s);border-color:var(--peri);color:var(--peri);font-weight:600}
+.timeline-card{padding:8px 14px}
+.timeline-heading{flex-wrap:wrap;gap:8px}
+.timeline-heading .link,.today-actions button{min-height:44px}
+.timeline-card .tl-i{grid-template-columns:55px 12px minmax(0,1fr) 44px;gap:6px;align-items:center}
+.timeline-card .tl::before{left:70px}
+.timeline-card .tl-detail{min-width:0;overflow-wrap:anywhere}
+.timeline-card .chk{width:44px;height:44px}
+.timeline-card .chk:disabled{opacity:.5}
+.week-nav{display:flex;justify-content:space-between;gap:6px;flex-wrap:wrap}
+.week-nav button{min-height:44px;flex:1;padding:7px 8px;text-align:center}
+.week-range{margin-top:12px}
+.agenda-day{margin-top:16px;border-top:1px solid var(--line);padding-top:8px}
+.agenda-date{display:flex;align-items:center;flex-wrap:wrap;gap:8px;width:100%;min-height:44px;padding:8px;border-radius:12px;font-weight:600;text-align:left}
+.agenda-date.selected{background:var(--peri-s);box-shadow:inset 0 0 0 1px var(--peri)}
+.agenda-day.is-today .agenda-date time{color:var(--peri)}
+.agenda-date .tag{font-size:12px;color:var(--teal)}
+.agenda-empty{padding:8px}
 .chk{width:26px;height:26px;border-radius:50%;border:1.5px solid var(--line2);display:grid;place-items:center}
 .chk.on{background:var(--teal);border-color:var(--teal);color:var(--onfill)}
 .chk svg{width:14px;height:14px}
