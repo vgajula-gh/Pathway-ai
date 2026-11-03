@@ -120,3 +120,15 @@ it('prepares the student’s existing program details while live search is turne
  expect((await app.inject({method:'POST',url:'/api/discovery/run',headers:headers(),payload:{opportunityIds:['program']}})).statusCode).toBe(422);
  }finally{await app.close();}
 });
+it('prepares a needs-checking Scout pick once without re-extracting, and Buddy retains its warning',async()=>{
+ await db.savedOpportunity.deleteMany();
+ await db.opportunity.update({where:{id:'program'},data:{verificationStatus:'needs_verification',promptVersion:'scout-v1',sourceReadAt:new Date(),sourceCheckedAt:null,minAge:16,checks:'["Confirm minimum age 16; age is not inferred from grade"]',evidence:JSON.stringify({name:{sourceUrl:'https://example.edu/rules',quote:'Program'},deadline:{sourceUrl:'https://example.edu/rules',quote:pageText}})}});
+ await db.studentPick.create({data:{studentId,opportunityId:'program',bucket:'paid',rank:0,refreshCycle:'test'}});
+ const {studentOpportunityIds}=await import('../src/knowledge/scope.js');expect(await studentOpportunityIds(studentId)).toEqual(['program']);
+ const {prepareKnowledgeBatch}=await import('../src/knowledge/preparation.js');expect(await prepareKnowledgeBatch(studentId)).toBe(1);expect(await prepareKnowledgeBatch(studentId)).toBe(0);
+ expect(holder.runtime.embedder.embed).toHaveBeenCalledTimes(1);expect(holder.llm.json).not.toHaveBeenCalled();
+ const {structuredFacts}=await import('../src/knowledge/facts.js');const {loadContext}=await import('../src/lib/context.js');
+ const facts=structuredFacts(await db.opportunity.findUniqueOrThrow({where:{id:'program'}}),(await loadContext(studentId)).ctx);
+ expect(facts.source.value).toContain('details need checking');expect(facts.eligibility.value).toContain('minimum age 16');
+ await db.opportunityFeedback.create({data:{studentId,opportunityId:'program',reason:'other'}});expect(await studentOpportunityIds(studentId)).toEqual([]);expect(await db.knowledgeChunk.count()).toBeGreaterThan(0);
+});

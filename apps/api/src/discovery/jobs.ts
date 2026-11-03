@@ -1,5 +1,7 @@
 import {advanceOrStartScout} from '../scout/scheduler.js';
 import {PROMPT_VERSION} from '../scout/prompts.js';
+import {extractScout} from '../scout/extract.js';
+import {qualifyScout} from '../scout/qualify.js';
 import {reserveMonthlyAI} from '../lib/ai-limits.js';
 import {HttpError} from '../lib/errors.js';
 import { recheckDue } from '../domain/refresh.js';
@@ -121,9 +123,16 @@ export async function recheckOpportunity(
       budget.extractionCalls++;
       budget.usage.tokens += Math.ceil(pages.reduce((n, p) => n + p.text.length, 0) / 3) + 6500;
       stage = 'extract';
-      const facts = await dependencies.extract(pages);
-      stage = 'verify';
-      const data = verifyOpportunity(facts, pages, trustedDomains());
+      let data;
+      if(o.promptVersion===PROMPT_VERSION) {
+        const result=await extractScout(pages);
+        if(result.usage)budget.usage.tokens+=(result.usage.inputTokens||0)+(result.usage.outputTokens||0);
+        stage='verify';const qualified=qualifyScout(result.facts,pages,trustedDomains());
+        if(!qualified.data)throw new DiscoveryFailure({stage:'verify',code:qualified.reasons.some(r=>r.reason==='past_deadline')?'deadline_passed':'missing_evidence'});
+        data=qualified.data;
+      } else {
+        const facts=await dependencies.extract(pages);stage='verify';data=verifyOpportunity(facts,pages,trustedDomains());
+      }
       if (
         identity(o.officialDomain || new URL(o.url).hostname, o.name) !==
         identity(data.officialDomain, data.name)
@@ -157,7 +166,9 @@ export async function recheckOpportunity(
         where: { id },
         data: {
           lastRecheckedAt: now,
+          ...(o.promptVersion===PROMPT_VERSION?{sourceReadAt:now}:{}),
           ...(o.verificationStatus === 'verified' ? { verifiedAt: now, sourceCheckedAt: now } : {}),
+          ...(o.applicationStatusCheckedAt?{applicationStatusCheckedAt:now}:{}),
           ...(o.costVerifiedAt ? { costVerifiedAt: now } : {}),
         },
       });

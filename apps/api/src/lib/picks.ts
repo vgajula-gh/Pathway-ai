@@ -10,6 +10,7 @@ import { env } from './env.js';
 import { countdown } from '../domain/applications.js';
 import { activeOpportunity } from '../domain/opportunity-active.js';
 import { wallNow, dkey } from '../domain/time.js';
+import {publicScoutFacts} from '../domain/scout-scoring.js';
 export const toOpp = (o: Awaited<ReturnType<typeof prisma.opportunity.findMany>>[number]) => ({
   ...o,
   cost:
@@ -20,6 +21,9 @@ export const toOpp = (o: Awaited<ReturnType<typeof prisma.opportunity.findMany>>
   skills: j<string[]>(o.skills, []),
   tags: j<string[]>(o.tags, []),
   checks: j<string[]>(o.checks, []),
+  publicFacts:publicScoutFacts(o),
+  qualificationNotes:j<{field:string;reason:string}[]>(o.qualificationNotes,[]),
+  sources:Object.entries(j<Record<string,{sourceUrl:string;quote:string}>>(o.evidence,{})).filter(([,e])=>e&&typeof e.sourceUrl==='string'&&e.sourceUrl.startsWith('https://')&&typeof e.quote==='string').map(([field,e])=>({field,url:e.sourceUrl,quote:e.quote.slice(0,1000)})),
 });
 export async function personalPicks(studentId: string, rebuild = false) {
   const { events, rules, ctx } = await loadContext(studentId);

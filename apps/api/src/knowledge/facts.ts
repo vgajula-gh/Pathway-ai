@@ -7,9 +7,10 @@ type Program=Awaited<ReturnType<typeof prisma.opportunity.findUniqueOrThrow>>;
 export function structuredFacts(o:Program,ctx:StudentContext) {
   const fit=eligibility(toOpp(o),ctx),evidence=j<Record<string,{sourceUrl:string}>>(o.evidence,{});
   return {
+    source:{value:o.verificationStatus==='verified'?'Source verified':o.verificationStatus==='needs_verification'?'Page read; details need checking. '+j<string[]>(o.checks,[]).join('; '):'Details need another check',sourceUrl:o.url},
     deadline:{value:o.deadline&&evidence.deadline?o.deadline:'Not confirmed — check the official site',sourceUrl:evidence.deadline?.sourceUrl},
     cost:{value:costLabel(toOpp(o)),sourceUrl:evidence.costType?.sourceUrl},
-    eligibility:{value:fit.status==='not_eligible'?fit.reasons.join('; '):fit.status==='check'?`Please confirm: ${fit.checks.join('; ')}`:'Your grade fits the listed grade range. Other program requirements may apply.',sourceUrl:evidence.gradeMin?.sourceUrl},
+    eligibility:{value:fit.status==='not_eligible'?fit.reasons.join('; '):fit.status==='check'?`Please confirm: ${fit.checks.join('; ')}`:'Your grade fits the listed school audience. Other program requirements may apply.',sourceUrl:evidence.gradeMin?.sourceUrl||evidence.schoolLevel?.sourceUrl},
     status:{value:o.verificationStatus==='expired'?'Deadline passed':o.verificationStatus==='stale'?'Details need another check':o.applicationStatus==='unknown'?'Application status not confirmed':o.applicationStatus,sourceUrl:evidence.applicationStatus?.sourceUrl},
   };
 }

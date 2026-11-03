@@ -44,7 +44,8 @@ export async function prepareKnowledgeBatch(studentId?:string,deadlineAt=Infinit
     try {
       const o=await prisma.opportunity.findUnique({where:{id}});
       if(!o)throw new Error('Program no longer exists');
-      if(!state.pages.length||!o.sourceCheckedAt||Date.now()-+o.sourceCheckedAt>30*86400000)
+      const read=o.sourceReadAt||o.sourceCheckedAt;
+      if(!state.pages.length||!read||Date.now()-+read>30*86400000)
         await recheckOpportunity(id,budget,{fetch:(await import('../discovery/pages.js')).fetchOfficialPage,extract:(await import('../discovery/extraction.js')).extract,ingest:(id,b)=>ingestKnowledge(id,b,rt)});
       else await ingestKnowledge(id,budget,rt);
       if(!(await snapshot(id,rt)).ready)throw new Error('Details could not be prepared');
