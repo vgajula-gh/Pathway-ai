@@ -8,6 +8,9 @@ import {research} from '../src/scout/research.js';
 import {extractScout} from '../src/scout/extract.js';
 import {env} from '../src/lib/env.js';
 import {scoutFixture} from './fixtures/scout.js';
+import {researchOutput} from '../src/scout/providers.js';
+import {searchDiagnostics} from '../src/discovery/diagnostics.js';
+import {ResearchJSON,FactsJSON} from '../src/scout/schema.js';
 const previous={...env};
 const context={today:'2026-11-02',gradeBand:'9-10',interests:['AI','coding','business'],focusInterests:['AI','coding'],region:'NC',buckets:['free','paid'] as ('free'|'paid')[]};
 const leads={candidates:[{name:'Example Robotics',officialUrl:'https://example.edu/robotics',interests:['coding'],costHint:'free'}],searchThemesUsed:['coding']};
@@ -46,4 +49,37 @@ it('extracts source passage references with strict schema and no generated quota
  const f=scoutFixture();sdk.chat.mockResolvedValue({id:'chat',choices:[{finish_reason:'stop',message:{content:JSON.stringify(f.facts)}}],usage:{prompt_tokens:20,completion_tokens:10}});
  const result=await extractScout([f.page]);expect(result.facts.name).toBe('Example Robotics');expect(result.usage?.inputTokens).toBe(20);
  const request=sdk.chat.mock.calls[0][0];expect(request.response_format.json_schema.strict).toBe(true);expect(JSON.stringify(request.messages)).toContain('p0-s0');
+});
+it('keeps named HTTPS leads with absent metadata or harmless additional fields without a paid repair',async()=>{
+ const provider={research:vi.fn(async()=>({text:JSON.stringify({candidates:[{name:'Example Robotics',officialUrl:'https://example.edu/robotics',description:'Ignored public prose'}]}),citations:[],usage:{provider:'openai' as const,model:'test',inputTokens:10,outputTokens:5,responseId:'resp'}}))};
+ const result=await research(provider,context,6,true,async()=>{});expect(result.output).toEqual({candidates:[{name:'Example Robotics',officialUrl:'https://example.edu/robotics',interests:[],costHint:'unknown'}],searchThemesUsed:[]});expect(sdk.chat).not.toHaveBeenCalled();expect(provider.research).toHaveBeenCalledOnce();
+});
+it('uses provider-supported string formats in the actual repair request while enforcing full URL checks locally',async()=>{
+ const formats=new Set(['date-time','time','date','duration','email','hostname','ipv4','ipv6','uuid']);
+ const check=(value:any):void=>{if(!value||typeof value!=='object')return;if(typeof value.format==='string')expect(formats.has(value.format)).toBe(true);for(const v of Object.values(value))check(v);};
+ check(ResearchJSON.schema);check(FactsJSON.schema);
+ sdk.chat.mockImplementation(async(request)=>{check(request.response_format.json_schema.schema);const url=request.response_format.json_schema.schema.properties.candidates.items.properties.officialUrl;expect(url.type).toBe('string');expect(url).not.toHaveProperty('format');expect(new RegExp(url.pattern).test('https://example.edu')).toBe(true);expect(new RegExp(url.pattern).test('http://example.edu')).toBe(false);return {id:'repair',choices:[{finish_reason:'stop',message:{content:JSON.stringify(leads)}}]};});
+ const provider={research:vi.fn(async()=>({text:'malformed JSON',citations:[],usage:{provider:'openai' as const,model:'test',inputTokens:1,outputTokens:1,responseId:null}}))};
+ expect((await research(provider,context,6,true,async()=>{})).repaired).toBe(true);expect(sdk.chat).toHaveBeenCalledOnce();
+ for(const url of ['https://user:password@example.edu','https://example.edu:8443/program','http://example.edu','https://'])expect(()=>researchOutput(JSON.stringify({candidates:[{name:'Unsafe',officialUrl:url}]}))).toThrow();
+});
+it('accepts an array envelope and keeps valid siblings while excluding unsafe or nameless leads',()=>{
+ const output=researchOutput(JSON.stringify([{name:'Valid',officialUrl:'https://example.edu/program'},{name:'Unsafe',officialUrl:'http://example.edu'},{officialUrl:'https://example.edu/nameless'}]));
+ expect(output.candidates).toHaveLength(1);expect(output.candidates[0].name).toBe('Valid');
+ expect(()=>researchOutput('{"unexpected":true}')).toThrow();expect(researchOutput('{"candidates":[]}').candidates).toEqual([]);
+});
+it('reports the actual controlled schema field/code without copying rejected values or arbitrary keys',()=>{
+ try{researchOutput(JSON.stringify({candidates:[{name:'Secret-valued name',officialUrl:'http://invalid.example',private_key:'sk-private-sentinel'}]}));throw new Error('Expected failure');}catch(e:any){
+  expect(e.info.issues).toContainEqual({field:'candidates.item.officialUrl',code:'custom'});expect(JSON.stringify(e.info)).not.toMatch(/Secret-valued|private_key|sk-private/);
+ }
+});
+it('distinguishes rejected web research from rejected format repair, preserving safe parameter metadata without retrying',async()=>{
+ const error=Object.assign(new Error('private request body and credentials'),{status:400,code:'unsupported_parameter',param:'max_tool_calls'});
+ const provider={research:vi.fn().mockRejectedValue(error)};
+ let info:any;try{await research(provider,context,6,true,async()=>{});}catch(e:any){info=e.info;}
+ expect(info).toMatchObject({operation:'research',httpStatus:400,providerCode:'unsupported_parameter',providerParam:'max_tool_calls'});expect(provider.research).toHaveBeenCalledOnce();expect(sdk.chat).not.toHaveBeenCalled();
+ provider.research.mockResolvedValue({text:'bad JSON',citations:[],usage:{provider:'openai',model:'test',inputTokens:1,outputTokens:1,responseId:null}});sdk.chat.mockRejectedValue(Object.assign(new Error('private message'),{status:400,error:{code:'invalid_json_schema',param:'response_format'}}));
+ try{await research(provider,context,6,true,async()=>{});}catch(e:any){info=e.info;}
+ const {diagnostics}=searchDiagnostics([{id:'error',usage:JSON.stringify({failures:[info]})}]);
+ expect(diagnostics.failures[0]).toMatchObject({operation:'repair',providerCode:'invalid_json_schema',providerParam:'response_format',httpStatus:400});expect(JSON.stringify(diagnostics)).not.toContain('private');expect(sdk.chat).toHaveBeenCalledOnce();
 });

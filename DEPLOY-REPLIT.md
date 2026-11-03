@@ -154,3 +154,7 @@ Optional tuning is listed in `.env.example`: max three Scout research calls; eig
 Web Push uses a VAPID public/private key pair to identify this website to push services; it is separate from sign-in/calendar encryption and only needed for opted-in notifications. Generate with the existing web-push CLI (`npx web-push generate-vapid-keys`) and set VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY and a contact VAPID_SUBJECT. Students never enter these values.
 
 An external scheduler can explicitly POST an empty JSON body to `/internal/jobs/run` using the JOBS_SECRET Bearer header. It shares the persistent worker lock and all normal caps with Explore/server timers. Autoscale may sleep; the visible Explore screen can advance queued work without a continuous background process. No raw Secrets belong in a scheduler URL.
+
+### If research reports HTTP400 or invalid_schema
+
+Use the research compatibility update before changing models or raising limits. The repair schema no longer sends unsupported `format: uri`; full server HTTPS validation is retained. This patch needs no new database migration or Secret. Sync/publish the code, then make one controlled search using the normal allowance. New diagnostics identify `operation` (research or repair), safe rejected `providerParam`/`providerCode`, and specific schema fields. Existing failed rows cannot retroactively gain those details. A new successful local test does not prove a live provider request succeeded.

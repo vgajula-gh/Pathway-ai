@@ -8,8 +8,21 @@ export type ResearchProvider={research(context:PublicSearchContext,count:number)
 export function researchOutput(text:string) {
   let parsed:unknown;
   try{parsed=parseJSON(text);}catch{throw new DiscoveryFailure({stage:'search',code:'invalid_json'});}
-  const value=ResearchOutput.safeParse(parsed);
-  if(!value.success)throw new DiscoveryFailure({stage:'search',code:'invalid_schema',issues:[{field:'output',code:'invalid_type'}]});
+  // These are unverified leads, not program facts. Missing metadata must not lose
+  // readable named URLs; unknown cost remains unknown until source qualification.
+  const record=(v:unknown):Record<string,unknown>=>v&&typeof v==='object'&&!Array.isArray(v)?v as Record<string,unknown>:{};
+  const root=record(parsed),raw=Array.isArray(parsed)?parsed:root.candidates;
+  const strings=(v:unknown,max:number)=>Array.isArray(v)?v.filter((s):s is string=>typeof s==='string').slice(0,max).map(s=>s.slice(0,80)):[];
+  const leads=Array.isArray(raw)?raw.slice(0,16).map(v=>{const c=record(v);const hint=typeof c.costHint==='string'?c.costHint.toLowerCase():'unknown';return {name:c.name,officialUrl:c.officialUrl,interests:strings(c.interests,10),costHint:['free','paid','unknown'].includes(hint)?hint:'unknown'};}):raw;
+  const shape={candidates:leads,searchThemesUsed:strings(root.searchThemesUsed,10)};
+  const value=ResearchOutput.safeParse(shape);
+  if(!value.success) {
+    // Keep valid siblings when another lead lacks identity or has an unsafe URL.
+    const valid=Array.isArray(leads)?leads.flatMap(c=>{const r=ResearchOutput.shape.candidates.element.safeParse(c);return r.success?[r.data]:[];}):[];
+    if(valid.length)return ResearchOutput.parse({...shape,candidates:valid});
+    const fields=new Set(['candidates','name','officialUrl','interests','costHint','searchThemesUsed']);
+    throw new DiscoveryFailure({stage:'search',code:'invalid_schema',issues:value.error.issues.slice(0,8).map(i=>({field:i.path.map(p=>typeof p==='number'?'item':fields.has(p)?p:'field').join('.')||'output',code:i.code}))});
+  }
   return value.data;
 }
 export function validResearch(value:unknown){return ResearchOutput.parse(value);}

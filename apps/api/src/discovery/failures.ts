@@ -38,6 +38,7 @@ const messages = {
   service_unavailable: 'The program search service is temporarily unavailable.',
 };
 export type FailureInfo = { stage: FailureStage; code: keyof typeof messages; sourceHost?: string; httpStatus?: number;
+  operation?:'research'|'repair'|'extract';providerCode?:string;providerParam?:string;
   verification?:VerificationIssue[];
   issues?:{field:string;code:string}[];finishReason?:'length'|'content_filter'|'empty'|'refusal';errorType?:'TypeError'|'ReferenceError'|'Error';location?:string;
   mediaType?:SourceType;contentEncoding?:'gzip'|'br'|'deflate'|'identity'|'other' };
@@ -47,6 +48,13 @@ export class DiscoveryFailure extends Error {
 export const failureMessage = (failure: FailureInfo) => Object.hasOwn(messages, failure.code) ? messages[failure.code] : messages.service_unavailable;
 export const operationalFailure=(f:FailureInfo)=>!['deadline_passed','missing_evidence'].includes(f.code);
 export const knownFailureCode=(code:unknown):code is FailureInfo['code']=>typeof code==='string'&&Object.hasOwn(messages,code);
+const providerCodes=new Set(['invalid_request_error','invalid_json_schema','unsupported_parameter','unsupported_value','model_not_found','context_length_exceeded','invalid_value','invalid_parameter','missing_required_parameter','unknown_parameter']);
+const parameterParts=new Set(['model','tools','type','tool_choice','max_tool_calls','max_output_tokens','max_completion_tokens','max_tokens','search_context_size','text','format','response_format','json_schema','schema','properties','required','additionalProperties','items','name','strict','reasoning','effort','input','messages','temperature','top_p']);
+export function safeProviderDetails(value:{providerCode?:unknown;providerParam?:unknown}) {
+  const code=typeof value.providerCode==='string'&&providerCodes.has(value.providerCode)?value.providerCode:undefined;
+  const param=typeof value.providerParam==='string'&&value.providerParam.length<=180&&value.providerParam.split(/[.\[\]]/).filter(Boolean).every(p=>parameterParts.has(p)||/^\d{1,3}$/.test(p))?value.providerParam:undefined;
+  return {...(code?{providerCode:code}:{}),...(param?{providerParam:param}:{})};
+}
 export function primaryFailure(failures:FailureInfo[]) {
   const relevant=failures.filter(operationalFailure),verification=failures.filter(f=>f.stage==='verify');
   const pool=verification.length?[...relevant,...verification]:relevant.length?relevant:failures;
@@ -62,7 +70,7 @@ export function failureInfo(error: unknown, stage: FailureStage): FailureInfo {
   if (error instanceof DiscoveryFailure) return error.info;
   if(error instanceof OpportunityEvidenceError)return {stage,code:error.verification.some(i=>i.reason==='past_deadline')?'deadline_passed':'missing_evidence',verification:error.verification};
   if(error instanceof AIOutputError)return {stage,code:error.code,...(error.finishReason?{finishReason:error.finishReason}:{})};
-  const e = error as { status?: unknown; name?: unknown; code?: unknown; message?: unknown;stack?:unknown } | null;
+  const e = error as { status?: unknown; name?: unknown; code?: unknown;param?:unknown;error?:{code?:unknown;param?:unknown}; message?: unknown;stack?:unknown } | null;
   // OpenAI SDK subclasses inherit Error.name === "Error"; constructor identity is distinct.
   const type=error instanceof Error?error.constructor.name:String(e?.name||'');
   const status = typeof e?.status === 'number' && Number.isInteger(e.status) ? e.status : undefined;
@@ -83,5 +91,6 @@ export function failureInfo(error: unknown, stage: FailureStage): FailureInfo {
   const location=code==='extraction_error'&&typeof e?.stack==='string'
     ?e.stack.match(/apps\/api\/(?:src|dist)\/((?:agent\/llm\/(?:openai|anthropic|ollama|extraction|types)|discovery\/extraction)\.(?:ts|js)):(\d+):\d+/):null;
   return { stage, code, ...(status && status >= 400 && status <= 599 ? { httpStatus: status } : {}),
+    ...safeProviderDetails({providerCode:e?.code||e?.error?.code,providerParam:e?.param||e?.error?.param}),
     ...(code==='extraction_error'?{errorType:e?.name==='TypeError'?'TypeError':e?.name==='ReferenceError'?'ReferenceError':'Error',...(location?{location:location[1]+':'+location[2]}:{})}:{}) };
 }

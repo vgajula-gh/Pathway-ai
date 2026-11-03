@@ -12,6 +12,7 @@ import {reserveRun} from '../src/discovery/jobs.js';
 import {scoutFixture} from './fixtures/scout.js';
 import type {ScoutDependencies} from '../src/scout/runner.js';
 import {PROMPT_VERSION} from '../src/scout/prompts.js';
+import {research} from '../src/scout/research.js';
 
 beforeAll(async()=>{writeFileSync(join(dir,'test.db'),'');await promisify(execFile)(process.execPath,['../../node_modules/prisma/build/index.js','migrate','deploy','--schema','prisma/schema.prisma'],{env:{...process.env,DATABASE_URL:url}});},30000);
 beforeEach(async()=>{await db.discoveryRun.deleteMany();await db.discoveryGroup.deleteMany();await db.opportunity.deleteMany();await db.discoveryUsage.deleteMany();await db.aIUsage.deleteMany();vi.unstubAllEnvs();});
@@ -40,6 +41,12 @@ it('persists a bounded graph stage per invocation and finishes real catalog stor
  const run=await finish(id,deps);expect(run.status).toBe('complete');expect(await db.opportunity.count()).toBe(1);expect(await db.sourcePage.count()).toBe(1);
  expect(deps.research).toHaveBeenCalledOnce();expect(deps.extract).toHaveBeenCalledOnce();
  const old=await db.discoveryUsage.findFirstOrThrow();await advanceScout(run,deps);expect(await db.discoveryUsage.findFirstOrThrow()).toEqual(old);
+});
+it('carries minimally formatted real research parsing through page qualification and SQL storage',async()=>{
+ const f=scoutFixture(),id=await start(),deps=dependencies([f]);
+ const web=vi.fn(async()=>({text:JSON.stringify([{name:f.facts.name,officialUrl:f.page.sourceUrl}]),citations:[],usage:{provider:'openai' as const,model:'test',inputTokens:20,outputTokens:10,responseId:'response'}}));
+ deps.research=research;deps.provider={search:async()=>({urls:[],tokens:0}),research:web};
+ const run=await finish(id,deps);expect(run.status).toBe('complete');expect(await db.opportunity.count()).toBe(1);expect(await db.sourcePage.count()).toBe(1);expect(web).toHaveBeenCalledOnce();expect(deps.extract).toHaveBeenCalledOnce();
 });
 it('retains research leads before processing and resumes a saved response without another web request',async()=>{
  const id=await start(),deps=dependencies();const run=await db.discoveryRun.findUniqueOrThrow({where:{id}}),state=JSON.parse(run.state);

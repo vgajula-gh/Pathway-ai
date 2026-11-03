@@ -1,12 +1,12 @@
 import {z} from 'zod';
 import {safeModelId} from './config.js';
 import {Extraction} from './extraction.js';
-import {knownFailureCode,type FailureInfo,type FailureStage} from './failures.js';
+import {knownFailureCode,safeProviderDetails,type FailureInfo,type FailureStage} from './failures.js';
 import {sourceTypes} from './source-urls.js';
 import {verificationFields,verificationReasons} from '../domain/opportunity-evidence.js';
 
 const stages=new Set(['search','robots','fetch','extract','verify','store','index']);
-const fields=new Set([...Object.keys(Extraction.shape),'sourceUrl','quote','field','item','output']);
+const fields=new Set([...Object.keys(Extraction.shape),'sourceUrl','quote','field','item','output','candidates','officialUrl','interests','costHint','searchThemesUsed']);
 const issueCodes=new Set<string>(Object.values(z.ZodIssueCode));
 const stepNames={search_candidates:'search',fetch_official_pages:'fetch',extract_facts:'extract',verify_facts:'verify',store_catalog:'save',ingest_knowledge:'index'} as const;
 const record=(v:unknown):Record<string,any>=>v&&typeof v==='object'&&!Array.isArray(v)?v as Record<string,any>:{};
@@ -19,6 +19,7 @@ function cleanFailure(value:unknown):FailureInfo|null {
     return typeof i.field==='string'&&i.field.length<=150&&i.field.split('.').every(p=>fields.has(p))&&issueCodes.has(i.code)?[{field:i.field,code:i.code as string}]:[];
   }):[];
   return {stage:f.stage as FailureStage,code:f.code,
+    ...safeProviderDetails(f),...(['research','repair','extract'].includes(f.operation)?{operation:f.operation}:{}),
     ...(Array.isArray(f.verification)?{verification:f.verification.slice(0,10).flatMap((value:unknown)=>{
       const i=record(value);return verificationFields.includes(i.field)&&verificationReasons.includes(i.reason)?[{field:i.field,reason:i.reason}]:[];
     })}:{}),
