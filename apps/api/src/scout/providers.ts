@@ -1,4 +1,4 @@
-import {ResearchOutput} from './schema.js';
+import {ResearchOutput,ResearchDetails,ResearchEvidence} from './schema.js';
 import type {PublicSearchContext} from './prompts.js';
 import {parseJSON,type LLMUsage} from '../agent/llm/types.js';
 import {DiscoveryFailure} from '../discovery/failures.js';
@@ -13,7 +13,13 @@ export function researchOutput(text:string) {
   const record=(v:unknown):Record<string,unknown>=>v&&typeof v==='object'&&!Array.isArray(v)?v as Record<string,unknown>:{};
   const root=record(parsed),raw=Array.isArray(parsed)?parsed:root.candidates||root.opportunities||root.programs||root.results||(root.name&&root.officialUrl?[root]:undefined);
   const strings=(v:unknown,max:number)=>Array.isArray(v)?v.filter((s):s is string=>typeof s==='string').slice(0,max).map(s=>s.slice(0,80)):[];
-  const leads=Array.isArray(raw)?raw.slice(0,16).map(v=>{const c=record(v);const hint=typeof c.costHint==='string'?c.costHint.toLowerCase():'unknown';return {name:c.name,officialUrl:c.officialUrl||c.official_url||c.url,interests:strings(c.interests,10),costHint:['free','paid','unknown'].includes(hint)?hint:'unknown'};}):raw;
+  const leads=Array.isArray(raw)?raw.slice(0,16).map(v=>{const c=record(v);const hint=typeof c.costHint==='string'?c.costHint.toLowerCase():'unknown';
+    const data=record(c.details),details:Record<string,unknown>={};
+    if(Object.keys(data).length)for(const [key,schema] of Object.entries(ResearchDetails.shape)) {
+      if(key==='evidence'){details.evidence=Array.isArray(data.evidence)?data.evidence.slice(0,16).flatMap(e=>{const parsed=ResearchEvidence.safeParse(e);return parsed.success?[parsed.data]:[];}):[];continue;}
+      const parsed=schema.safeParse(data[key]);details[key]=parsed.success?parsed.data:['costType','applicationStatus','format'].includes(key)?'unknown':null;
+    }
+    return {name:c.name,officialUrl:c.officialUrl||c.official_url||c.url,interests:strings(c.interests,10),costHint:['free','paid','unknown'].includes(hint)?hint:'unknown',...(Object.keys(details).length?{details}: {})};}):raw;
   const shape={candidates:leads,searchThemesUsed:strings(root.searchThemesUsed,10)};
   const value=ResearchOutput.safeParse(shape);
   if(!value.success) {

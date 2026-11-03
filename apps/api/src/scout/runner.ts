@@ -87,6 +87,7 @@ export async function advanceScout(run:Run,overrides:Partial<ScoutDependencies>=
   if(state.stopRequested)state.stage='finish';
   const execute=async(stage:Stage)=>{
     if(stage==='research') {
+      budget.deadlineAt=Date.now()+scoutSettings().researchTimeoutMs;
       budget.phase='searching';
       if(!provider?.research)throw new Error('Search provider is not configured');
       budget.take('searches');await claim('research');await callStarted('research');const started=Date.now();
