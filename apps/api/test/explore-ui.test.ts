@@ -12,12 +12,12 @@ it('shows all cost buckets for a free-preferring student with honest unknown-cos
  await act(async()=>{renderer=create(createElement(Explore,{me:{budget:'free',interests:['Robotics']} as any,ask:vi.fn()}));});const buckets=renderer.root.findAllByType('details');expect(buckets[0].props.open).toBe(true);expect(buckets[1].props.open).toBe(true);expect(JSON.stringify(renderer.toJSON())).toContain('Paid or cost unconfirmed');expect(JSON.stringify(renderer.toJSON())).toContain('Cost not confirmed');
  expect(renderer.root.findAllByType('button').find(b=>b.children.join('')==='Search for more')!.props.disabled).toBe(true);expect(renderer.root.findAllByType('button').some(b=>b.children.join('')==='Ask about this program')).toBe(false);
 });
-it('shows every unexpired search link beyond the primary three cost-unconfirmed picks, including during a partial search',async()=>{
+it('shows at most five cost-unconfirmed results during a partial search',async()=>{
  state.data.picks=Array.from({length:3},(_,i)=>opportunity('primary-'+i,'paid'));
  state.data.recommended=[...state.data.picks,...Array.from({length:3},(_,i)=>opportunity('extra-'+i,'paid'))];
  state.data.search.phase='partial';state.data.discoveryEnabled=true;
  await act(async()=>{renderer=create(createElement(Explore,{me:{budget:'free',interests:['Coding']} as any,ask:vi.fn()}));});
- expect(renderer.root.findAllByType('h3').map(h=>h.children.join(''))).toEqual(['primary-0','primary-1','primary-2','extra-0','extra-1','extra-2']);
+ expect(renderer.root.findAllByType('h3').map(h=>h.children.join(''))).toEqual(['primary-0','primary-1','primary-2','extra-0','extra-1']);
  expect(JSON.stringify(renderer.toJSON())).toContain('Some details could not be confirmed');
 });
 it('records a dismissal reason before asking the server for the replacement',async()=>{
@@ -117,4 +117,18 @@ it('explains an estimated spending cap and an explicit retry cooldown without hi
 it('shows plain-language page confirmation failures after completion while preserving all links',async()=>{
  state.data.diagnostics={searchAttempts:1,candidates:{found:10,filtered:0,queued:10},verifiedCandidates:5,steps:{fetch:{completed:5,failed:4},extract:{completed:0,failed:0},verify:{completed:5,failed:0}},programsSaved:10,failures:[{stage:'fetch',code:'http_error',count:4},{stage:'verify',code:'deadline_passed',count:1}]};
  await act(async()=>{renderer=create(createElement(Explore,{me:{budget:'any',interests:['Coding']} as any,ask:vi.fn()}));});const text=JSON.stringify(renderer.toJSON());expect(text).toContain('10');expect(text).toContain('5 confirmed');expect(text).toContain('4 page checks could not finish');expect(text).toContain('1 past-deadline results hidden');expect(text).toContain('free-one');
+});
+
+it('caps a 43-paid-option library at five per bucket, ranks by fit and refills without a paid search',async()=>{
+ const ranked=(id:string,bucket:string,score:number)=>({...opportunity(id,bucket),fit:{...opportunity(id,bucket).fit,score}});
+ const paid=Array.from({length:43},(_,i)=>ranked('paid-'+i,'paid',i/100)),free=Array.from({length:8},(_,i)=>ranked('free-'+i,'free',i/100));
+ state.data={...state.data,picks:[free[0],paid[0]],recommended:[...paid,...free]};
+ const props={me:{budget:'any',interests:['Coding']} as any,ask:vi.fn()};
+ await act(async()=>{renderer=create(createElement(Explore,props));});
+ const names=()=>renderer.root.findAllByType('h3').map(h=>h.children.join(''));
+ expect(names()).toEqual(['free-7','free-6','free-5','free-4','free-3','paid-42','paid-41','paid-40','paid-39','paid-38']);
+ expect(renderer.root.findAllByType('summary').map(s=>s.children.join(''))).toEqual(['Free (5)','Paid or cost unconfirmed (5)']);
+ state.data={...state.data,recommended:state.data.recommended.map((o:any)=>o.id==='paid-42'?{...o,status:'dismissed'}:o)};
+ await act(async()=>renderer.update(createElement(Explore,props)));
+ expect(names().filter(n=>n.startsWith('paid-'))).toEqual(['paid-41','paid-40','paid-39','paid-38','paid-37']);expect(state.api).not.toHaveBeenCalled();
 });
