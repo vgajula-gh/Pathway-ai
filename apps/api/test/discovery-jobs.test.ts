@@ -243,15 +243,41 @@ it('marks all-extraction failures failed, records requested models and retains t
  const {enqueueSearch,searchState}=await import('../src/discovery/requests.js');
  vi.stubEnv('SEARCH_MODEL','test-web-model');vi.stubEnv('AI_MODEL_EXTRACTION','test-reader-model');
  remote.discover.mockImplementationOnce(async(_group,_buckets,budget:any)=>{
-  budget.failures.push({stage:'extract',code:'invalid_schema',issues:[{field:'gradeMin',code:'invalid_type'}]});
+  budget.failures.push({stage:'fetch',code:'unsupported_content',mediaType:'application/pdf'},{stage:'extract',code:'invalid_schema',issues:[{field:'gradeMin',code:'invalid_type'}]});
+  budget.candidates={found:2,filtered:1,queued:1};
+  budget.workflow.push({node:'search_candidates',status:'completed'},{node:'fetch_official_pages',status:'completed'},{node:'extract_facts',status:'failed'});
   return [];
  });
  await enqueueSearch(studentId,'manual');await runJobs();
  const run=await db.discoveryRun.findFirstOrThrow(),usage=JSON.parse(run.usage);
  expect(run.status).toBe('failed');expect(usage).toMatchObject({phase:'failed',savedIds:[],models:{search:{provider:'openai',model:'test-web-model'},extraction:{model:'test-reader-model'}}});
  expect((await searchState(studentId)).search.phase).toBe('failed');expect((await refreshStatus(studentId)).remaining).toBe(1);
+ expect(run.error).toContain('unexpected format');
+ const status=await searchState(studentId);
+ expect(status.diagnostics).toMatchObject({runs:1,candidates:{found:2,filtered:1,queued:1},steps:{extract:{completed:0,failed:1}},programsSaved:0});
+ expect(status.diagnostics.failures.map(f=>f.code)).toEqual(['unsupported_content','invalid_schema']);
  expect((await db.discoveryUsage.findFirstOrThrow()).runs).toBe(1);expect((await db.aIUsage.findFirstOrThrow()).count).toBe(1);
  expect(await db.opportunitySearchRequest.findFirstOrThrow()).toMatchObject({status:'failed',countedAt:null});
  await runJobs();expect(remote.discover).toHaveBeenCalledTimes(1);
  expect(run.usage).not.toContain('fake-test-key');
+});
+it('reports all historical failures for the authenticated request without another search or rewriting old usage',async()=>{
+ const {enqueueSearch}=await import('../src/discovery/requests.js');
+ remote.discover.mockImplementationOnce(async(_group,_buckets,budget:any)=>{
+  budget.failures.push({stage:'fetch',code:'unsupported_content'},{stage:'extract',code:'incomplete_response',finishReason:'length'});return [];
+ });
+ await enqueueSearch(studentId,'manual');await runJobs();
+ const run=await db.discoveryRun.findFirstOrThrow(),oldUsage=JSON.parse(run.usage);delete oldUsage.candidates;delete oldUsage.models;
+ await db.discoveryRun.update({where:{id:run.id},data:{usage:JSON.stringify(oldUsage)}});
+ await db.opportunitySearchRequest.updateMany({where:{studentId},data:{error:'The official source is not a readable web page.'}});
+ await db.discoveryRun.create({data:{groupKey:'unrelated',kind:'discovery',status:'failed',usage:JSON.stringify({failures:[{stage:'extract',code:'invalid_schema',issues:[{field:'private-unrelated-field',code:'invalid_type'}]}]})}});
+ const app=await buildApp();app.log.level='silent';
+ try{
+  const response=await app.inject({url:'/api/discovery/status',headers:{'x-student-id':studentId}});
+  expect(response.statusCode).toBe(200);const status=response.json();
+  expect(status.error).toContain('could not finish reading');expect(status.diagnostics).toMatchObject({runs:1,candidates:null,models:[]});expect(status.diagnostics.failures).toHaveLength(2);
+  expect(response.body).not.toContain('private-unrelated-field');expect(remote.discover).toHaveBeenCalledTimes(1);
+  expect((await db.discoveryRun.findUniqueOrThrow({where:{id:run.id}})).usage).toBe(JSON.stringify(oldUsage));
+  expect((await db.discoveryUsage.findFirstOrThrow()).runs).toBe(1);expect((await refreshStatus(studentId)).remaining).toBe(1);
+ }finally{await app.close();}
 });

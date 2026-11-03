@@ -12,7 +12,7 @@ import { ingestKnowledge, reconcileVectors } from '../knowledge/service.js';
 import { fetchOfficialPage, Page } from './pages.js';
 import { extract } from './extraction.js';
 import { verifyOpportunity } from '../domain/opportunity-verification.js';
-import { failureInfo, failureMessage, FailureStage, DiscoveryFailure, operationalFailure } from './failures.js';
+import { failureInfo, failureMessage, FailureStage, DiscoveryFailure, operationalFailure,primaryFailure } from './failures.js';
 import { settleSearchRequests,neededGroupBuckets } from './requests.js';
 export {withJobLock} from '../lib/job-lock.js';
 import {withJobLock} from '../lib/job-lock.js';
@@ -68,7 +68,7 @@ export async function finishRun(
       data: {
         status,
         error,
-        usage: JSON.stringify({ ...budget.usage, tokensAreEstimates: true, models:budget.models, phase: budget.phase, savedIds: budget.savedIds, workflow: budget.workflow, failures: budget.failures }),
+        usage: JSON.stringify({ ...budget.usage, tokensAreEstimates: true, models:budget.models,candidates:budget.candidates, phase: budget.phase, savedIds: budget.savedIds, workflow: budget.workflow, failures: budget.failures }),
         finishedAt: new Date(),
       },
     }),
@@ -229,7 +229,7 @@ async function discoverNext(groupKeys?: string[], foreground = false,deadlineAt=
   budget.deadlineAt=Math.min(budget.deadlineAt,deadlineAt);
   if (foreground) budget.deadlineAt = Math.min(budget.deadlineAt,Date.now() + 60000);
   budget.onStep = async () => {
-    await prisma.discoveryRun.update({ where: { id: run.id }, data: { usage: JSON.stringify({ ...budget.usage, models:budget.models, phase: budget.phase, savedIds: budget.savedIds, workflow: budget.workflow, failures: budget.failures }) } });
+    await prisma.discoveryRun.update({ where: { id: run.id }, data: { usage: JSON.stringify({ ...budget.usage, models:budget.models,candidates:budget.candidates, phase: budget.phase, savedIds: budget.savedIds, workflow: budget.workflow, failures: budget.failures }) } });
   };
   await prisma.discoveryGroup.update({ where: { key: group.key }, data: { status: 'running', lastDiscoveredAt: new Date(), error: '' } });
   await budget.onStep();
@@ -240,7 +240,7 @@ async function discoverNext(groupKeys?: string[], foreground = false,deadlineAt=
         await ingestKnowledge(id,budget);
       },
     });
-    const failure=!budget.savedIds.length?budget.failures.find(operationalFailure):undefined;
+    const failure=!budget.savedIds.length&&budget.failures.some(operationalFailure)?primaryFailure(budget.failures):undefined;
     budget.phase = budget.savedIds.length ? budget.failures.length ? 'partial' : 'complete' : failure?'failed':'empty';
     const error=failure?failureMessage(failure):'';
     await prisma.discoveryGroup.update({ where: { key: group.key }, data: { status: failure?'error':'idle', pendingBuckets: '[]', error } });

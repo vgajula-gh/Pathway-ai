@@ -9,17 +9,15 @@ import robotsParser from 'robots-parser';
 import { pinnedLookup, publicAddress } from '../lib/calendar-fetch.js';
 import { CAPS, RunBudget } from './config.js';
 import { DiscoveryFailure, FailureStage } from './failures.js';
+import {httpsSourceURL,fileSourceType,sourceType} from './source-urls.js';
 export type Page = {
   sourceUrl: string; pageTitle: string; text: string; contentHash: string; checkedAt: Date; links: string[];
 };
 const agent = 'PathwayOpportunityBot';
 const maxBytes = 1024 * 1024;
 export function officialUrl(value: string) {
-  let u: URL;
-  try { u = new URL(value); } catch { throw new DiscoveryFailure({ stage: 'fetch', code: 'invalid_url' }); }
-  if (u.protocol !== 'https:' || u.username || u.password || (u.port && u.port !== '443'))
-    throw new DiscoveryFailure({ stage: 'fetch', code: 'invalid_url' });
-  u.hash = '';
+  const u=httpsSourceURL(value);
+  if(!u)throw new DiscoveryFailure({stage:'fetch',code:'invalid_url'});
   return u;
 }
 /** Only the canonical www/apex form of the same hostname may change origin. */
@@ -74,13 +72,19 @@ function request(url: URL, address: { address: string; family: number }, budget:
 }
 
 function decode(bytes: Buffer, encoding: string | undefined, stage: FailureStage, sourceHost: string) {
+  const kind=encoding?.trim().toLowerCase()||'identity';
+  const contentEncoding=['gzip','br','deflate','identity'].includes(kind)?kind as 'gzip'|'br'|'deflate'|'identity':'other';
+  if(contentEncoding==='other')throw new DiscoveryFailure({stage,code:'content_decoding_failed',sourceHost,contentEncoding});
   try {
     const options = { maxOutputLength: maxBytes };
-    const body = encoding === 'gzip' ? gunzipSync(bytes, options)
-      : encoding === 'br' ? brotliDecompressSync(bytes, options)
-      : encoding === 'deflate' ? inflateSync(bytes, options) : bytes;
+    const body = kind === 'gzip' ? gunzipSync(bytes, options)
+      : kind === 'br' ? brotliDecompressSync(bytes, options)
+      : kind === 'deflate' ? inflateSync(bytes, options) : bytes;
     return body.toString('utf8');
-  } catch { throw new DiscoveryFailure({ stage, code: 'unsupported_content', sourceHost }); }
+  } catch(error) {
+    const code=(error as {code?:string}).code==='ERR_BUFFER_TOO_LARGE'?'page_too_large':'content_decoding_failed';
+    throw new DiscoveryFailure({stage,code,sourceHost,contentEncoding});
+  }
 }
 
 async function raw(value: string, budget: RunBudget, stage: 'robots' | 'fetch', redirects = 0): Promise<{ url: string; body: string; status: number; contentType: string }> {
@@ -128,22 +132,29 @@ async function allowed(url: URL, budget: RunBudget) {
 
 export function readable(html: string, url: string): Omit<Page, 'checkedAt'> {
   const $ = load(html);
-  $('script,style,noscript,nav,footer,header,form,iframe').remove();
-  const text = ($('main').text() || $('article').text() || $('body').text()).replace(/\s+/g, ' ').trim().slice(0, CAPS.pageChars);
+  // Eligibility/fee links often live in navigation, even though navigation is not source text.
   const links = $('a[href]').toArray().flatMap(a => {
     try {
       const u = officialUrl(new URL($(a).attr('href')!, url).href);
-      return u.origin === new URL(url).origin && /rules|faq|eligib|fee|cost|apply|requirements/i.test(u.pathname) ? [u.href] : [];
+      return u.origin === new URL(url).origin && !fileSourceType(u) && /rules|faq|eligib|fee|cost|apply|requirements/i.test(u.pathname) ? [u.href] : [];
     } catch { return []; }
   });
+  $('script,style,noscript,nav,footer,header,form,iframe').remove();
+  const text = ($('main').text() || $('article').text() || $('body').text()).replace(/\s+/g, ' ').trim().slice(0, CAPS.pageChars);
   return { sourceUrl: url, pageTitle: $('title').text().trim().slice(0, 200) || new URL(url).hostname, text, contentHash: createHash('sha256').update(text).digest('hex'), links: [...new Set(links)].slice(0, 3) };
 }
 export async function fetchOfficialPage(value: string, budget: RunBudget): Promise<Page> {
   const page = await raw(officialUrl(value).href, budget, 'fetch');
   const sourceHost = new URL(page.url).hostname;
   if (page.status !== 200) throw new DiscoveryFailure({ stage: 'fetch', code: 'http_error', sourceHost, httpStatus: page.status });
-  if (page.contentType && !/^(text\/(html|plain)|application\/xhtml\+xml)\b/i.test(page.contentType))
-    throw new DiscoveryFailure({ stage: 'fetch', code: 'unsupported_content', sourceHost });
+  const type=page.contentType.split(';')[0].trim().toLowerCase(),prefix=page.body.slice(0,2048).replace(/^\uFEFF/,'').trimStart();
+  const binary=prefix.startsWith('%PDF-')||/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/.test(prefix.slice(0,256));
+  const start=prefix.replace(/^(?:\s*<!--[\s\S]*?-->\s*|\s*<\?xml[^>]*\?>\s*)*/i,'');
+  const html=/^(?:<!doctype\s+html\b|<(?:html|head|body|main|article)\b)/i.test(start);
+  const declared=['text/html','text/plain','application/xhtml+xml'].includes(type);
+  const generic=['','application/octet-stream','binary/octet-stream','application/unknown'].includes(type);
+  if(binary||!declared&&!(generic&&html))
+    throw new DiscoveryFailure({stage:'fetch',code:'unsupported_content',sourceHost,mediaType:prefix.startsWith('%PDF-')?'application/pdf':sourceType(type)});
   const data = readable(page.body, page.url);
   if (data.text.length < 80) throw new DiscoveryFailure({ stage: 'fetch', code: 'insufficient_text', sourceHost });
   return { ...data, checkedAt: new Date() };

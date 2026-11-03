@@ -8,6 +8,7 @@ import { discoveryQuery } from './groups.js';
 import type { verifyOpportunity } from '../domain/opportunity-verification.js';
 import { noObserver, StepObserver, WorkflowStep } from '../workflows/privacy.js';
 import { failureInfo, FailureStage, DiscoveryFailure } from './failures.js';
+import {httpsSourceURL,fileSourceType} from './source-urls.js';
 
 export type VerifiedOpportunity = ReturnType<typeof verifyOpportunity>;
 export type DiscoveryNodes = {
@@ -82,7 +83,7 @@ export function createDiscoveryGraph(
       : END;
   return new StateGraph(State)
     .addNode('search_candidates', async (s) => {
-      const urls = new Set<string>();
+      const seen=new Set<string>(),lists:string[][]=[];
       try {
         for (const bucket of [...new Set(s.buckets)].slice(0, 2)) {
           budget.take('searches');
@@ -90,10 +91,27 @@ export function createDiscoveryGraph(
             discoveryQuery(s.group, bucket, new Date().getUTCFullYear()),
           );
           budget.usage.tokens += result.tokens;
-          result.urls.slice(0, CAPS.candidates).forEach((url) => urls.add(url));
+          const list:string[]=[];
+          for(const value of result.urls.slice(0,CAPS.candidates)) {
+            if(seen.has(value))continue;
+            seen.add(value);budget.candidates.found++;
+            const url=httpsSourceURL(value),mediaType=url?fileSourceType(url):null;
+            if(!url||mediaType) {
+              budget.candidates.filtered++;
+              budget.failures.push({stage:'fetch',code:url?'unsupported_content':'invalid_url',...(url?{sourceHost:url.hostname}:{}),...(mediaType?{mediaType}:{})});
+            } else list.push(url.href);
+          }
+          lists.push(list);
         }
+        // Alternate buckets so the first search cannot crowd out all of the second's pages.
+        const urls:string[]=[],selected=new Set<string>();
+        for(let i=0;i<CAPS.candidates&&urls.length<CAPS.candidates;i++)for(const list of lists) {
+          const url=list[i];
+          if(url&&!selected.has(url)&&urls.length<CAPS.candidates){selected.add(url);urls.push(url);}
+        }
+        budget.candidates.queued=urls.length;
         await record({ node: 'search_candidates', status: 'completed' });
-        return { urls: [...urls].slice(0, CAPS.candidates) };
+        return { urls };
       } catch (error) {
         budget.failures.push(failureInfo(error, 'search'));
         await record({ node: 'search_candidates', status: 'failed' });
@@ -114,7 +132,7 @@ export function createDiscoveryGraph(
       guarded('fetch_official_pages', async (s) => {
         const main = await nodes.fetch(s.currentUrl, budget),
           pages = [main];
-        for (const url of main.links.slice(0, 3))
+        for (const url of main.links.filter(value=>{const url=httpsSourceURL(value);return url&&url.origin===new URL(main.sourceUrl).origin&&!fileSourceType(url);}).slice(0,3))
           try {
             pages.push(await nodes.fetch(url, budget));
           } catch {
@@ -142,7 +160,11 @@ export function createDiscoveryGraph(
     )
     .addNode(
       'store_catalog',
-      guarded('store_catalog', async (s) => ({ savedId: await nodes.save(s.verified!, s.pages, s.group) })),
+      guarded('store_catalog', async (s) => {
+        const savedId=await nodes.save(s.verified!,s.pages,s.group);
+        if(!budget.savedIds.includes(savedId))budget.savedIds.push(savedId);
+        return {savedId};
+      }),
     )
     .addNode(
       'ingest_knowledge',

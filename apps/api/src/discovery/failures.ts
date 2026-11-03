@@ -1,4 +1,5 @@
 import {AIOutputError} from '../agent/llm/output-error.js';
+import type {SourceType} from './source-urls.js';
 export type FailureStage = 'search' | 'robots' | 'fetch' | 'extract' | 'verify' | 'store' | 'index';
 const messages = {
   robots_blocked: 'The official website does not allow automated reading of this page.',
@@ -13,6 +14,7 @@ const messages = {
   timeout: 'The official website or AI service took too long to respond.',
   page_too_large: 'The official page exceeds the reading limit.',
   unsupported_content: 'The official source is not a readable web page.',
+  content_decoding_failed:'The official page could not be decoded. Other sources may still work.',
   insufficient_text: 'The official page has too little readable text to check its details.',
   missing_evidence: 'The official page did not support the required program details.',
   identity_mismatch: 'The fetched page could not be confirmed as the same program.',
@@ -34,12 +36,21 @@ const messages = {
   service_unavailable: 'The program search service is temporarily unavailable.',
 };
 export type FailureInfo = { stage: FailureStage; code: keyof typeof messages; sourceHost?: string; httpStatus?: number;
-  issues?:{field:string;code:string}[];finishReason?:'length'|'content_filter'|'empty'|'refusal';errorType?:'TypeError'|'ReferenceError'|'Error';location?:string };
+  issues?:{field:string;code:string}[];finishReason?:'length'|'content_filter'|'empty'|'refusal';errorType?:'TypeError'|'ReferenceError'|'Error';location?:string;
+  mediaType?:SourceType;contentEncoding?:'gzip'|'br'|'deflate'|'identity'|'other' };
 export class DiscoveryFailure extends Error {
   constructor(public info: FailureInfo) { super(messages[info.code]); this.name = 'DiscoveryFailure'; }
 }
 export const failureMessage = (failure: FailureInfo) => Object.hasOwn(messages, failure.code) ? messages[failure.code] : messages.service_unavailable;
 export const operationalFailure=(f:FailureInfo)=>!['deadline_passed','missing_evidence'].includes(f.code);
+export const knownFailureCode=(code:unknown):code is FailureInfo['code']=>typeof code==='string'&&Object.hasOwn(messages,code);
+export function primaryFailure(failures:FailureInfo[]) {
+  const relevant=failures.filter(operationalFailure),pool=relevant.length?relevant:failures;
+  const rank=(f:FailureInfo)=>['missing_model','provider_authorization','provider_request','provider_limit'].includes(f.code)?100:
+    ['unsupported_content','invalid_url'].includes(f.code)?5:
+    ({search:70,robots:10,fetch:20,extract:80,verify:40,store:90,index:90}[f.stage]);
+  return pool.reduce<FailureInfo|undefined>((best,f)=>!best||rank(f)>rank(best)?f:best,undefined);
+}
 
 /** Allowlisted metadata only: no raw provider errors, response bodies, URLs or prompts. */
 export function failureInfo(error: unknown, stage: FailureStage): FailureInfo {

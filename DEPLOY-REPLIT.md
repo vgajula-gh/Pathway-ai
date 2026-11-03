@@ -249,3 +249,15 @@ Use these checks after syncing this code to Replit, before publishing. They run 
 4. If the check succeeds, test one real search in Preview. Check the correct environment's latest DiscoveryRun records. New records include `usage.models`; old records cannot establish which historical model was used. An empty Pinecone index alone is not proof that search failed: vectors are written after source verification and catalog persistence, in namespace **opportunities**.
 
 OpenAI extraction now sends its exact JSON schema, accepts nullable unknown evidence, requests compact source quotes and allows 4096 output-text tokens (plus nano's existing reasoning headroom). Official-source, grade, date, cost and activity checks remain mandatory. A run where every candidate fails extraction is marked failed; failures keep shared paid reservations counted but leave the student's successful-search allowance intact. No new Secrets, database migration or configured quota changes are required.
+
+## Inspect the published search without Agent or Shell
+
+After merging/syncing this source-reading update and publishing, sign in to the published website and open `/api/discovery/status` in the same browser. Its `diagnostics` section summarizes the current request's stored runs. Opening it does not start another search or consume AI usage, and it can summarize the older failed request you already tested.
+
+- `steps.fetch` / `steps.extract` / `steps.verify` show successful and failed processing steps.
+- `programsSaved` counts distinct recorded catalog IDs; it is not a Pinecone vector count.
+- `failures` groups every recorded stage/code and safe media type, encoding or field issue. An early unreadable document can no longer hide a later model/configuration failure.
+- `models` shows requested model identities when they were recorded. `candidates: null` means those older runs did not record candidate counts.
+- `httpAttempts` includes robots requests, redirects and supporting pages, not just successful program reads.
+
+Copy this JSON report if search still fails. No extra search, index recreation or data reset is needed to inspect it. Generic MIME labels no longer reject genuine HTML; known downloads are filtered so HTML results can use the existing reading budget. Actual PDFs/office documents, arbitrary binary data and unsupported pages remain excluded. Eligibility, official evidence, dates, quotas and the three-Free/three-Paid targets are unchanged.

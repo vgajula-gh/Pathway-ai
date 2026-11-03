@@ -63,3 +63,9 @@ Opportunity Gap Finder · Opportunity Creator (design your own project/club) · 
 - OpenAI extraction requests the closed, required JSON schema. Unknown evidence is nullable and cannot verify a fact. Missing models fail before paid search; malformed JSON, schema fields, truncation and refusal have distinct safe diagnostics.
 - Extraction failures with no saves produce failed run/request states, retain the student allowance, preserve shared paid counters and never replay automatically. Requested models are recorded without secrets.
 - Owner checks default to no provider call. The --live path makes one hosted request against a synthetic fixture with no database or vector access. Tests exercise the real SDK HTTP request with network intercepted; live provider quality requires the explicit owner check.
+
+## Readable discovery sources
+
+- Read genuine generic-MIME HTML, reject real binary/PDF/JSON sources, and distinguish decompression corruption from excessive decoded size. Preserve robots, pinned DNS, private-address and redirect protections.
+- Filter download URLs before the candidate cap; balance Free/Paid URLs and collect navigation eligibility links without including navigation in source evidence. Keep all provider, HTTP and extraction caps.
+- Signed-in status summaries include all bound failures and actual step counts, can explain older runs with no new paid work, exclude unrelated records, redact arbitrary values and preserve unknown historical model/candidate data.

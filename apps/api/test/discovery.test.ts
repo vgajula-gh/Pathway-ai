@@ -11,6 +11,10 @@ export function facts(){const data=Extraction.parse({...empty(),name:'Example Ro
 it('normalizes groups independently of interest order, case and duplicates, never using a student name',()=>{
  const g=interestGroups({interests:[' Robotics ','ROBOTICS','Art'],grade:10,region:'NC'});expect(g.map(g=>g.key)).toEqual(['art|9-10|NC','robotics|9-10|NC']);expect(discoveryQuery(g[1],'free',2030)).toContain('free no participation fee');expect(discoveryQuery(g[1],'paid',2030)).toContain('fees financial aid');expect(identity('www.example.edu','Example Robotics')).toBe(identity('example.edu',' EXAMPLE  Robotics '));
 });
+it('looks for currently open and upcoming official HTML opportunities across the year boundary',()=>{
+ const query=discoveryQuery({topic:'robotics',gradeBand:'9-10',region:'NC'},'free',2026);
+ expect(query).toContain('2026 2027');expect(query).toContain('currently accepting applications');expect(query).toContain('official HTML program pages');
+});
 it('keeps unknown extraction fields null, checks literal evidence and only confirms explicitly free participation',()=>{
  const data=facts();let result=verifyOpportunity(data,[page],new Set(['example.edu']),new Date('2029-01-01'));
  expect(result).toMatchObject({verificationStatus:'verified',costType:'free',gradeMin:9,gradeMax:12,deadline:'2030-01-10'});

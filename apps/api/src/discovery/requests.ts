@@ -6,7 +6,8 @@ import { interestGroups } from './groups.js';
 import { discoveryConfigured,setting } from './config.js';
 import {catalogCoverage,publicCatalogCoverage} from './catalog.js';
 import { transaction,stateIn,refreshDays } from './refresh.js';
-import { failureMessage,FailureInfo,operationalFailure } from './failures.js';
+import { failureMessage,FailureInfo,operationalFailure,primaryFailure } from './failures.js';
+import {searchDiagnostics} from './diagnostics.js';
 
 type Binding={key:string;since:string;cached?:boolean};
 const pending=['queued','running'];
@@ -149,7 +150,7 @@ export async function settleSearchRequests(studentId?:string) {
         if(current.cycleStartedAt&&+state.cycleStartedAt===+current.cycleStartedAt)
           await tx.pickRefreshState.update({where:{studentId:request.studentId},data:current.manualSlot==='bonus'?{extraUsed:true}:{manualUsed:{increment:1}}});
       }
-      const failure=failed?failures.find(operationalFailure)||failures[0]:failures[0];
+      const failure=primaryFailure(failures);
       const error=failure?failureMessage(failure):failed?'The search could not finish. Please try again.':'';
       await tx.opportunitySearchRequest.update({where:{id:request.id},data:{status,resultIds:JSON.stringify(ids),finishedAt:new Date(),countedAt:successful&&current.manualSlot?new Date():null,error}});
     });
@@ -162,14 +163,16 @@ export async function searchState(studentId:string) {
     prisma.opportunitySearchRequest.findFirst({where:{studentId},orderBy:{createdAt:'desc'}}),
     monthlySearchAllowance(prisma),
   ]);
-  if(!request)return {finding:false,limited:monthlyAllowance.limited,monthlyAllowance,error:null,resultIds:[] as string[],search:{phase:monthlyAllowance.limited?'limited':'idle',found:0,detail:monthlyAllowance.limited?monthlyLimitMessage(monthlyAllowance):null,startedAt:null,finishedAt:null}};
+  if(!request)return {finding:false,limited:monthlyAllowance.limited,monthlyAllowance,diagnostics:searchDiagnostics([]).diagnostics,error:null,resultIds:[] as string[],search:{phase:monthlyAllowance.limited?'limited':'idle',found:0,detail:monthlyAllowance.limited?monthlyLimitMessage(monthlyAllowance):null,startedAt:null,finishedAt:null}};
   const bindings=j<Binding[]>(request.groupBindings,[]),runs=await boundRuns(bindings);
   const running=runs.find(r=>r?.status==='running'),value=running?snapshot(running.usage):null;
+  const {diagnostics,failures}=searchDiagnostics(runs.filter((r):r is NonNullable<typeof r>=>!!r));
   const allowed=['searching','reading_sources','checking_facts','indexing'];
   const finding=pending.includes(request.status),limited=!finding&&monthlyAllowance.limited;
   const phase=finding?running&&allowed.includes(value?.phase||'')?value!.phase!:'queued':limited?'limited':request.status==='limited'?'idle':request.status;
   const ids=j<string[]>(request.resultIds,[]);
-  const detail=limited?monthlyLimitMessage(monthlyAllowance):request.status==='limited'?'Search allowance is available again.':request.error||null;
-  return {finding,limited,monthlyAllowance,error:request.status==='failed'?request.error:null,resultIds:ids,
+  const primary=primaryFailure(failures),error=request.status==='failed'?(primary?failureMessage(primary):request.error):null;
+  const detail=limited?monthlyLimitMessage(monthlyAllowance):request.status==='limited'?'Search allowance is available again.':error||request.error||null;
+  return {finding,limited,monthlyAllowance,diagnostics,error,resultIds:ids,
     search:{phase,found:ids.length,detail,startedAt:request.createdAt.toISOString(),finishedAt:request.finishedAt?.toISOString()||null}};
 }
