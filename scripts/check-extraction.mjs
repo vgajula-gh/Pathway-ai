@@ -2,9 +2,9 @@
 import {extract} from '../apps/api/src/discovery/extraction.ts';
 import {extractionSettings} from '../apps/api/src/agent/llm/extraction.ts';
 import {discoveryModels} from '../apps/api/src/discovery/config.ts';
-import {failureInfo,DiscoveryFailure} from '../apps/api/src/discovery/failures.ts';
+import {failureInfo} from '../apps/api/src/discovery/failures.ts';
 import {env} from '../apps/api/src/lib/env.ts';
-import {verifyOpportunity} from '../apps/api/src/domain/opportunity-verification.ts';
+import {verifyCandidate} from '../apps/api/src/discovery/verification.ts';
 
 const live=process.argv.includes('--live'),settings=extractionSettings();
 const report={mode:live?'live':'configuration',models:discoveryModels(),checkedAt:new Date().toISOString()};
@@ -24,8 +24,7 @@ if(missing.length){
   try{
     const facts=await extract([page]);
     stage='verify';
-    const verified=verifyOpportunity(facts,[page],new Set(['example.edu']));
-    if(verified.verificationStatus!=='verified')throw new DiscoveryFailure({stage:'verify',code:'missing_evidence'});
+    const verified=verifyCandidate(facts,[page],new Set(['example.edu']));
     console.log(JSON.stringify({...report,ok:true,verified:true,costType:verified.costType,note:'Extraction, local schema validation and evidence verification passed for the synthetic fixture. It was not saved. Real source access and indexing are separate steps.'},null,2));
   } catch(error){
     console.log(JSON.stringify({...report,ok:false,failure:failureInfo(error,stage)},null,2));process.exitCode=1;

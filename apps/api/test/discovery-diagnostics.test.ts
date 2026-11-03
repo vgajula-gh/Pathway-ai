@@ -26,3 +26,15 @@ it('preserves every failure count while prioritizing configuration and later pro
 it('does not hide a decompression or HTTP failure behind a filtered document',()=>{
  expect(primaryFailure([{stage:'fetch',code:'unsupported_content'},{stage:'fetch',code:'content_decoding_failed',contentEncoding:'gzip'}])?.code).toBe('content_decoding_failed');
 });
+it('retains only controlled verification fields and reasons, with no arbitrary stored values',()=>{
+ const failure={stage:'verify',code:'missing_evidence',verification:[{field:'gradeMin',reason:'quote_not_found',quote:'private-quote'},{field:'officialDomain',reason:'unreviewed_domain',sourceUrl:'https://private-source.example'},{field:'private-field',reason:'not_stated'},{field:'format',reason:'private-reason'}]};
+ const {diagnostics}=searchDiagnostics([{id:'one',usage:JSON.stringify({failures:[failure,failure]})}]);
+ expect(diagnostics.failures).toEqual([{stage:'verify',code:'missing_evidence',verification:[{field:'gradeMin',reason:'quote_not_found'},{field:'officialDomain',reason:'unreviewed_domain'}],count:2}]);
+ expect(JSON.stringify(diagnostics)).not.toContain('private-');
+});
+it('explains verification rejections instead of an incidental reading or processing limit',()=>{
+ const failures=[{stage:'verify',code:'missing_evidence'},{stage:'verify',code:'deadline_passed'},{stage:'fetch',code:'timeout'},{stage:'fetch',code:'unsupported_content'},{stage:'extract',code:'run_limit'}] as const;
+ expect(primaryFailure([...failures])?.code).toBe('missing_evidence');
+ expect(primaryFailure([...failures,{stage:'search',code:'provider_authorization'}])?.code).toBe('provider_authorization');
+ expect(primaryFailure([{stage:'extract',code:'run_limit'}])?.code).toBe('run_limit');
+});

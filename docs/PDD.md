@@ -12,6 +12,8 @@ Start without dummy recommendations. Interested is visible only with saved appli
 
 Competitions require a future official deadline. Other programs need a future official deadline or checked open/rolling statement. Clubs and volunteering need open sign-up or current/upcoming activity. Hard eligibility exclusions, expiration and freshness are code decisions. Only explicit free participation earns Free. Unknown cost belongs to Paid with a warning. Variety/urgency refine fit ranking; permit at most one eligible outside-interest stretch item.
 
+Equivalent explicit numeric grade wording is accepted, including ordinal ranges and contiguous lists. Unknown, age-only or rising-grade eligibility remains unconfirmed. Search diagnostics identify which required facts prevented verification; an incidental processing limit must not hide completed verification rejections. New diagnostics preserve no raw model text or student data.
+
 Interested creates a requirements/deadline tracker without changing the student’s schedule. Not for me records a reason. Both refill from the shared catalog without AI. A completed manual search is allowed once per rolling 30 days plus one meaningful-interest-change bonus; failed searches do not consume it. Paid provider attempts remain counted globally. Missing integrations, searching, partial results, no matches, no interests and failures have honest states with no fabricated cards.
 
 ## Shared knowledge and trust

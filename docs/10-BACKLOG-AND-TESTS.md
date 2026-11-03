@@ -69,3 +69,10 @@ Opportunity Gap Finder · Opportunity Creator (design your own project/club) · 
 - Read genuine generic-MIME HTML, reject real binary/PDF/JSON sources, and distinguish decompression corruption from excessive decoded size. Preserve robots, pinned DNS, private-address and redirect protections.
 - Filter download URLs before the candidate cap; balance Free/Paid URLs and collect navigation eligibility links without including navigation in source evidence. Keep all provider, HTTP and extraction caps.
 - Signed-in status summaries include all bound failures and actual step counts, can explain older runs with no new paid work, exclude unrelated records, redact arbitrary values and preserve unknown historical model/candidate data.
+
+## Opportunity evidence regression
+
+- Equivalent literal numeric grade ranges, ordinal ranges and contiguous lists verify; arbitrary model bounds, ages, rising grades, contradictory bounds and gaps in grade lists do not. Organizer/domain, literal-source, active-status, cost and deadline checks remain required.
+- Verification failures record controlled required-field/reason pairs, separated from persisted facts. Status summaries drop arbitrary fields, reasons, source URLs and rejected values. Old records retain unknown details.
+- Completed evidence rejections explain an empty search ahead of incidental fetch/exhaustion errors; setup/provider/extraction/storage failures retain priority. Allowances and automatic retry behavior remain unchanged.
+- Synthetic source/extraction fixtures pass through the real graph, SQL storage, selection and HTTP routes to produce three Free and three Paid recommendations for two students. The second student reuses the shared catalog without new search or extraction calls. External provider/source access and production success still require live verification.
