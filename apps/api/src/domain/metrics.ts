@@ -1,22 +1,21 @@
 // Today screen: three transparent "rings" + headline + next best action.
 // Rings show plain quantities (minutes, hours, steps) — never a judgment score.
-import { addDays, dkey, minOf, mondayOf, sod } from './time.js';
+import { addDays, dkey, mondayOf, sod } from './time.js';
 import { dayCapacity, expand, findConflicts } from './schedule.js';
 import { AvailabilityRules, CalEvent } from './types.js';
+import {remainingTime} from './remaining-time.js';
 
 export interface MilestoneLite { id: string; title: string; status: string; targetDate: string; doneAt?: Date | null }
 
 export function todayMetrics(events: CalEvent[], rules: AvailabilityRules, milestones: MilestoneLite[], now = new Date()) {
   const cap = dayCapacity(events, rules, now);
-  const prot = Math.max(0, minOf(rules.downtimeEnd) - minOf(rules.downtimeStart));
-  const win = Math.max(1, minOf(rules.studyEnd) - minOf(rules.studyStart));
-  const free = cap.freeMin + prot;
+  const remaining=remainingTime(events,rules,now),free=remaining.inWindow;
   const w0 = mondayOf(now), w1 = addDays(w0, 7), k0 = dkey(w0), k1 = dkey(addDays(w1, -1));
   const wk = milestones.filter(m => (m.targetDate && m.targetDate >= k0 && m.targetDate <= k1) || (m.doneAt && +m.doneAt >= +w0 && +m.doneAt < +w1));
   const done = wk.filter(m => m.status === 'done').length;
   return {
-    focus: { label: 'Focus', minutes: cap.studyMin, limit: rules.maxStudyMin, pct: cap.studyMin / rules.maxStudyMin, status: cap.studyMin === 0 ? 'Open' : cap.overStudy ? 'Too much' : 'On track' },
-    freeTime: { label: 'Free time', minutes: free, inWindow: cap.freeMin, downtime: prot, pct: free / (win + prot), status: free >= 180 ? 'Plenty' : free >= 90 ? 'Some' : 'Tight' },
+    focus: { label: 'Study planned', minutes: cap.studyMin, limit: rules.maxStudyMin, pct: rules.maxStudyMin>0?cap.studyMin / rules.maxStudyMin:0, status: cap.studyMin === 0 ? 'Not scheduled' : cap.overStudy ? 'Over limit' : 'Within limit' },
+    freeTime: { label: 'Free time left', minutes: free, ...remaining, pct: remaining.windowRemaining>0?free/remaining.windowRemaining:0, status: !remaining.windowRemaining?'Study window ended':!free?'No free slots':free >= 180 ? 'Plenty' : free >= 90 ? 'Some' : 'Tight' },
     progress: { label: 'Progress', done, planned: wk.length, pct: wk.length ? done / wk.length : 0, status: !wk.length ? 'No steps yet' : done / wk.length >= 0.6 ? 'Moving' : 'Building' },
     capacity: cap
   };

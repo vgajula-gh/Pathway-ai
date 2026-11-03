@@ -31,6 +31,10 @@ flowchart LR
 ## Decision flow (from the PDD)
 Student context → understand request → retrieve reliable context → evaluate relevance, eligibility, capacity → recommend with explanation → request approval when action is needed → execute through an authorized tool → verify → learn from explicit feedback.
 
+## Today time estimates
+
+`domain/remaining-time.ts` computes display-only future time from student-local `wallNow`, availability and calendar occurrences. It clips windows/events to the remaining calendar day, merges overlapping bookings, excludes protected rest from study free time, and reports remaining unbooked rest and booked rest separately. Weekly recurrences and overnight windows are included. `todayMetrics` retains full-day Study planned and weekly goal progress; the planner's full-day `dayCapacity`, free-slot search and proposal validation retain their existing semantics. GET Today is uncached and read-only; the visible client refreshes each minute and on return/focus. Insight uses the same student-local day. No schema, environment setting or paid provider call is added by these estimates.
+
 ## LLM layer (provider-agnostic)
 ```
 Buddy agent · insights · schedule scan · coach

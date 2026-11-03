@@ -1,7 +1,7 @@
 import Week from '../components/Week';
 import Calendars from '../components/Calendars';
 import AddEvent from '../components/AddEvent';
-import { useState } from 'react';
+import { useEffect,useState } from 'react';
 import { api } from '../lib/api';
 import { Proposal, Student, Tab, Today as TodayData, NewsResponse } from '../lib/types';
 import { EMO, SOURCE_TAG, fmtMins, fmtTime } from '../lib/format';
@@ -20,6 +20,13 @@ export default function Today({ me, go, ask, setMe }: { me:Student; go:(t:Tab)=>
   const news = useLoad(()=>api<NewsResponse>('/api/news'),[me.settings.newsTopics?.join(',')]);
   const [newsOpen,setNewsOpen] = useState(false), [sheet,setSheet] = useState<Surface>(null);
   const [snoozed,setSnoozed] = useState(false), [actionError,setActionError] = useState<string|null>(null);
+  useEffect(()=>{
+    const refresh=()=>{if(typeof document==='undefined'||document.visibilityState!=='hidden')reload();};
+    const timer=setInterval(refresh,60000);
+    if(typeof document!=='undefined')document.addEventListener('visibilitychange',refresh);
+    if(typeof window!=='undefined')window.addEventListener('focus',refresh);
+    return()=>{clearInterval(timer);if(typeof document!=='undefined')document.removeEventListener('visibilitychange',refresh);if(typeof window!=='undefined')window.removeEventListener('focus',refresh);};
+  },[reload]);
   if(!d) return error ? <p role="alert">{error} <button className="link" onClick={reload}>Try again</button></p> : <div className="splash"><Typing /></div>;
   const m=d.metrics, na=d.nextAction, top=news.data?.top;
   const part=d.greetingPart || partOfDay(), hello={morning:'Good morning',afternoon:'Good afternoon',evening:'Good evening',night:'Hello'}[part];
@@ -39,7 +46,12 @@ export default function Today({ me, go, ask, setMe }: { me:Student; go:(t:Tab)=>
       <div className="card glance"><div className="rings">{(['focus','freeTime','progress'] as const).map(k=>
         <button key={k} className="ringbtn" onClick={()=>setSheet({k:'ring',v:k})} aria-label={m[k].label+': '+ringVal(k)+', '+m[k].status}>
           <Ring pct={m[k].pct} color={COLORS[k]} size={84}>{ringVal(k)}</Ring><span className="n">{m[k].label}</span><span className={'st '+CLS[k]}>{m[k].status}</span>
-        </button>)}</div></div>
+        </button>)}</div>
+        <div className="sec" style={{marginTop:14,padding:'0 8px 8px'}}>
+          <p className="small"><b>Protected downtime left</b> · {fmtMins(m.freeTime.downtime??0)}</p>
+          <p className="note">Reserved for rest, separate from free time. Estimates use your calendar and availability settings.</p>
+          {!!m.freeTime.downtimeBusy&&<p className="note c-rose">{fmtMins(m.freeTime.downtimeBusy)} of your remaining downtime overlaps calendar events.</p>}
+        </div></div>
       <div className="sec-h timeline-heading"><h3>Today’s timeline</h3><button className="link" onClick={()=>setSheet({k:'scan'})}>Scan schedule</button></div>
       <div className="card" style={{padding:'8px 14px'}}>
         {d.timeline.length ? <div className="tl">{d.timeline.map(o=>{
@@ -73,9 +85,9 @@ export default function Today({ me, go, ask, setMe }: { me:Student; go:(t:Tab)=>
         : <div className="card spark"><p className="label">NEWS FOR YOU</p><p className="muted small">{news.error?'News is not available right now.':!news.data?'Loading stories…':'No stories for your topics yet.'}</p><button className="link" onClick={()=>setNewsOpen(true)}>Choose news topics</button></div>)}
     </div></section>}
 
-    {sheet?.k==='ring' && <Sheet title={m[sheet.v].label} onClose={()=>setSheet(null)}><div style={{textAlign:'center'}}><Ring pct={m[sheet.v].pct} color={COLORS[sheet.v]} size={150} width={9}>{ringVal(sheet.v)}</Ring><p className={CLS[sheet.v]}>{m[sheet.v].status}</p></div><p className="muted small">{sheet.v==='focus'?'Study time on your calendar compared with the limit you set. Not a grade.':sheet.v==='freeTime'?'Open minutes in your study window plus protected downtime.':'Goal steps planned this week and how many you’ve finished.'}</p><div className="sec"><p className="label">CONTRIBUTORS</p><div className="card">
+    {sheet?.k==='ring' && <Sheet title={m[sheet.v].label} onClose={()=>setSheet(null)}><div style={{textAlign:'center'}}><Ring pct={m[sheet.v].pct} color={COLORS[sheet.v]} size={150} width={9}>{ringVal(sheet.v)}</Ring><p className={CLS[sheet.v]}>{m[sheet.v].status}</p></div><p className="muted small">{sheet.v==='focus'?'Scheduled Study blocks for today compared with your daily limit. Marking an event done does not change planned time.':sheet.v==='freeTime'?'Unbooked minutes still ahead in your study window, based on your calendar. Protected downtime is reserved for rest and shown separately.':'Goal steps planned this week and how many you’ve finished.'}</p><div className="sec"><p className="label">CONTRIBUTORS</p><div className="card">
       {sheet.v==='focus' && <Contrib l="Study planned today" v={fmtMins(m.focus.minutes)+' of '+fmtMins(m.focus.limit)} pct={m.focus.pct} c={COLORS.focus} />}
-      {sheet.v==='freeTime' && <><Contrib l="Free in your study window" v={fmtMins(m.freeTime.inWindow)} pct={1} c={COLORS.freeTime} /><Contrib l="Protected downtime" v={fmtMins(m.freeTime.downtime)} pct={1} c={COLORS.freeTime} /></>}
+      {sheet.v==='freeTime' && <><Contrib l="Free time left in your study window" v={fmtMins(m.freeTime.inWindow)} pct={m.freeTime.pct} c={COLORS.freeTime} /><Contrib l="Protected downtime left — separate" v={fmtMins(m.freeTime.downtime)} pct={m.freeTime.downtimeRemaining?((m.freeTime.downtime??0)/m.freeTime.downtimeRemaining):0} c={COLORS.freeTime} />{!!m.freeTime.downtimeBusy&&<p className="note c-rose">{fmtMins(m.freeTime.downtimeBusy)} overlaps calendar events during your remaining downtime.</p>}</>}
       {sheet.v==='progress' && <><Contrib l="Steps done this week" v={String(m.progress.done)} pct={m.progress.pct} c={COLORS.progress} /><Contrib l="Steps planned this week" v={String(m.progress.planned)} pct={1} c="var(--line2)" /></>}
     </div></div></Sheet>}
     {sheet?.k==='why' && na && <Sheet title="Why this step" onClose={()=>setSheet(null)}><h2>{na.title}</h2><p className="muted">{na.why}</p><div className="sec"><p className="label">WHERE THIS CAME FROM</p><p>{na.source}</p><p className="label">WHAT I LOOKED AT</p><p className="muted">{na.dataUsed.join(' · ')}</p></div></Sheet>}

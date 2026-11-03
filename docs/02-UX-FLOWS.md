@@ -60,6 +60,8 @@ A slim one-line first-name greeting and student-local date, with a subtle time-o
 
 Keep the floating Talk to Buddy orb. No dummy events, goals or suggestions fill empty space.
 
+Ring details explain their source: Study planned sums today's Study blocks against the daily limit regardless of completion; Free time left counts only future unbooked study-window minutes. Protected downtime left appears separately below the rings and in the free-time contributor sheet, reduced by actual calendar overlaps with an overlap warning. Progress counts this week's goal steps. Availability is editable in You. At 8 PM with default windows and no bookings, show 1h free plus a separate 2h rest summary. Time estimates refresh every minute while visible and on return/focus using read-only requests; no AI request or allowance is used.
+
 ## Explore and program questions
 
 Show **Interested** above search only when at least one application exists. Preserve Interested → Preparing → Applied → Result, notes, checklist progress, one next step and deadline countdowns, including “Deadline passed” for expired applications.

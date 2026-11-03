@@ -106,3 +106,11 @@ See [Explore simplification](15-EXPLORE-SIMPLIFICATION.md).
 - A library with 43 Paid or cost-unconfirmed options and more than five Free options shows the five highest-fit options in each group, ten cards maximum, without duplicate IDs.
 - Smaller groups show the actual available count. Unknown cost stays in Paid or cost-unconfirmed; saved/dismissed and expired entries remain excluded from discovery cards.
 - Saving/dismissing can reveal the next stored result without a new paid search. Search targets, limits, source verification and Interested progress are unchanged.
+
+## Today planned study and remaining time
+
+- Study planned reports scheduled Study-event minutes against the daily limit, regardless of done state; other event types do not add Study minutes. Zero limits produce finite percentages. Weekly goal progress is unchanged.
+- With default availability and no bookings, 8 PM local shows 60 minutes free and 120 minutes protected downtime separately. Past time is excluded; no free study-window time remains after 9 PM.
+- Ongoing/overlapping bookings, weekly recurrence, overnight events/windows, zero-duration deadlines and equal window endpoints produce nonnegative remaining quantities without duplicate subtraction. Actual downtime overlaps reduce rest and are explained in the UI.
+- API integration verifies the student's timezone across UTC midnight, isolation from another student's calendar, no-store responses and unchanged AI usage counters. UI tests verify contributor explanations, three rings, separate rest, minute refresh and hidden/return/focus behavior without paid requests.
+- No schema migration, data reset or new Secret is needed. Run all tests, typecheck and production build before publishing.

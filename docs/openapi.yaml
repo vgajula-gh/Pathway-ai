@@ -11,6 +11,47 @@ components:
     accessCode: { type: apiKey, in: header, name: x-access-code }
     devStudent: { type: apiKey, in: header, name: x-student-id }
   schemas:
+    TodayMetrics:
+      type: object
+      required: [focus, freeTime, progress, capacity]
+      description: Deterministic estimates from this student's calendar and availability, evaluated in student-local time. No AI call.
+      properties:
+        focus:
+          type: object
+          required: [label, minutes, limit, pct, status]
+          properties:
+            label: { const: Study planned }
+            minutes: { type: integer, minimum: 0, description: Today's scheduled Study-event minutes including done blocks; not measured work }
+            limit: { type: integer, minimum: 0, description: Configured daily study limit }
+            pct: { type: number, minimum: 0, description: 'minutes / limit; zero when limit is zero, may exceed one' }
+            status: { enum: [Not scheduled, Within limit, Over limit] }
+        freeTime:
+          type: object
+          required: [label, minutes, inWindow, windowRemaining, downtime, downtimeRemaining, downtimeBusy, pct, status]
+          description: Future portions of today's local windows only. Overlapping bookings count once; zero-duration events do not block time. Overnight windows are clipped to today.
+          properties:
+            label: { const: Free time left }
+            minutes: { type: integer, minimum: 0, description: Unbooked remaining study-window minutes excluding protected rest; equals inWindow }
+            inWindow: { type: integer, minimum: 0 }
+            windowRemaining: { type: integer, minimum: 0, description: Study-window minutes still ahead before subtracting bookings and protected rest }
+            downtime: { type: integer, minimum: 0, description: Unbooked protected-rest minutes still ahead; separate from minutes }
+            downtimeRemaining: { type: integer, minimum: 0, description: Protected-rest minutes still ahead before subtracting bookings }
+            downtimeBusy: { type: integer, minimum: 0, description: Union of bookings during remaining rest; downtimeRemaining minus downtime }
+            pct: { type: number, minimum: 0, maximum: 1, description: 'minutes / windowRemaining, or zero when none remains' }
+            status: { enum: [Study window ended, No free slots, Plenty, Some, Tight] }
+        progress:
+          type: object
+          required: [label, done, planned, pct, status]
+          description: Goal milestones targeted or completed in this Monday–Sunday week
+          properties:
+            label: { const: Progress }
+            done: { type: integer, minimum: 0 }
+            planned: { type: integer, minimum: 0 }
+            pct: { type: number, minimum: 0, maximum: 1 }
+            status: { enum: [No steps yet, Moving, Building] }
+        capacity:
+          type: object
+          description: Existing full-day planning capacity; independent of display-only remaining time
     StudentRegion:
       type: string
       description: Optional broad region; empty means unspecified
@@ -463,7 +504,23 @@ paths:
       responses: { '200': { description: OK } }
     delete: { summary: Delete all student data, responses: { '204': { description: Deleted } } }
   /api/me/export: { get: { summary: Export all data, responses: { '200': { description: JSON export } } } }
-  /api/today: { get: { summary: Today snapshot (glance then next step then spark), responses: { '200': { description: 'Student-local greetingPart/date, rings, timeline, dueSoon and dueSoonEvents within seven days, pending approvals, nullable nextAction, word/brief' } } } }
+  /api/today:
+    get:
+      summary: Today snapshot (glance then next step then spark)
+      description: Read-only student-local snapshot. Client refreshes every minute while visible and on return/focus; no AI request or allowance used.
+      responses:
+        '200':
+          description: Student-local greetingPart/date, rings, timeline, dueSoon and dueSoonEvents within seven days, pending approvals, nullable nextAction, word/brief
+          headers:
+            Cache-Control: { schema: { const: no-store } }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [date, metrics]
+                properties:
+                  date: { type: string, format: date, description: Student-local date }
+                  metrics: { $ref: '#/components/schemas/TodayMetrics' }
   /api/today/insight: { post: { summary: AI brief (cached daily), responses: { '200': { description: OK }, '403': { description: AI consent off }, '503': { description: AI unavailable } } } }
   /api/events:
     get: { summary: Occurrences in range, parameters: [{ name: from, in: query, schema: { type: string } }, { name: to, in: query, schema: { type: string } }], responses: { '200': { description: OK } } }
