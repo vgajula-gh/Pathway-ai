@@ -21,6 +21,15 @@ function literal(value:string,quote:string) {
   }
   return false;
 }
+/** Punctuation variants may identify the same name; never invent a missing
+ * year or accept one generic word as proof of program identity. */
+export function supportedProgramName(name:string,quote:string) {
+  if(literal(name,quote))return true;
+  const words=(s:string)=>normalizeEvidence(s).replace(/[^\p{L}\p{N}]+/gu,' ').trim().split(/\s+/);
+  const meaningful=words(name).filter(w=>!['a','an','the','and','of','for','program'].includes(w));
+  const source=new Set(words(quote));
+  return meaningful.length>=2&&meaningful.every(w=>source.has(w));
+}
 export function confirmedDate(value:string|null,quote:string,kind:'deadline'|'opening'|'activity'|'date'='date') {
   if(!value)return null;
   const date=new Date(value+'T12:00:00Z');if(!Number.isFinite(+date)||date.toISOString().slice(0,10)!==value)return null;
@@ -28,7 +37,7 @@ export function confirmedDate(value:string|null,quote:string,kind:'deadline'|'op
   const patterns=[value,`(?:${names[month-1]}|${names[month-1].slice(0,3)})\\.?\\s+0?${day}(?:st|nd|rd|th)?[,]?\\s+${year}`,`0?${day}(?:st|nd|rd|th)?\\s+(?:${names[month-1]}|${names[month-1].slice(0,3)})\\.?[,]?\\s+${year}`,`0?${month}/0?${day}/${year}`];
   for(const pattern of patterns)for(const m of quote.matchAll(new RegExp(`\\b(?:${pattern})\\b`,'gi'))) {
     const around=quote.slice(Math.max(0,m.index!-100),m.index!+m[0].length+50);
-    if(kind==='date'||(kind==='deadline'?/deadline|apply by|applications? (?:are )?due|submissions? (?:are )?due|entries (?:are )?due|registration (?:closes|ends)|submit by/i:kind==='opening'?/applications? open|registration opens|opening|opens (?:on|for)/i:/activity|meeting|volunteer|session|event|club/i).test(around))return value;
+    if(kind==='date'||(kind==='deadline'?/deadline|apply by|applications? (?:are )?due|submissions? (?:are )?due|entries (?:are )?due|registration (?:closes|ends)|submit by|applications? (?:are )?accepted until|last day|\bcloses?\b/i:kind==='opening'?/applications? open|registration opens|opening|opens (?:on|for)/i:/activity|meeting|volunteer|session|event|club/i).test(around))return value;
   }
   return null;
 }
@@ -57,7 +66,7 @@ export function qualifyScout(facts:ScoutFacts,pages:Page[],trusted:Set<string>,n
   const evidence:Record<string,{sourceUrl:string;quote:string}>={};
   const quote=(field:keyof ScoutFacts)=>resolved[field]?.quote||'';
   const keep=(field:keyof ScoutFacts)=>{if(resolved[field])evidence[field]=resolved[field];};
-  const text=(field:keyof ScoutFacts):string|null=>{const value=facts[field];if(typeof value==='string'&&value&&literal(value,quote(field))){keep(field);return value;}return null;};
+  const text=(field:keyof ScoutFacts):string|null=>{const value=facts[field];if(typeof value==='string'&&value&&(field==='name'?supportedProgramName(value,quote(field)):literal(value,quote(field)))){keep(field);return value;}return null;};
   const list=(field:'skills'|'tags'|'requirements')=>{const values=facts[field]?.filter(v=>literal(v,quote(field)))||[];if(values.length)keep(field);return values;};
   const evidencedName=text('name'),name=evidencedName||lead?.name||pages[0].pageTitle||facts.name,organizer=text('organizer');
   if(!evidencedName){add('name','not_stated');notes.push('Program name comes from the search result; details are not confirmed');}

@@ -27,6 +27,6 @@ export function deadlineExpired(deadline:string|null|undefined,today:string) {
 export function explicitApplicationStatus(value:string,quote:string) {
   if(value==='closed')return !/not closed|still open/i.test(quote)&&/\b(closed|not open|no longer accepting|applications? (?:have )?ended)\b/i.test(quote);
   if(/\b(closed|not open|not (?:currently )?accepting|no longer accepting|will open|opening on|opens on)\b/i.test(quote))return false;
-  if(value==='rolling')return /\brolling\s+(admissions?|applications?|enrol(?:l)?ment)\b|\b(applications?|sign[ -]?ups?)\b.{0,50}\b(rolling basis|year.round|ongoing)\b/i.test(quote);
+  if(value==='rolling')return /\brolling\s+(admissions?|applications?|enrol(?:l)?ment)\b|\b(applications?|sign[ -]?ups?)\b.{0,50}\b(rolling basis|year.round|ongoing)\b|\baccepted on a rolling basis\b/i.test(quote);
   return value==='open'&&(/\b(applications?|registration|enrol(?:l)?ment|sign[ -]?ups?|membership)\s+(?:(?:are|is)\s+(?:(?:now|currently)\s+)?open|(?:now|currently)\s+open)\b/i.test(quote)||/\b(apply|register|sign up|join)\s+(now|today)\b|\bopen for (applications|registration|sign[ -]?ups)\b|\b(?:currently |now |we are )?accepting (?:applications?|registrations?)\b|\bapplications? open(?: (?:now|today))?(?=[.!?;:]|$)/i.test(quote));
 }

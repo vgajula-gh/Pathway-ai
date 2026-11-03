@@ -1,6 +1,6 @@
 import {FactFields,ScoutFacts,type ResearchOutput} from '../scout/schema.js';
 import {sourcePassages} from '../scout/passages.js';
-import {normalizeEvidence} from './scout-qualification.js';
+import {normalizeEvidence,supportedProgramName} from './scout-qualification.js';
 import {gradeRangeInQuote} from './opportunity-evidence.js';
 import type {Page} from '../discovery/pages.js';
 
@@ -24,6 +24,7 @@ export function confirmedResearchFacts(lead:Lead,pages:Page[]):ScoutFacts {
     return null;
   };
   facts.evidence.name=refs(lead.name);
+  if(!facts.evidence.name){const passage=passages.find(p=>supportedProgramName(lead.name,p.text));if(passage)facts.evidence.name=[passage.id];}
   if(!details)return facts;
   const evidence=(key:string)=>details.evidence.find(e=>e.field===key&&refs(e.quote,e.sourceUrl));
   const bind=(field:keyof typeof FactFields,from:string=field)=>{
