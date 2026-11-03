@@ -43,7 +43,7 @@ export async function personalPicks(studentId: string, rebuild = false) {
             ...saved.map((x) => x.opportunityId),
             ...feedback.map((x) => x.opportunityId),
           ]);
-          const counts = { free: setting('FREE_PICKS', 3, 10), paid: setting('PAID_PICKS', 3, 10) };
+          const counts = { free: setting('FREE_PICKS', 3, 3), paid: setting('PAID_PICKS', 3, 3) };
           const valid = previous.filter((p) => {
             const o = opps.find((o) => o.id === p.opportunityId);
             return (
@@ -113,6 +113,7 @@ export async function personalPicks(studentId: string, rebuild = false) {
                 pickedAt:
                   previous.find((old) => old.opportunityId === p.opportunityId)?.pickedAt || new Date(),
                 refreshCycle: cycle,
+                scoreBreakdown:JSON.stringify((()=>{const fit=scoreOpportunity(opps.find(o=>o.id===p.opportunityId)!,ctx,freeMin);return !fit.excluded&&'breakdown' in fit?fit.breakdown:{};})()),
               })),
             });
           return chosen;

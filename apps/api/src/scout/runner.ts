@@ -25,7 +25,7 @@ type Run=Awaited<ReturnType<typeof prisma.discoveryRun.findUniqueOrThrow>>;
 export type ScoutDependencies={research:typeof research;fetch:typeof fetchOfficialPage;extract:typeof extractScout;qualify:typeof qualifyScout;save:typeof storeCandidate;provider:NonNullable<ReturnType<typeof getSearch>>};
 export function newScoutState(context:PublicSearchContext,groupKeys:string[],maxCandidates=16):ScoutState {
   const safe=publicSearchContext(context);
-  return {stage:'research',context:safe,groupKeys,candidateId:null,inFlight:null,repairUsed:false,maxCandidates:Math.max(0,Math.min(16,maxCandidates)),query:scoutPrompt(safe,Math.min(6,maxCandidates)),calls:[],startedAt:new Date().toISOString()};
+  return {stage:'research',context:safe,groupKeys,candidateId:null,inFlight:null,repairUsed:false,maxCandidates:Math.max(0,Math.min(16,maxCandidates)),query:scoutPrompt(safe,maxCandidates),calls:[],startedAt:new Date().toISOString()};
 }
 function pagesOf(value:string):Page[] {return j<any[]>(value,[]).map(p=>({...p,checkedAt:new Date(p.checkedAt)}));}
 class ScoutBudget extends RunBudget {
@@ -85,7 +85,7 @@ export async function advanceScout(run:Run,overrides:Partial<ScoutDependencies>=
       budget.phase='searching';
       if(!provider?.research)throw new Error('Search provider is not configured');
       budget.take('searches');await claim('research');await callStarted('research');const started=Date.now();
-      const response=await deps.research({research:provider.research},state.context,Math.min(6,state.maxCandidates),!state.repairUsed,async(u,k)=>{if(k==='repair')state.repairUsed=true;await addCall(u,k,Date.now()-started);},async()=>{state.repairUsed=true;await callStarted('repair');await persist();});
+      const response=await deps.research({research:provider.research},state.context,state.maxCandidates,!state.repairUsed,async(u,k)=>{if(k==='repair')state.repairUsed=true;await addCall(u,k,Date.now()-started);},async()=>{state.repairUsed=true;await callStarted('repair');await persist();});
       state.repairUsed||=response.repaired;
       const seen=new Set<string>(),programs=new Set<string>();
       for(const lead of balancedLeads(response.output.candidates)) {

@@ -3,8 +3,9 @@
 import {normalizeTopic} from '../discovery/groups.js';
 import {dkey,wallNow} from './time.js';
 import { StudentContext } from './types.js';
+import {publicScoutFacts,scoutPreferenceChecks,scoutScore} from './scout-scoring.js';
 
-export interface Opp { id: string; name: string; category: string; gradeMin: number | null; gradeMax: number | null; region?: string[]; verificationStatus?: string; minAge?: number | null; format: string; cost: string; commitment: string; skills: string[]; tags: string[]; checks: string[]; sourceCheckedAt?: Date | null; deadline?: string | null }
+export interface Opp { id: string; name: string; category: string; gradeMin: number | null; gradeMax: number | null; region?: string[]; verificationStatus?: string; minAge?: number | null; format: string; cost: string; commitment: string; skills: string[]; tags: string[]; checks: string[]; sourceCheckedAt?: Date | null; deadline?: string | null; sourceReadAt?:Date|null;scoutFacts?:string;promptVersion?:string;costType?:string }
 export type FactorState = 'ok' | 'mid' | 'no' | 'na';
 export interface Factor { key: string; state: FactorState; text: string }
 
@@ -12,13 +13,14 @@ export function eligibility(o: Opp, s: StudentContext) {
   const reasons: string[] = [], checks = [...o.checks];
   if ((o.gradeMin != null && s.grade < o.gradeMin) || (o.gradeMax != null && s.grade > o.gradeMax)) reasons.push(o.gradeMin === o.gradeMax ? `Only for grade ${o.gradeMin}` : `For grades ${o.gradeMin}–${o.gradeMax}`);
   if (o.deadline && o.deadline < (s.timezone?dkey(wallNow(s.timezone)):new Date().toISOString().slice(0,10))) reasons.push('The deadline has passed');
-  if (o.gradeMin == null || o.gradeMax == null) checks.push('Grade eligibility is not confirmed');
+  if ((o.gradeMin == null || o.gradeMax == null)&&publicScoutFacts(o).schoolLevel!=='high_school') checks.push('Grade eligibility is not confirmed');
   if (o.verificationStatus === 'expired') reasons.push('The deadline has passed');
   if (s.region === 'virtual' && !/virtual|online/i.test(o.format)) reasons.push('You chose virtual opportunities only');
   if (s.region && s.region !== 'virtual' && o.region?.length && !o.region.some(r => ['virtual', 'US', s.region].includes(r))) reasons.push('Outside your selected region');
   if (o.minAge) checks.push(`Minimum age ${o.minAge}`);
   if (s.budget === 'free' && !/^free/i.test(o.cost)) checks.push(`Cost: ${o.cost}`);
   if (s.format === 'virtual' && !/virtual|online|application/i.test(o.format)) checks.push('In-person participation');
+  const preference=scoutPreferenceChecks(o,s);reasons.push(...preference.reasons);checks.push(...preference.checks);
   return { status: reasons.length ? 'not_eligible' : checks.length ? 'check' : 'eligible', reasons, checks } as const;
 }
 
@@ -27,6 +29,7 @@ export const WEIGHTS = { interest: 0.3, goal: 0.2, schedule: 0.15, cost: 0.15, r
 export function scoreOpportunity(o: Opp, s: StudentContext, weekFreeMin: number) {
   const e = eligibility(o, s);
   if (e.status === 'not_eligible') return { id: o.id, excluded: true as const, eligibility: e };
+  if(o.promptVersion==='scout-v1')return scoutScore(o,s,weekFreeMin,e);
   const matched = s.interests.filter(n => o.tags.some(t => {const tag=normalizeTopic(t),interest=normalizeTopic(n);return !!tag&&!!interest&&(tag.includes(interest)||interest.includes(tag));}));
   const goalText = s.goals.join(' ').toLowerCase();
   const goalHit = o.tags.some(t => goalText.includes(t)) || o.skills.some(k => goalText.includes(k.toLowerCase().split(' ')[0]));

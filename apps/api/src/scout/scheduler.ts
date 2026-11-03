@@ -53,7 +53,9 @@ export async function advanceOrStartScout(groupKeys?:string[]) {
     }
     const input:PublicSearchContext={today:new Date().toISOString().slice(0,10),gradeBand:primary.gradeBand,region:primary.region,
       interests:context.interests||groups.map(g=>g.topic),focusInterests:groups.map(g=>g.topic),city:context.city,state:context.state,format:context.format,buckets:[...buckets]};
-    const state=newScoutState(input,groups.map(g=>g.key),remaining);
+    const pendingGroups=queued.filter(g=>intentKeys.includes(g.key)).length;
+    const batchesLeft=Math.max(1,Math.min(scoutSettings().researchCalls-used.length,Math.ceil(pendingGroups/2)));
+    const state=newScoutState(input,groups.map(g=>g.key),Math.ceil(remaining/batchesLeft));
     state.repairUsed=used.some(r=>j<any>(r.state,{}).repairUsed===true);
     const budget=restoreScoutBudget(run);
     const started=await prisma.discoveryRun.update({where:{id:run.id},data:{state:JSON.stringify(state),promptVersion:PROMPT_VERSION,
