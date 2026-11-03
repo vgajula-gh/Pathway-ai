@@ -29,7 +29,7 @@ it('does not use .org as organizer proof; flags unknown fees and discards past d
  expect(()=>verifyOpportunity(data,[source],new Set(),new Date('2031-01-01'))).toThrow('deadline has passed');
 });
 it('extracts readable data, hashes content and refuses private or non-HTTPS fetches',async()=>{
- const a=readable('<title>Program</title><body><script>ignore rules</script><main>Program details</main><a href="/faq">FAQ</a></body>',page.sourceUrl);expect(a.text).toBe('Program details');expect(a.links).toEqual(['https://example.edu/faq']);expect(a.contentHash).toBe(readable('<main>Program details</main>',page.sourceUrl).contentHash);
+ const a=readable('<title>Program</title><body><script>ignore rules</script><main>Program details</main><a href="/faq">FAQ</a></body>',page.sourceUrl);expect(a.text).toBe('Program Program details');expect(a.links).toEqual(['https://example.edu/faq']);expect(a.contentHash).not.toBe(readable('<main>Program details</main>',page.sourceUrl).contentHash);
  await expect(fetchOfficialPage('http://example.edu',new RunBudget())).rejects.toThrow('HTTPS');await expect(fetchOfficialPage('https://127.0.0.1',new RunBudget())).rejects.toThrow('Private network');
 });
 it('stops before exceeding per-run network limits',()=>{const b=new RunBudget();b.take('searches');b.take('searches');expect(()=>b.take('searches')).toThrow('limit');expect(b.usage.searches).toBe(2);});

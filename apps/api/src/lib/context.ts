@@ -1,3 +1,4 @@
+import {discoveryPreferences} from '../domain/discovery-preferences.js';
 // Loads everything the deterministic engine needs for one student.
 import type { Prisma } from '@prisma/client';
 import { prisma, j } from './db.js';
@@ -18,6 +19,6 @@ export async function loadContext(studentId: string, db: Pick<Prisma.Transaction
   ]);
   const a = student.availability;
   const rules: AvailabilityRules = a ? { studyStart: a.studyStart, studyEnd: a.studyEnd, maxStudyMin: a.maxStudyMin, downtimeStart: a.downtimeStart, downtimeEnd: a.downtimeEnd } : DEFAULT_RULES;
-  const ctx: StudentContext = { timezone:student.timezone, region: student.region, grade: student.grade, interests: j(student.interests, []), skills: j(student.skills, []), budget: student.budget, format: student.format, goals: goals.filter(g => g.status !== 'done').map(g => g.title) };
+  const ctx: StudentContext = { discovery:discoveryPreferences(student.discoveryPreferences), timezone:student.timezone, region: student.region, grade: student.grade, interests: j(student.interests, []), skills: j(student.skills, []), budget: student.budget, format: student.format, goals: goals.filter(g => g.status !== 'done').map(g => g.title) };
   return { student, rules, events: events.map(toCalEvent), goals, ctx, milestones: goals.flatMap(g => g.milestones) };
 }

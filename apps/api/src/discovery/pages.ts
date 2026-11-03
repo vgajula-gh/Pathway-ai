@@ -139,9 +139,13 @@ export function readable(html: string, url: string): Omit<Page, 'checkedAt'> {
       return u.origin === new URL(url).origin && !fileSourceType(u) && /rules|faq|eligib|fee|cost|apply|requirements/i.test(u.pathname) ? [u.href] : [];
     } catch { return []; }
   });
+  const title=$('title').text().replace(/\s+/g,' ').trim().slice(0,200);
   $('script,style,noscript,nav,footer,header,form,iframe').remove();
-  const text = ($('main').text() || $('article').text() || $('body').text()).replace(/\s+/g, ' ').trim().slice(0, CAPS.pageChars);
-  return { sourceUrl: url, pageTitle: $('title').text().trim().slice(0, 200) || new URL(url).hostname, text, contentHash: createHash('sha256').update(text).digest('hex'), links: [...new Set(links)].slice(0, 3) };
+  $('br,hr').replaceWith(' ');
+  $('main,article,section,div,p,h1,h2,h3,h4,h5,h6,li,ul,ol,table,tr,td,th,dl,dt,dd,blockquote').each((_i,el)=>{$(el).prepend(' ').append(' ');});
+  const body=($('main').text() || $('article').text() || $('body').text()).replace(/\s+/g,' ').trim();
+  const text=(title?title+' '+body:body).trim().slice(0,CAPS.pageChars);
+  return { sourceUrl: url, pageTitle: title || new URL(url).hostname, text, contentHash: createHash('sha256').update(text).digest('hex'), links: [...new Set(links)].slice(0, 3) };
 }
 export async function fetchOfficialPage(value: string, budget: RunBudget): Promise<Page> {
   const page = await raw(officialUrl(value).href, budget, 'fetch');

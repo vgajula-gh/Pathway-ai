@@ -13,14 +13,15 @@ import { env } from '../lib/env.js';
 
 import { noteInterestChange } from '../discovery/refresh.js';
 import { Region } from '../domain/regions.js';
+import {DiscoveryPreferencesPatch,discoveryPreferences} from '../domain/discovery-preferences.js';
 const hhmm = z.string().regex(/^\d{2}:\d{2}$/);
 const Onboard = z.object({ credentials: Credentials.optional(), region: Region.default(''), name: z.string().min(1).max(60), grade: z.number().int().min(9).max(12), interests: z.array(z.string()).max(20).default([]), goal: z.string().max(140).optional(),
   aiConsent: z.boolean().default(true), timezone: z.string().refine(zone => { try { new Intl.DateTimeFormat('en', { timeZone: zone }); return true; } catch { return false; } }, 'Choose a valid timezone').default('America/New_York'), studyStart: hhmm.default('16:00'), studyEnd: hhmm.default('21:00'), downtimeStart: hhmm.default('21:00'), downtimeEnd: hhmm.default('23:00'), sampleWeek: z.boolean().default(false) });
-const Patch = z.object({ region: Region, name: z.string().min(1).max(60), grade: z.number().int().min(9).max(12), interests: z.array(z.string().max(80)).max(20), skills: z.array(z.string()), location: z.string().max(80), aiConsent: z.boolean(), budget: z.enum(['free', 'any']), format: z.enum(['virtual', 'any']),
+const Patch = z.object({ discoveryPreferences:DiscoveryPreferencesPatch, region: Region, name: z.string().min(1).max(60), grade: z.number().int().min(9).max(12), interests: z.array(z.string().max(80)).max(20), skills: z.array(z.string()), location: z.string().max(80), aiConsent: z.boolean(), budget: z.enum(['free', 'any']), format: z.enum(['virtual', 'in_person', 'any']),
   settings: z.object({ voice: z.boolean(), showWord: z.boolean(), showNews: z.boolean(), theme: z.enum(['dusk', 'dark', 'light', 'auto']), newsTopics: z.array(z.string()).max(7).nullable() }).partial(), availability: z.object({ studyStart: hhmm, studyEnd: hhmm, maxStudyMin: z.number().int().min(30).max(360), downtimeStart: hhmm, downtimeEnd: hhmm }).partial() }).partial();
 
 export function serializeStudent(s: any) {
-  return { id: s.id, hasSignIn: !!s.signInHash, name: s.name, grade: s.grade, timezone: s.timezone, region: s.region, location: s.location, interests: j(s.interests, []), skills: j(s.skills, []), aiConsent: s.aiConsent, budget: s.budget, format: s.format, settings: { voice: false, showWord: true, showNews: true, theme: 'dusk', newsTopics: null, ...j(s.settings, {}) }, provenance: j(s.provenance, {}), availability: s.availability, createdAt: s.createdAt };
+  return { discoveryPreferences:discoveryPreferences(s.discoveryPreferences), id: s.id, hasSignIn: !!s.signInHash, name: s.name, grade: s.grade, timezone: s.timezone, region: s.region, location: s.location, interests: j(s.interests, []), skills: j(s.skills, []), aiConsent: s.aiConsent, budget: s.budget, format: s.format, settings: { voice: false, showWord: true, showNews: true, theme: 'dusk', newsTopics: null, ...j(s.settings, {}) }, provenance: j(s.provenance, {}), availability: s.availability, createdAt: s.createdAt };
 }
 
 export default async function routes(app: FastifyInstance) {
@@ -47,7 +48,7 @@ export default async function routes(app: FastifyInstance) {
   app.patch('/api/me', async req => {
     const s = await requireStudent(req), b = Patch.parse(req.body), prov = j<Record<string, unknown>>(s.provenance, {}), at = new Date().toISOString(), src = 'You edited';
     if (b.interests) prov.interests = { src, at }; if (b.skills) prov.skills = { src, at }; if (b.availability) prov.availability = { src, at };
-    await prisma.student.update({ where: { id: s.id }, data: { name: b.name, region: b.region, grade: b.grade, location: b.location, aiConsent: b.aiConsent, budget: b.budget, format: b.format,
+    await prisma.student.update({ where: { id: s.id }, data: { discoveryPreferences:b.discoveryPreferences && JSON.stringify({...discoveryPreferences(s.discoveryPreferences),...b.discoveryPreferences}), name: b.name, region: b.region, grade: b.grade, location: b.location, aiConsent: b.aiConsent, budget: b.budget, format: b.format,
       interests: b.interests && JSON.stringify(b.interests), skills: b.skills && JSON.stringify(b.skills), settings: b.settings && JSON.stringify({ ...j(s.settings, {}), ...b.settings }), provenance: JSON.stringify(prov) } });
     if(b.interests)await noteInterestChange(s.id,j(s.interests,[]),b.interests);
     if (b.availability) await prisma.availability.upsert({ where: { studentId: s.id }, update: { ...b.availability, source: 'edited', lastVerified: new Date() }, create: { studentId: s.id, ...b.availability } });

@@ -1,3 +1,4 @@
+import type {DiscoveryPreferences} from './discovery-preferences.js';
 export const EVENT_TYPES = ['class', 'exam', 'deadline', 'club', 'sports', 'competition', 'volunteering', 'study', 'personal', 'reminder', 'other'] as const;
 export type EventType = typeof EVENT_TYPES[number];
 /** Fixed commitments can't be moved by Pathway; flexible blocks can. */
@@ -12,5 +13,6 @@ export interface AvailabilityRules {
   studyStart: string; studyEnd: string; maxStudyMin: number; downtimeStart: string; downtimeEnd: string;
 }
 export interface StudentContext {
+  discovery?: DiscoveryPreferences;
   timezone?: string; region?: string; grade: number; interests: string[]; skills: string[]; budget: string; format: string; goals: string[];
 }
