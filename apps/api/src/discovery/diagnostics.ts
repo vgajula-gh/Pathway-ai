@@ -38,10 +38,19 @@ export function searchDiagnostics(runs:{id:string;usage:string}[]) {
   const unique=[...new Map(runs.map(r=>[r.id,r])).values()];
   const steps=Object.fromEntries(Object.values(stepNames).map(name=>[name,{completed:0,failed:0}])) as Record<typeof stepNames[keyof typeof stepNames],{completed:number;failed:number}>;
   let searchAttempts=0,httpAttempts=0,knownCandidates=true;
+  let webSearches=0,inputTokens=0,outputTokens=0,estimatedCostUsd=0,knownUsage=true,knownCost=true,verifiedCandidates=0,knownVerified=true;
   const candidates={found:0,filtered:0,queued:0},ids=new Set<string>(),models=new Map<string,unknown>(),failures:FailureInfo[]=[];
   for(const run of unique) {
     let u:Record<string,any>={};try{u=record(JSON.parse(run.usage));}catch{/* Legacy missing diagnostics. */}
     searchAttempts+=count(u.searches);httpAttempts+=count(u.pages);
+    if(!Array.isArray(u.calls)||!u.calls.length)knownUsage=false;
+    else for(const call of u.calls){const c=record(call),usage=record(c.usage);
+      if(!['research','extract','repair'].includes(c.kind))continue;
+      if(typeof usage.inputTokens!=='number'||typeof usage.outputTokens!=='number'||c.kind==='research'&&typeof usage.webSearches!=='number')knownUsage=false;
+      inputTokens+=count(usage.inputTokens);outputTokens+=count(usage.outputTokens);if(c.kind==='research')webSearches+=count(usage.webSearches);
+    }
+    if(typeof u.estimatedCost==='number'&&Number.isFinite(u.estimatedCost)&&u.estimatedCost>=0&&u.estimatedCost<=1e6)estimatedCostUsd+=u.estimatedCost;else knownCost=false;
+    if(u.candidateOutcomes&&typeof u.candidateOutcomes==='object')verifiedCandidates+=count(u.candidateOutcomes.verified);else knownVerified=false;
     if(u.candidates&&typeof u.candidates==='object'&&!Array.isArray(u.candidates)&&['found','filtered','queued'].every(k=>typeof u.candidates[k]==='number'&&Number.isSafeInteger(u.candidates[k])&&u.candidates[k]>=0&&u.candidates[k]<=1e6))for(const key of ['found','filtered','queued'] as const)candidates[key]+=count(u.candidates[key]);
     else knownCandidates=false;
     if(Array.isArray(u.savedIds))for(const id of u.savedIds)if(typeof id==='string')ids.add(id);
@@ -62,5 +71,6 @@ export function searchDiagnostics(runs:{id:string;usage:string}[]) {
   const grouped=new Map<string,FailureInfo&{count:number}>();
   for(const failure of failures){const key=JSON.stringify(failure),old=grouped.get(key);grouped.set(key,{...failure,count:(old?.count||0)+1});}
   return {failures,diagnostics:{runs:unique.length,searchAttempts,httpAttempts,candidates:knownCandidates?candidates:null,
+    webSearches:knownUsage?webSearches:null,inputTokens:knownUsage?inputTokens:null,outputTokens:knownUsage?outputTokens:null,estimatedCostUsd:knownCost?estimatedCostUsd:null,verifiedCandidates:knownVerified?verifiedCandidates:null,
     steps,programsSaved:ids.size,failures:[...grouped.values()],models:[...models.values()]}};
 }

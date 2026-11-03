@@ -21,6 +21,9 @@ import { settleSearchRequests,neededGroupBuckets } from './requests.js';
 export {withJobLock} from '../lib/job-lock.js';
 import {withJobLock} from '../lib/job-lock.js';
 import {reserveDiscoverySpend} from './spend.js';
+import {confirmedResearchFacts} from '../domain/research-evidence.js';
+import {ResearchOutput} from '../scout/schema.js';
+import {scoutSettings} from '../scout/settings.js';
 export async function reserveRun(groupKey: string, kind: 'discovery' | 'recheck' | 'knowledge', now = new Date()) {
   const month = now.toISOString().slice(0, 7),
     field = kind === 'discovery' ? 'runs' : 'rechecks',
@@ -122,19 +125,27 @@ export async function recheckOpportunity(
         data: { verificationStatus: 'stale', sourceCheckedAt: null, verifiedAt: null, costVerifiedAt: null },
       });
       budget.check();
-      budget.extractionCalls++;
-      budget.usage.tokens += Math.ceil(pages.reduce((n, p) => n + p.text.length, 0) / 3) + 6500;
       stage = 'extract';
       let data;
       if(o.promptVersion===PROMPT_VERSION) {
-        const result=await extractScout(pages);
-        if(result.usage)budget.usage.tokens+=(result.usage.inputTokens||0)+(result.usage.outputTokens||0);
-        stage='verify';const qualified=qualifyScout(result.facts,pages,trustedDomains());
+        let facts;
+        if(scoutSettings().sourceMode==='research_evidence'){
+          const candidate=await prisma.researchCandidate.findFirst({where:{opportunityId:id},orderBy:{createdAt:'desc'},include:{run:true}});
+          const parsed=ResearchOutput.safeParse(j<any>(candidate?.run.state||'{}',{}).researchOutput);
+          const lead=parsed.success?parsed.data.candidates.find(c=>c.officialUrl===candidate?.url):undefined;
+          facts=confirmedResearchFacts(lead||{name:o.name,officialUrl:o.url,interests:[],costHint:'unknown'},pages);
+        }else{
+          budget.extractionCalls++;const result=await extractScout(pages);facts=result.facts;
+          if(result.usage)budget.usage.tokens+=(result.usage.inputTokens||0)+(result.usage.outputTokens||0);
+        }
+        stage='verify';const qualified=qualifyScout(facts,pages,trustedDomains(),new Date(),{name:o.name,url:o.url});
         if(!qualified.data)throw new DiscoveryFailure({stage:'verify',code:qualified.reasons.some(r=>r.reason==='past_deadline')?'deadline_passed':'missing_evidence'});
         data=qualified.data;
       } else {
+        budget.extractionCalls++;budget.usage.tokens+=Math.ceil(pages.reduce((n,p)=>n+p.text.length,0)/3)+6500;
         const facts=await dependencies.extract(pages);stage='verify';data=verifyOpportunity(facts,pages,trustedDomains());
       }
+      if(!data.deadline&&o.deadline)data={...data,deadline:o.deadline,evidence:JSON.stringify({...j<any>(data.evidence,{}),...(j<any>(o.evidence,{}).deadline?{deadline:j<any>(o.evidence,{}).deadline}:{})})};
       if (
         identity(o.officialDomain || new URL(o.url).hostname, o.name) !==
         identity(data.officialDomain, data.name)

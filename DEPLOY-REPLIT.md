@@ -2,7 +2,7 @@
 
 For the expiration-only Explore follow-up, there are **no new schema changes, Secrets or resets**. Merge/sync main, run `npm ci --include=dev`, build and publish. Earlier Scout schema additions must already be applied. Open Explore after publish: existing stored rejected links may recover without a new paid search. Only run another search if needed; unconfirmed links should remain visible even if extraction fails. See [the behavior and test checklist](docs/15-EXPLORE-SIMPLIFICATION.md).
 
-These steps work for a new invitation-only pilot or an update to an existing app. Keep your existing database, sign-in secret and calendar secret. This update adds database fields and tables; it does not reset profiles, applications or usage.
+These steps work for a new invitation-only pilot or an update to an existing app. Keep your existing database, sign-in secret and calendar secret. The earlier Scout migrations must already be applied. This follow-up adds no database fields/tables and does not reset profiles, applications or paid usage.
 
 ## 1. Get the code from GitHub
 
@@ -61,6 +61,30 @@ node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
 
 These owner secrets are not student login phrases. Each student chooses their own phrase during setup and keeps their recovery code. ACCESS_CODES is an invitation allowlist, not a seat count: a code can register multiple profiles. Ten distinct codes help identify ten testers; hosting capacity depends on your Replit plan/concurrency.
 
+### Scout controls for this update
+
+Set these optional controls in **Publishing → deployment/app Secrets** before republishing. Add them separately to workspace Secrets if you also test Preview/Shell. Existing configured count limits are preserved; no limit is automatically raised to 50.
+
+| Setting | Default / meaning |
+| --- | --- |
+| SCOUT_SOURCE_MODE | `research_evidence`: research details, then a best-effort source check; no separate extraction AI call. `fetch_and_extract` keeps the optional older extraction path |
+| SCOUT_MAX_TOOL_CALLS | `5` web tools per research request; maximum `10` |
+| SCOUT_MAX_CALLS_PER_SEARCH | `2` funded research batches; maximum `3`. Up to three focus interests per batch covers five interests |
+| SCOUT_RESEARCH_TIMEOUT_SECONDS | `150`, maximum `150` |
+| SCOUT_EXTRACTION_TIMEOUT_SECONDS | `90`, maximum `90`; optional extraction mode only |
+| SCOUT_TIMEOUT_SECONDS | `60` maximum for ordinary source worker stages |
+| SCOUT_MAX_OUTPUT_TOKENS | `6000`, maximum `8000`; old explicit overrides remain in effect |
+| SCOUT_MAX_HTTP_ATTEMPTS | `40`; includes robots/redirect HTTP attempts |
+| SCOUT_REDIRECT_DOMAINS | Optional comma-separated owner-reviewed application hostnames; no protocols/paths. Do not allow all `.org` sites |
+| DISCOVERY_MONTHLY_BUDGET | Existing value; default `10` research-batch attempts/month. `50` is an optional pilot setting you can choose after testing |
+| DISCOVERY_MONTHLY_SPEND_USD | `25` estimated discovery dollars/month; `0` blocks new funded research |
+| SCOUT_WEB_SEARCH_PRICE_USD | `0.025` configured estimate per web tool, not verified vendor pricing |
+| SCOUT_INPUT_PRICE_PER_MILLION | `4` configured estimate; use rates conservative enough for all enabled Scout models |
+| SCOUT_OUTPUT_PRICE_PER_MILLION | `16` configured estimate; same pricing caveat |
+| JOBS_SECRET | Stable owner-only random value, at least `32` characters; already required for diagnostics/jobs |
+
+Keep your actual provider keys/models, AI_DAILY_LIMIT and AI_MONTHLY_LIMIT. A richer research response is optional: malformed details still leave usable links visible. Reported details do not establish eligibility, Free or a Verified badge until actual fetched text supports them. No missing deadline year is guessed. Only confirmed past deadlines hide results; closed/unknown status and profile mismatches remain warnings.
+
 ## 4. Optional Pinecone setup
 
 Search/cards work without Pinecone. PostgreSQL stores the actual catalog; Pinecone stores public source vectors for cited program questions.
@@ -117,15 +141,15 @@ Do not paste JOBS_SECRET into the URL or chat. The command sends it only as an A
    npm run check:scout -- --url https://YOUR-APP.replit.app --mode live
    ```
 
-   It returns a runId and queues one public coding candidate, with no student data. The job may use **one web research request plus one extraction request**, not one total model call. It does not use a format repair. Shared paid reservations remain counted even on failure.
+   It returns a runId and queues one public coding candidate, with no student data. Default evidence-first mode uses **one research API request, up to five web tools, a page check and zero extraction AI calls**. Optional fetch-and-extract mode can also make one extraction request. This owner test performs no format repair. Normal attempt/AI/estimated-spend caps apply, including failures.
 
-3. Advance the returned runId. Repeat until `done:true` (normally research, read, extraction/qualification stages). Each call processes one bounded network stage:
+3. Advance the returned runId. Repeat until `done:true` (normally research, then page confirmation; optional extraction adds another stage). Each call processes one bounded network stage:
 
    ```sh
    npm run check:scout -- --url https://YOUR-APP.replit.app --mode advance --run JOB_ID
    ```
 
-   An enabled background worker/owner cron may also continue this explicitly authorized job. Read its report with step 6. Live results may be rejected if pages are blocked, old or missing identity/activity facts; the report shows why. This owner job alone does not create student picks or force Pinecone embeddings.
+   An enabled background worker/owner cron may also continue this explicitly authorized job. Read its report with step 6. Blocked/unreadable pages retain an unconfirmed link; a confirmed past deadline is hidden. No usable URLs means a real failure. The report shows each candidate outcome, fetch reason, actual observed tools/tokens and estimated cost. This owner job alone does not create student picks or force Pinecone embeddings.
 
 4. Then test one student search below. Do not repeatedly run live tests to work around an error or budget cap.
 
@@ -136,20 +160,24 @@ The existing `npm run check:extraction` remains a configuration-only workspace c
 1. Use a new **test** profile or your existing test profile; keep real student data. Try a wrong invitation code, then the correct one. Set a sign-in phrase and confirm it opens the same profile on a second device.
 2. Choose interests and turn on AI consent in You → Privacy. Open Explore: it offers recommendations/search without automatically spending web calls on entry. The optional preference editor is shared with You; saving preferences reranks SQL choices without starting web research.
 3. Choose Search for opportunities / Search for more. Keep Explore open while it reads pages. Stage and candidate/page/qualified counts reflect stored work. Existing cards remain usable. A complete shared library is reused; otherwise only missing coverage is researched.
-4. Check up to three Free and three Paid or cost-unconfirmed **in total**. Fewer is valid. Confirm source excerpts, date, cost/format/age warnings and honest Verified versus Needs checking labels. Future announced openings belong in Coming soon, outside the active six. No expired competition should appear.
+4. Check the primary three Free and three Paid or cost-unconfirmed picks, followed by other unexpired links. Fewer confirmed Free options is valid. Both groups are expanded. Check actual source excerpts and reported-versus-confirmed details; future openings/closed applications remain visible with warnings. Confirmed past deadlines should not appear in discovery.
 5. Mark Interested, dismiss with a reason, compare, open the program page and request a prep proposal. Replacements use the catalog without a new paid search. Your schedule changes only after approval.
 6. With embeddings configured, let Preparing details become Ask about this program. Check citations and warnings in Buddy and grouped My opportunities answers. Check Pinecone's opportunities namespace; source chunks are public and shared, not student profiles.
 7. With a second matching student, verify library reuse without another web run. Test an unknown location/cost, no matches, AI off and a reached cap: ordinary calendars, goals, existing programs and data controls still work. Test the layout and controls on a phone.
 
 ## Limits and recovery
 
-DISCOVERY_MONTHLY_BUDGET is an attempt count, **not dollars**. The Scout uses at most three funded research batches per explicit student search; each batch covers at most two focus interests. With a cap of 30, ten students whose searches all need three distinct batches can consume it with their initial searches. Shared catalog reuse can reduce demand; failure attempts still count. One search can include several provider requests for page extraction, so 30 is not a provider-call or dollar limit.
+DISCOVERY_MONTHLY_BUDGET counts research-batch attempts, **not dollars, students or individual web-tool calls**. Default two batches can cover five interests; with a cap of 30, ten students needing two fresh batches each could use 20 attempts before additional searches/retries. Shared reuse can reduce demand. Paid failures still count. Existing configured limits remain in effect.
 
-AI_MONTHLY_LIMIT is the separate overall reservation cap (interactive requests plus shared discovery/recheck/preparation work). AI_DAILY_LIMIT applies to interactive requests for each student; shared catalog work does not debit an arbitrary student's daily counter. Hosted provider failures remain counted. UTC calendar months reset the shared usage; personal manual-search allowance uses its rolling 30-day cycle. A failed student search preserves its successful-search slot but does not refund provider attempts.
+AI_MONTHLY_LIMIT separately caps overall interactive/shared reservations; AI_DAILY_LIMIT caps each student's interactive requests. Shared jobs do not debit an arbitrary student's daily counter. UTC calendar months reset shared usage; the student successful-search cycle is rolling 30 days.
 
-Raising a cap requires updating the production Secret and republishing. The app rechecks current caps against preserved usage, so an old “limited” result does not keep the button disabled. Starting/resuming web work still requires an explicit student action. Catalog reuse/refills stay free even when a cap is reached. No data reset is needed.
+A failed or empty search preserves the student's successful-search slot. Earlier empty-result charges are restored once with an audit event; provider usage is not refunded or deleted. Explicit retry is available after one hour, with at most three unsuccessful attempts per shared interest group per UTC day. No timer automatically repeats a failed paid call. Existing results and free library reuse remain available.
 
-Optional tuning is listed in `.env.example`: max three Scout research calls; eight free-hint/eight paid-or-unknown-hint queued leads (max sixteen combined); 30-day cache; 60-second maximum network stage; output and HTTP limits; six scoring weights totaling 100. Keep defaults first. Do not increase caps to hide missing evidence, unreadable sites or a setup problem. See [the implementation and qualification guide](docs/14-OPPORTUNITY-SCOUT.md).
+DISCOVERY_MONTHLY_SPEND_USD adds an **estimated discovery spending cap**, default $25. A transaction holds estimated funds before funding each run, so concurrent requests cannot all claim the same balance. Completion reconciles the hold using observed tool calls/tokens; missing usage retains conservative estimates. Historical estimated spend initializes the balance. The owner report shows spent-plus-held estimates and configured prices. Raising the cap/republishing rechecks the preserved balance; no reset is required.
+
+At defaults, up to two research requests × five web tools × the configured $0.025 = **$0.25 for tools, plus tokens and any one format repair**. Default evidence-first reservation is approximately $0.5506 per run, including possible repair, with unused estimated funds released at settlement. Those rates and input allowances are estimates, not current provider prices or a guarantee of actual charges. Rechecks, embeddings, Buddy and hosting have separate costs. Set spending controls/alerts in your OpenAI project/account too; confirm whether your provider's budget setting actually blocks requests or only sends alerts.
+
+This update requires no new database migration or data reset. For an existing app with earlier missing-column errors, first confirm the original Scout migrations have been applied through Publish. Keep Explore open to advance work or use the existing owner scheduler. The API and development proxy allow three minutes for a hosted-provider request, retaining the longer local Ollama timeout. Longer SDK timeouts cannot guarantee that a hosting/proxy connection will stay open; persisted stages retain completed results without automatically replaying uncertain paid work.
 
 ## Optional notifications and scheduling
 

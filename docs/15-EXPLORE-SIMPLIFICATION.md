@@ -23,10 +23,14 @@ Authenticated GET /api/opportunities can recover up to 100 earlier rejected/erro
 
 Unconfirmed links show Needs checking; only supported reviewed records gain Verified. HTTPS/DNS/robots/redirect/size safeguards, authentication/access codes, privacy, proposal approvals and AI limits remain enforced. PDF links may display without automatic reading. SQL owns cards; optional Pinecone embeddings require fetched text and funded preparation. Additional library results become eligible for program questions after Interested and preparation.
 
-A settled search with usable partial links uses the normal successful-search allowance. Failure with no usable results remains a failure; paid attempts still count globally. Limits are not raised or reset.
+A settled search with usable partial links uses the normal successful-search allowance. Failure or an empty result uses no successful-search allowance; paid attempts still count globally. Earlier empty-result charges are restored once with an audit record. Explicit failed/empty retries wait one hour and are bounded to three unsuccessful shared-group attempts per UTC day. Existing configured attempt limits remain unchanged. An additional $25 default estimated discovery cap reserves funds before work and reconciles using observed tokens/tool calls; it is not a provider-wide hard billing ceiling.
 
 ## Deployment and validation
 
 No new schema migration, Secret or data reset is required. Merge the PR, sync Replit, install/build and publish using [the deployment guide](../DEPLOY-REPLIT.md). Existing Scout migrations must already be applied; missing production tables/columns still require the existing Publish schema flow.
 
 Regression tests cover unreadable/truncated research citations, six links after six extraction failures, overflow beyond primary picks, warning-only mismatches, expiry, preserved deadlines, redirects/title changes, recovery without paid calls, second-student reuse, limits and crashes. Mocked tests verify code paths; live Replit search quality remains an owner check because this workspace has no provider credentials or production database access.
+
+## Evidence-first follow-up
+
+All six follow-up modules and settings are documented in [sourcing](08-OPPORTUNITY-AND-NEWS-SOURCING.md) and [deployment](../DEPLOY-REPLIT.md). Research, qualification, optional extraction, budget/retry fixes, diagnostics and regression tests reuse existing tables. No production migration or reset is added. Default research returns links first; reported details stay explicitly unconfirmed until actual source text supports them. Unreadable output with no returned usable links still fails honestly.

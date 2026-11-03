@@ -90,3 +90,13 @@ Covered by scout-foundation, scout-providers, scout-runner, scout-qualification,
 - Existing consent, privacy, secure-fetch, quotas, saved/dismissed choices, crash protection, Today, sign-in, calendar and approval tests remain passing. Provider fixtures do not prove live provider search quality.
 
 See [Explore simplification](15-EXPLORE-SIMPLIFICATION.md).
+
+## Evidence-first acceptance
+
+- Configurable bounded multi-search returns optional detail reports without losing good links to malformed metadata; SDK usage records observed web tools and tokens.
+- Ten returned programs with four HTTP403 sites, two redirects, a PDF and three ordinary pages produce ten visible links, five confirmed records, three primary Free/three Paid-or-cost-unconfirmed picks and zero extraction AI calls. Source rechecks for these Scout records also avoid extraction.
+- Missing years, unsupported quotations and unreviewed redirects cannot establish facts or Verified. Robots/private-network protections remain enforced. Alternate literal deadline/name phrasing works.
+- Optional extraction uses relevant literal passages with stable IDs and at most 90 seconds; research has a separate bounded 150-second allowance.
+- Empty searches preserve manual allowance; previous empty charges restore once without paid-counter refunds. Explicit cooldown and three unsuccessful attempts/group/UTC day prevent uncontrolled repetition.
+- Estimated-spend admission is atomic across concurrent runs; settlement releases unused holds exactly once, preserves history and recovers when caps rise. Unknown paid usage retains estimates, never a fabricated zero.
+- Owner test/diagnostics report source mode, actual tools/tokens, estimates and candidate outcomes without private profiles/keys or paid GET side effects. Explore shows plain-language completion reasons and cooldown/spend blockers with existing links visible.

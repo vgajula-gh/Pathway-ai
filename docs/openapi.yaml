@@ -35,6 +35,12 @@ components:
         available: { type: boolean }
         remaining: { type: integer, minimum: 0 }
         nextAvailableAt: { type: string, format: date-time, description: Rolling successful-search allowance resets here; failures are not debited }
+    SearchRetryAvailability:
+      type: object
+      description: Explicit failed/empty retries wait one hour, with at most three unsuccessful shared-group attempts per UTC day; reading does not start work
+      properties:
+        available: { type: boolean }
+        nextAvailableAt: { type: [string, 'null'], format: date-time }
     SearchProgress:
       type: object
       properties:
@@ -49,7 +55,7 @@ components:
       description: Read-only current shared allowance, independent of the last request and the student rolling-cycle allowance. No provider call or counter reset.
       properties:
         limited: { type: boolean }
-        reasons: { type: array, uniqueItems: true, items: { enum: [discovery_monthly_limit, ai_monthly_limit] } }
+        reasons: { type: array, uniqueItems: true, items: { enum: [discovery_monthly_limit, ai_monthly_limit, discovery_monthly_spend] } }
         resetsAt: { type: string, format: date-time, description: Next UTC calendar-month boundary }
     CatalogCoverage:
       type: object
@@ -82,6 +88,12 @@ components:
         runs: { type: integer, minimum: 0 }
         searchAttempts: { type: integer, minimum: 0 }
         httpAttempts: { type: integer, minimum: 0, description: Includes robots requests, redirects and supporting pages }
+        webSearches: { type: [integer, 'null'], minimum: 0, description: Observed web tool calls; missing historical usage stays unknown }
+        inputTokens: { type: [integer, 'null'], minimum: 0 }
+        outputTokens: { type: [integer, 'null'], minimum: 0 }
+        estimatedCostUsd: { type: [number, 'null'], minimum: 0, description: Owner-configured estimates, not an invoice or provider-wide billing cap }
+        verifiedCandidates: { type: [integer, 'null'], minimum: 0 }
+
         candidates:
           type: [object, 'null']
           properties:
@@ -153,6 +165,7 @@ components:
         search: { $ref: '#/components/schemas/SearchProgress' }
         resultIds: { type: array, items: { type: string } }
         refresh: { $ref: '#/components/schemas/RefreshAvailability' }
+        retry: { $ref: '#/components/schemas/SearchRetryAvailability' }
     KnowledgeCitation:
       type: object
       properties:
@@ -194,6 +207,7 @@ components:
         search: { $ref: '#/components/schemas/SearchProgress' }
         resultIds: { type: array, items: { type: string } }
         refresh: { $ref: '#/components/schemas/RefreshAvailability' }
+        retry: { $ref: '#/components/schemas/SearchRetryAvailability' }
     AccountCredentials:
       type: object
       required: [phrase, confirmPhrase]

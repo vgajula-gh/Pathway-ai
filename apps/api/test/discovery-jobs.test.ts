@@ -327,3 +327,8 @@ it('bounds unsuccessful shared-group retries by cooldown and UTC day without sta
  expect(await researchRetry(db,[key],new Date('2030-01-01T08:00:00Z'))).toEqual({available:false,nextAvailableAt:'2030-01-02T00:00:00.000Z'});
  expect((await researchRetry(db,[key],new Date('2030-01-02T00:01:00Z'))).available).toBe(true);expect(remote.discover).not.toHaveBeenCalled();
 });
+
+it('keeps a zero estimated-spend cap disabled even when configured price estimates are zero',async()=>{
+ vi.stubEnv('DISCOVERY_MONTHLY_SPEND_USD','0');vi.stubEnv('SCOUT_WEB_SEARCH_PRICE_USD','0');vi.stubEnv('SCOUT_INPUT_PRICE_PER_MILLION','0');vi.stubEnv('SCOUT_OUTPUT_PRICE_PER_MILLION','0');
+ expect(await reserveRun('disabled','discovery')).toBeNull();expect(await db.discoveryRun.count()).toBe(0);expect(await db.aIUsage.count()).toBe(0);
+});

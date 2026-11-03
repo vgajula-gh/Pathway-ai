@@ -29,7 +29,7 @@ export type ScoutState={stage:Stage;context:PublicSearchContext;groupKeys:string
   stopRequested?:boolean;diagnostic?:boolean;
   sourceMode?:string;
   researchOutput?:ResearchOutput;candidateAllowance?:{free:number;paid:number};queuedCostHints?:{free:number;paid:number};
-  calls:{kind:'research'|'extract'|'repair';usage:LLMUsage;durationMs:number}[];startedAt:string};
+  calls:{kind:'research'|'extract'|'repair';usage:LLMUsage;durationMs:number;estimatedCost?:number}[];startedAt:string};
 type Run=Awaited<ReturnType<typeof prisma.discoveryRun.findUniqueOrThrow>>;
 export type ScoutDependencies={research:typeof research;fetch:typeof fetchOfficialPage;extract:typeof extractScout;qualify:typeof qualifyScout;save:typeof storeCandidate;provider:NonNullable<ReturnType<typeof getSearch>>};
 export function newScoutState(context:PublicSearchContext,groupKeys:string[],maxCandidates=16):ScoutState {
@@ -54,7 +54,7 @@ export function restoreScoutBudget(run:Run) {
   budget.deadlineAt=Date.now()+scoutSettings().timeoutMs;
   return budget;
 }
-export const scoutUsage=(budget:RunBudget,state:ScoutState)=>JSON.stringify({...budget.usage,estimatedCost:state.calls.reduce((sum,c)=>sum+estimatedCallCost(c.usage,c.kind),0),spendReservation:budget.spendReservation,models:budget.models,promptVersion:PROMPT_VERSION,candidates:budget.candidates,phase:budget.phase,savedIds:budget.savedIds,workflow:budget.workflow,failures:budget.failures,calls:state.calls.map(c=>({...c,estimatedCost:estimatedCallCost(c.usage,c.kind)})),query:state.query,groupKeys:state.groupKeys,tokensAreEstimates:state.calls.some(c=>c.usage.inputTokens==null||c.usage.outputTokens==null)});
+export const scoutUsage=(budget:RunBudget,state:ScoutState)=>JSON.stringify({...budget.usage,estimatedCost:state.calls.reduce((sum,c)=>sum+(c.estimatedCost??estimatedCallCost(c.usage,c.kind)),0),spendReservation:budget.spendReservation,models:budget.models,promptVersion:PROMPT_VERSION,candidates:budget.candidates,phase:budget.phase,savedIds:budget.savedIds,workflow:budget.workflow,failures:budget.failures,calls:state.calls.map(c=>({...c,estimatedCost:c.estimatedCost??estimatedCallCost(c.usage,c.kind)})),query:state.query,groupKeys:state.groupKeys,tokensAreEstimates:state.calls.some(c=>c.usage.inputTokens==null||c.usage.outputTokens==null)});
 
 /** Caller holds the shared job lease. One graph node executes per HTTP/cron invocation. */
 export async function advanceScout(run:Run,overrides:Partial<ScoutDependencies>={}) {
@@ -72,8 +72,9 @@ export async function advanceScout(run:Run,overrides:Partial<ScoutDependencies>=
   const claim=async(stage:Stage)=>{state.inFlight=stage;await persist();};
   const addCall=async(usage:LLMUsage,kind:'research'|'extract'|'repair',durationMs=0,replacePending=true)=>{
     const last=state.calls.at(-1);
-    if(replacePending&&last?.kind===kind&&last.usage.inputTokens==null&&last.usage.outputTokens==null&&last.usage.responseId==null)state.calls[state.calls.length-1]={kind,usage,durationMs};
-    else state.calls.push({kind,usage,durationMs});
+    const call={kind,usage,durationMs,estimatedCost:estimatedCallCost(usage,kind)};
+    if(replacePending&&last?.kind===kind&&last.usage.inputTokens==null&&last.usage.outputTokens==null&&last.usage.responseId==null)state.calls[state.calls.length-1]=call;
+    else state.calls.push(call);
     budget.usage.tokens+=(usage.inputTokens||0)+(usage.outputTokens||0);await persist();
   };
   const callStarted=async(kind:'research'|'extract'|'repair')=>{
@@ -205,6 +206,8 @@ export async function advanceScout(run:Run,overrides:Partial<ScoutDependencies>=
       const unconfirmed=await prisma.researchCandidate.count({where:{runId:run.id,status:{not:'verified'}}});
       budget.phase=budget.savedIds.length?budget.failures.length||unconfirmed?'partial':'complete':failure?'failed':'empty';
       const usage=j<any>(scoutUsage(budget,state),{});
+      const outcomes=await prisma.researchCandidate.groupBy({by:['status'],where:{runId:run.id},_count:true});
+      usage.candidateOutcomes=Object.fromEntries(outcomes.map(o=>[o.status,o._count]));
       // status condition prevents a second final usage debit on a later poll.
       await prisma.$transaction(async tx=>{
         const updated=await tx.discoveryRun.updateMany({where:{id:run.id,status:'running'},data:{status,error,finishedAt:new Date(),usage:JSON.stringify(usage),state:JSON.stringify(state)}});

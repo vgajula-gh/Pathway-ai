@@ -108,4 +108,5 @@ it('settles actual observed search estimates once and releases unused reserved s
  const run=await finish(id,deps);expect(JSON.parse(run.usage)).toMatchObject({estimatedCost:0.2,calls:[{estimatedCost:0.2,usage:{webSearches:2}}]});
  const ledger=await db.aIUsage.findUniqueOrThrow({where:{key:'discovery-spend:'+run.startedAt.toISOString().slice(0,7)}});expect(ledger.count).toBe(2000);
  await advanceScout(run,deps);expect((await db.aIUsage.findUniqueOrThrow({where:{key:ledger.key}})).count).toBe(2000);
+ vi.stubEnv('SCOUT_WEB_SEARCH_PRICE_USD','0.9');const {scoutUsage,restoreScoutBudget}=await import('../src/scout/runner.js');expect(JSON.parse(scoutUsage(restoreScoutBudget(run),JSON.parse(run.state))).estimatedCost).toBe(0.2);
 });

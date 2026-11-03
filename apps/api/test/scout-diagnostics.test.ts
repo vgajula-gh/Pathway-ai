@@ -73,3 +73,12 @@ it('reports repeated qualification failures before an incidental timeout, while 
  expect(primaryFailure([verify,verify,{stage:'extract',code:'timeout'}])).toEqual(verify);
  expect(primaryFailure([verify,verify,{stage:'extract',code:'provider_authorization'}])?.code).toBe('provider_authorization');
 });
+
+it('runs a research-evidence owner test with one research request, no extraction and complete cost diagnostics',async()=>{
+ vi.stubEnv('SCOUT_SOURCE_MODE','research_evidence');const app=await buildApp();app.log.level='silent';expect(app.initialConfig.connectionTimeout).toBe(180000);try{
+  const start=(await app.inject({method:'POST',url:'/internal/diagnostics/test-scout',headers,payload:{mode:'live'}})).json();expect(start.maxProviderRequests).toBe(1);const id=start.result.runId;
+  for(let n=0;n<5;n++){const result=(await app.inject({method:'POST',url:'/internal/diagnostics/test-scout',headers,payload:{mode:'advance',runId:id}})).json();if(result.result.done)break;}
+  expect(external.research).toHaveBeenCalledOnce();expect(external.extract).not.toHaveBeenCalled();
+  const report=(await app.inject({url:'/internal/diagnostics?runId='+id,headers})).json();expect(report.runs[0]).toMatchObject({sourceMode:'research_evidence',outcomes:{needs_verification:1}});expect(report.runs[0].calls).toHaveLength(1);expect(report.runs[0].calls[0]).toHaveProperty('estimatedCost');expect(report.monthly.spend.costIsEstimate).toBe(true);expect(report.configuration.settings.webToolCalls).toBe(5);
+ }finally{await app.close();}
+});

@@ -130,5 +130,10 @@ it('confirms research evidence without extraction while retaining blocked, redir
   expect(list.recommended.filter((o:any)=>o.verified)).toHaveLength(5);expect(list.recommended.filter((o:any)=>!o.verified)).toHaveLength(5);expect(list.search.phase).toBe('partial');
   expect(remote.extract).not.toHaveBeenCalled();expect(remote.fetch).toHaveBeenCalledTimes(9);expect(await db.sourcePage.count()).toBe(5);
   expect(await db.researchCandidate.count({where:{status:'needs_verification'}})).toBe(5);
+  const {recheckOpportunity}=await import('../src/discovery/jobs.js'),{RunBudget}=await import('../src/discovery/config.js');
+  const first=list.recommended.find((o:any)=>o.name==='Research Coding 0');
+  await recheckOpportunity(first.id,new RunBudget(),{fetch:async()=>({...fixtures[0].page,contentHash:'changed-but-supported'}),extract:remote.extract,ingest:async()=>{}});
+  expect(remote.extract).not.toHaveBeenCalled();expect(await db.opportunity.findUniqueOrThrow({where:{id:first.id}})).toMatchObject({costType:'free',deadline:'2030-12-01'});
+
  }finally{await app.close();}
 });

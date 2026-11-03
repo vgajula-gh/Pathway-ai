@@ -107,3 +107,14 @@ it('saves optional preferences without starting web research or a plan write',as
  await act(async()=>renderer.root.findByType('form').props.onSubmit({preventDefault(){}}));
  expect(state.api).toHaveBeenCalledOnce();expect(state.api).toHaveBeenCalledWith('/api/me',expect.objectContaining({method:'PATCH',body:expect.objectContaining({discoveryPreferences:expect.objectContaining({personalProject:'A robotics prototype'})})}));expect(setMe).toHaveBeenCalledOnce();
 });
+
+it('explains an estimated spending cap and an explicit retry cooldown without hiding results',async()=>{
+ const props={me:{budget:'any',interests:['Coding']} as any,ask:vi.fn()};state.data={...state.data,discoveryEnabled:true,limited:true,monthlyAllowance:{limited:true,reasons:['discovery_monthly_spend'],resetsAt:'2030-02-01T00:00:00Z'}};
+ await act(async()=>{renderer=create(createElement(Explore,props));});expect(JSON.stringify(renderer.toJSON())).toContain('estimated budget');expect(JSON.stringify(renderer.toJSON())).toContain('free-one');
+ state.data={...state.data,limited:false,search:{...state.data.search,phase:'failed'},error:'Search could not finish',retry:{available:false,nextAvailableAt:'2030-01-01T13:00:00Z'}};
+ await act(async()=>renderer.update(createElement(Explore,props)));expect(JSON.stringify(renderer.toJSON())).toContain('No search allowance was used');expect(renderer.root.findAllByType('button').find(b=>b.children.join('')==='Try again')!.props.disabled).toBe(true);
+});
+it('shows plain-language page confirmation failures after completion while preserving all links',async()=>{
+ state.data.diagnostics={searchAttempts:1,candidates:{found:10,filtered:0,queued:10},verifiedCandidates:5,steps:{fetch:{completed:5,failed:4},extract:{completed:0,failed:0},verify:{completed:5,failed:0}},programsSaved:10,failures:[{stage:'fetch',code:'http_error',count:4},{stage:'verify',code:'deadline_passed',count:1}]};
+ await act(async()=>{renderer=create(createElement(Explore,{me:{budget:'any',interests:['Coding']} as any,ask:vi.fn()}));});const text=JSON.stringify(renderer.toJSON());expect(text).toContain('10');expect(text).toContain('5 confirmed');expect(text).toContain('4 page checks could not finish');expect(text).toContain('1 past-deadline results hidden');expect(text).toContain('free-one');
+});

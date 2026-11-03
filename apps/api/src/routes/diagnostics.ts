@@ -25,16 +25,16 @@ export default async function routes(app:FastifyInstance) {
       const result=await withJobLock('opportunity-jobs',async()=>{
         const running=await prisma.discoveryRun.findMany({where:{promptVersion:PROMPT_VERSION,status:'running'}});
         const existing=running.find(r=>j<Partial<ScoutState>>(r.state,{}).diagnostic);
-        if(existing)return {runId:existing.id,started:false};
+        if(existing)return {runId:existing.id,started:false,sourceMode:j<Partial<ScoutState>>(existing.state,{}).sourceMode||'fetch_and_extract'};
         const group={key:'scout-diagnostic|9-10|US',topic:'coding',gradeBand:'9-10',region:'US'};
         const run=await reserveRun(group.key,'discovery');if(!run)throw new HttpError(429,'The shared search or AI allowance has been reached.');
         await prisma.discoveryGroup.upsert({where:{key:group.key},create:group,update:{}});
         const state=newScoutState({today:new Date().toISOString().slice(0,10),gradeBand:'9-10',region:'US',interests:['coding'],focusInterests:['coding'],buckets:['free','paid']},[group.key],1);
         state.diagnostic=true;state.repairUsed=true;
         await prisma.discoveryRun.update({where:{id:run.id},data:{promptVersion:PROMPT_VERSION,state:JSON.stringify(state),usage:scoutUsage(restoreScoutBudget(run),state),groupLinks:{create:{groupKey:group.key}}}});
-        return {runId:run.id,started:true};
+        return {runId:run.id,started:true,sourceMode:state.sourceMode};
       });
-      return reply.code(202).send({mode:'live',...result,maxProviderRequests:2,note:'Queued one public test candidate. Advance the job to research and extract; normal shared caps apply. No student data is used.'});
+      return reply.code(202).send({mode:'live',...result,maxProviderRequests:!result.skipped&&result.result.sourceMode==='research_evidence'?1:2,note:'Queued one public test candidate. Advance the bounded job; research-evidence mode makes no extraction AI call. Normal shared caps apply. No student data is used.'});
     }
     if(!body.runId)throw new HttpError(422,'Provide the diagnostic runId.');
     const result=await withJobLock('opportunity-jobs',async()=>{

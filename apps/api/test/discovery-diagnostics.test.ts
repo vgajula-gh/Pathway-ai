@@ -45,3 +45,9 @@ it('explains verification rejections instead of an incidental reading or process
  expect(primaryFailure([...failures,{stage:'search',code:'provider_authorization'}])?.code).toBe('provider_authorization');
  expect(primaryFailure([{stage:'extract',code:'run_limit'}])?.code).toBe('run_limit');
 });
+
+it('reports observed web tools, tokens, confirmation counts and estimates without inventing old usage',()=>{
+ const run={id:'new',usage:JSON.stringify({calls:[{kind:'research',usage:{inputTokens:120,outputTokens:40,webSearches:3}},{kind:'repair',usage:{inputTokens:20,outputTokens:10}}],estimatedCost:0.08,candidateOutcomes:{verified:2,needs_verification:4}})};
+ expect(searchDiagnostics([run]).diagnostics).toMatchObject({webSearches:3,inputTokens:140,outputTokens:50,estimatedCostUsd:0.08,verifiedCandidates:2});
+ expect(searchDiagnostics([{id:'old',usage:'{}'}]).diagnostics).toMatchObject({webSearches:null,inputTokens:null,estimatedCostUsd:null,verifiedCandidates:null});
+});
