@@ -70,8 +70,10 @@ export function enterMaintenance() {
 }
 export type ResetInput = {
   operationId: string; snapshotHash: string; month: string; rolloutComplete: true;
-  backup: {reference: string; takenAt: string; restoreVerified: true; productionHost: string};
+  backup?: {reference: string; takenAt: string; restoreVerified: true; productionHost: string};
+  backupWaiver?: {acknowledgment: string; productionHost: string};
 };
+export const backupWaiverAcknowledgment = 'I ACCEPT PERMANENT LOSS OF ALL PRODUCTION STUDENT DATA WITHOUT A BACKUP';
 export async function executeReset(input: ResetInput) {
   return gated(async tx => {
     const marker = await tx.jobLease.findUnique({where: {key: markerKey}});
@@ -79,12 +81,19 @@ export async function executeReset(input: ResetInput) {
     const previous = await tx.jobLease.findUnique({where: {key: receiptKey(input.operationId)}});
     if (previous) return JSON.parse(previous.owner);
     const now = new Date(), earliest = +marker.expiresAt + minimumDrainMs;
-    const backupTime = Date.parse(input.backup.takenAt);
     if (Date.now() < earliest || !input.rolloutComplete) throw new HttpError(409, 'Wait for the maintenance drain window and confirm the deployment rollout completed.');
-    if (!input.backup.restoreVerified || input.backup.productionHost !== productionHost ||
-      !input.backup.reference.trim() || !Number.isFinite(backupTime) || backupTime < earliest ||
-      backupTime > +now || +now - backupTime > 24 * 3600_000)
-      throw new HttpError(409, 'A verified, restorable production backup taken after the drain window is required. Backup attestation is an operator responsibility.');
+    if (!!input.backup === !!input.backupWaiver)
+      throw new HttpError(409, 'Provide either verified backup evidence or an explicit permanent-data-loss waiver, never both.');
+    if (input.backup) {
+      const backupTime = Date.parse(input.backup.takenAt);
+      if (!input.backup.restoreVerified || input.backup.productionHost !== productionHost ||
+        !input.backup.reference.trim() || !Number.isFinite(backupTime) || backupTime < earliest ||
+        backupTime > +now || +now - backupTime > 24 * 3600_000)
+        throw new HttpError(409, 'A verified, restorable production backup taken after the drain window is required. Backup attestation is an operator responsibility.');
+    } else if (input.backupWaiver?.acknowledgment !== backupWaiverAcknowledgment ||
+      input.backupWaiver.productionHost !== productionHost) {
+      throw new HttpError(409, 'Explicit acceptance of permanent production student data loss without a backup is required.');
+    }
     const before = await snapshot(tx, now);
     if (before.month !== input.month || before.snapshotHash !== input.snapshotHash) throw new HttpError(409, 'The database snapshot or UTC month changed. Review status again.');
     if (before.blockers.activities || before.blockers.oldWorkerLocks || before.blockers.calendarLeases || before.blockers.validation)
@@ -135,7 +144,9 @@ export async function executeReset(input: ResetInput) {
     if (digest({...library, finishedDiscoveryRun: undefined}) !== digest(protectedBefore)) throw new HttpError(409, 'Shared library identity changed; reset rolled back.');
     const report = {
       operationId: input.operationId, executedAt: now.toISOString(), month: before.month,
-      backup: input.backup, backupVerification: 'Operator-attested; this app cannot independently inspect platform backups.',
+      backup: input.backup || null,
+      backupWaiver: input.backupWaiver ? {...input.backupWaiver, acknowledgedAt: now.toISOString()} : null,
+      backupVerification: input.backup ? 'Operator-attested; this app cannot independently inspect platform backups.' : 'No backup: owner explicitly accepted permanent student data loss.',
       before, removed, interruptedRuns, library, remainingStudents: await tx.student.count(),
       allowanceCounters: {runs: 0, rechecks: 0, monthlyAI: 0},
       verification: null, maintenanceActive: true,

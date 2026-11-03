@@ -2,7 +2,7 @@ import type {FastifyInstance} from 'fastify';
 import {z} from 'zod';
 import {requireOwner} from '../lib/owner-auth.js';
 import {assertProductionTarget, productionHost} from '../maintenance/target.js';
-import {enterMaintenance, executeReset, leaveMaintenance, status} from '../maintenance/pilot-reset.js';
+import {enterMaintenance, executeReset, leaveMaintenance, status, backupWaiverAcknowledgment} from '../maintenance/pilot-reset.js';
 import {verifyRegistration} from '../maintenance/verification.js';
 
 const root = '/internal/maintenance/pilot-reset';
@@ -16,8 +16,14 @@ const execute = operation.extend({
   backup: z.object({
     reference: z.string().trim().min(1).max(200).refine(v => !/[:/@?\\]/.test(v), 'Use a non-secret backup label, not a URL, path or credential.'),
     takenAt: z.string().datetime(), restoreVerified: z.literal(true), productionHost: z.literal(productionHost),
-  }).strict(),
-}).strict();
+  }).strict().optional(),
+  backupWaiver: z.object({
+    acknowledgment: z.literal(backupWaiverAcknowledgment), productionHost: z.literal(productionHost),
+  }).strict().optional(),
+}).strict().superRefine((value, ctx) => {
+  if (!!value.backup === !!value.backupWaiver)
+    ctx.addIssue({code: z.ZodIssueCode.custom, path: ['backupWaiver'], message: 'Choose verified backup evidence or explicit acceptance of permanent data loss, never both.'});
+});
 
 export default async function maintenance(app: FastifyInstance) {
   app.addHook('onRequest', async (req, reply) => {

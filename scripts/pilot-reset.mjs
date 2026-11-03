@@ -6,6 +6,7 @@ const {values: a} = parseArgs({options: {
   'confirm-production': {type: 'string'}, operation: {type: 'string'},
   snapshot: {type: 'string'}, month: {type: 'string'}, backup: {type: 'string'},
   'backup-taken-at': {type: 'string'}, 'restore-verified': {type: 'boolean'},
+  'no-backup': {type: 'boolean'}, 'accept-permanent-loss': {type: 'boolean'},
   'rollout-complete': {type: 'boolean'}, 'confirm-delete-all-students': {type: 'boolean'},
 }, strict: true});
 
@@ -23,13 +24,22 @@ async function main() {
     throw new OwnerInputError('Confirm the production hostname with --confirm-production pathway-ai.replit.app.');
   if (!['status', 'start'].includes(a.action) && !a.operation) throw new OwnerInputError('Supply --operation from the start response.');
   if (a.action === 'execute') {
-    if (!a.snapshot || !a.month || !a.backup || !a['backup-taken-at'] ||
-      !a['restore-verified'] || !a['rollout-complete'] || !a['confirm-delete-all-students'])
-      throw new OwnerInputError('Execution requires snapshot, UTC month, backup label/time, restore verification, rollout confirmation and explicit deletion confirmation. Read docs/PILOT-RESET.md.');
+    if (!a.snapshot || !a.month || !a['rollout-complete'] || !a['confirm-delete-all-students'])
+      throw new OwnerInputError('Execution requires snapshot, UTC month, rollout confirmation and explicit deletion confirmation. Read docs/PILOT-RESET.md.');
+    if (a['no-backup']) {
+      if (!a['accept-permanent-loss'] || a.backup || a['backup-taken-at'] || a['restore-verified'])
+        throw new OwnerInputError('No-backup execution requires --accept-permanent-loss and cannot include backup evidence.');
+      body.backupWaiver = {
+        acknowledgment: 'I ACCEPT PERMANENT LOSS OF ALL PRODUCTION STUDENT DATA WITHOUT A BACKUP', productionHost: url.host,
+      };
+    } else {
+      if (!a.backup || !a['backup-taken-at'] || !a['restore-verified'] || a['accept-permanent-loss'])
+        throw new OwnerInputError('Supply verified backup evidence, or explicitly use --no-backup --accept-permanent-loss.');
+      body.backup = {reference: a.backup, takenAt: a['backup-taken-at'], restoreVerified: true, productionHost: url.host};
+    }
     Object.assign(body, {
       confirmation: 'DELETE ALL PRODUCTION STUDENT DATA',
       snapshotHash: a.snapshot, month: a.month, rolloutComplete: true,
-      backup: {reference: a.backup, takenAt: a['backup-taken-at'], restoreVerified: true, productionHost: url.host},
     });
   }
   if (a.action === 'start') delete body.operationId;

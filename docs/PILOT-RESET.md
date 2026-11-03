@@ -2,8 +2,11 @@
 
 This operation is **prepared, not automatically executed**. No startup/build hook
 resets data. It does not create or independently verify a platform backup.
-The owner must first obtain a restorable production backup and verify the restore
-procedure. Do not proceed on the strength of a label or an unverified export.
+By default the owner must obtain a restorable production backup and verify the
+restore procedure. Do not proceed on the strength of a label or an unverified
+export. Alternatively, an owner may explicitly waive the backup and accept
+permanent student-data loss. The receipt records that waiver; it never falsely
+claims a backup was taken. New registration does not restore deleted records.
 
 ## Scope and safeguards
 
@@ -57,6 +60,16 @@ argument, URL, screenshot or chat. Do not use the workspace DATABASE_URL.
    ```
    Use a non-secret backup label, not a URL or filesystem path. All confirmations
    are intentional. Any snapshot/month change requires a new review.
+
+   **Only when the owner explicitly chooses no backup**, omit backup evidence and
+   use both waiver flags instead:
+   ```
+   npm run pilot:reset -- --url https://pathway-ai.replit.app --action execute --confirm-production pathway-ai.replit.app --operation OPERATION_ID --snapshot SNAPSHOT_HASH --month YYYY-MM --no-backup --accept-permanent-loss --rollout-complete --confirm-delete-all-students
+   ```
+   In that case step 3 still requires a completed rollout, the full drain window
+   and zero blockers, but backup creation/verification is deliberately waived.
+   The target, snapshot, authorization, transaction and library-preservation
+   safeguards are unchanged.
 5. Test real registration and cookie authentication while still paused:
    ```
    npm run pilot:reset -- --url https://pathway-ai.replit.app --action verify --confirm-production pathway-ai.replit.app --operation OPERATION_ID
@@ -77,7 +90,8 @@ argument, URL, screenshot or chat. Do not use the workspace DATABASE_URL.
 
 Before execution, `--action cancel` with the same target and operation restores
 normal admission without deleting anything. Cancel cannot undo an executed reset;
-recovery requires the verified backup. Repeating execute for the same operation
+recovery requires a separate restorable backup, which cannot be assumed to exist
+when waived. Repeating execute for the same operation
 returns its receipt instead of resetting again.
 
 ## Exactly what changes

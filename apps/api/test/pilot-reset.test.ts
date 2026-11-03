@@ -33,7 +33,7 @@ vi.mock('../src/maintenance/target.js', async () => {
 import {buildApp} from '../src/app.js';
 import {env} from '../src/lib/env.js';
 import {backgroundActivity, beginActivity, markerKey, minimumDrainMs, receiptKey} from '../src/maintenance/admission.js';
-import {enterMaintenance, executeReset, leaveMaintenance, snapshot, status, type ResetInput} from '../src/maintenance/pilot-reset.js';
+import {enterMaintenance, executeReset, leaveMaintenance, snapshot, status, backupWaiverAcknowledgment, type ResetInput} from '../src/maintenance/pilot-reset.js';
 import {withJobLock} from '../src/lib/job-lock.js';
 const originalCodes = env.accessCodes, originalDisabled = env.aiDisabled;
 const owner = {host: 'pathway-ai.replit.app', authorization: 'Bearer test-owner-key-with-more-than-32-characters'};
@@ -113,7 +113,7 @@ async function seed() {
     {key: `day:2001-01-01:${studentId}`, count: 3}, {key: 'day:2001-01-01:unrelated', count: 2},
   ]});
 }
-async function ready(): Promise<ResetInput> {
+async function ready(): Promise<ResetInput & {backup: NonNullable<ResetInput['backup']>}> {
   const operation = await enterMaintenance();
   await db.jobLease.update({where: {key: markerKey}, data: {expiresAt: new Date(Date.now() - minimumDrainMs - 10_000)}});
   const view = await snapshot(db);
@@ -257,4 +257,39 @@ it('can cancel an unexecuted maintenance window without deleting records, but ca
   expect(await db.student.count()).toBe(1);
   input = await ready(); await executeReset(input);
   await expect(leaveMaintenance(input.operationId, true)).rejects.toThrow('cannot be cancelled');
+});
+it('requires exactly one recovery choice and refuses an implicit or invalid backup waiver', async () => {
+  const input = await ready();
+  const waiver = {acknowledgment: backupWaiverAcknowledgment, productionHost: owner.host};
+  await expect(executeReset({...input, backup: undefined})).rejects.toThrow('either verified backup');
+  await expect(executeReset({...input, backupWaiver: waiver})).rejects.toThrow('never both');
+  await expect(executeReset({...input, backup: undefined, backupWaiver: {...waiver, acknowledgment: 'yes'}})).rejects.toThrow('permanent');
+  expect(await db.student.count()).toBe(1);
+});
+it('records an explicit no-backup waiver without claiming a backup and preserves the same library and allowance safeguards', async () => {
+  const input = await ready();
+  const app = await buildApp(); app.log.level = 'silent';
+  const payload = {
+    ...input, backup: undefined, ...target, confirmation: 'DELETE ALL PRODUCTION STUDENT DATA',
+    backupWaiver: {acknowledgment: backupWaiverAcknowledgment, productionHost: owner.host},
+  };
+  try {
+    const invalid = await app.inject({method: 'POST', url: root + '/execute', headers: owner, payload: {...payload, backupWaiver: {productionHost: owner.host}}});
+    expect(invalid.statusCode).toBe(422);
+    expect(await db.student.count()).toBe(1);
+    const response = await app.inject({method: 'POST', url: root + '/execute', headers: owner, payload});
+    expect(response.statusCode, response.body).toBe(200);
+    expect(response.json()).toMatchObject({
+      backup: null, backupWaiver: {acknowledgment: backupWaiverAcknowledgment, productionHost: owner.host},
+      remainingStudents: 0, allowanceCounters: {runs: 0, rechecks: 0, monthlyAI: 0},
+    });
+    expect(response.json().backupWaiver.acknowledgedAt).toBeTruthy();
+    expect(response.json().backupVerification).toContain('No backup');
+    expect(await db.opportunity.count()).toBe(1);
+    expect(await db.sourcePage.count()).toBe(1);
+    expect(await db.knowledgeChunk.count()).toBe(1);
+    expect(await db.researchCandidate.count()).toBe(1);
+    expect(await db.discoveryUsage.findUnique({where: {month: month()}})).toMatchObject({estimatedCost: 6.37058, tokens: 1217645});
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  } finally { await app.close(); }
 });
