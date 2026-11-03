@@ -33,6 +33,31 @@ beforeEach(async () => {
   await db.opportunity.upsert({ where: { id: 'test' }, update: {}, create: { id: 'test', name: 'Test opportunity', organizer: 'Test', category: 'STEM', url: 'https://example.org', gradeMin: 9, gradeMax: 12, format: 'Virtual', cost: 'Free', commitment: 'Low', skills: '[]', tags: '[]', checks: '["Check eligibility"]' } });
 });
 afterAll(async () => { vi.unstubAllEnvs(); env.accessCodes = originalCodes; await db.$disconnect(); rmSync(dir, { recursive: true, force: true }); });
+it('returns uncached student-local remaining time without charging AI or mixing students',async()=>{
+  const app=await buildApp();app.log.level='silent';
+  try {
+    await db.student.update({where:{id:studentId},data:{timezone:'America/New_York'}});
+    await db.event.createMany({data:[
+      {studentId,title:'Study',type:'study',start:'2030-01-07T18:00',end:'2030-01-07T19:00',done:true},
+      {studentId,title:'Club',type:'club',start:'2030-01-07T20:30',end:'2030-01-07T21:00'},
+      {studentId,title:'Evening event',type:'personal',start:'2030-01-07T21:30',end:'2030-01-07T22:30'}
+    ]});
+    const other=await db.student.create({data:{name:'Other',grade:10}});
+    await db.event.create({data:{studentId:other.id,title:'Not mine',type:'study',start:'2030-01-07T16:00',end:'2030-01-07T23:00'}});
+    const usage=await db.aIUsage.count();
+    vi.useFakeTimers({toFake:['Date']});vi.setSystemTime(new Date('2030-01-08T01:00:00Z'));
+    const res=await app.inject({url:'/api/today',headers:headers()});
+    expect(res.statusCode).toBe(200);expect(res.headers['cache-control']).toBe('no-store');
+    expect(res.json()).toMatchObject({date:'2030-01-07',metrics:{
+      focus:{label:'Study planned',minutes:60,pct:.5},
+      freeTime:{label:'Free time left',minutes:30,windowRemaining:60,downtime:60,downtimeRemaining:120,downtimeBusy:60}
+    }});
+    vi.setSystemTime(new Date('2030-01-08T02:00:00Z'));
+    const later=(await app.inject({url:'/api/today',headers:headers()})).json();
+    expect(later.metrics.freeTime).toMatchObject({minutes:0,pct:0,status:'Study window ended',downtime:60});
+    expect(await db.aIUsage.count()).toBe(usage);
+  } finally {vi.useRealTimers();await app.close();}
+});
 it('saves, updates and isolates application metadata and never writes prep events before approval', async () => {
   const app = await buildApp(); app.log.level = 'silent';
   try {

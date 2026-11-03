@@ -15,7 +15,8 @@ import { WORDS } from '../data/words.js';
 import { dueEvents, greetingPart } from '../domain/today.js';
 
 export default async function routes(app: FastifyInstance) {
-  app.get('/api/today', async req => {
+  app.get('/api/today', async (req,reply) => {
+    reply.header('Cache-Control','no-store');
     const s = await requireStudent(req), { events, rules, milestones, goals } = await loadContext(s.id), now = wallNow(s.timezone), today = dkey(now);
     const occ = expand(events, sod(now), addDays(sod(now), 1));
     const clash = new Set(findConflicts(occ).filter(c => c.kind === 'overlap').flatMap(c => [c.a.id, c.b.id]));
@@ -37,7 +38,7 @@ export default async function routes(app: FastifyInstance) {
   app.post('/api/today/insight', async req => {
     const s = await requireStudent(req); if (!s.aiConsent) throw new HttpError(403, 'AI help is turned off');
     if (getLLM()) await reserveAI(s.id);
-    const { events, rules, milestones, goals } = await loadContext(s.id), now = new Date();
+    const { events, rules, milestones, goals } = await loadContext(s.id), now = wallNow(s.timezone);
     const data = JSON.stringify({ name: s.name, today: now.toDateString(), events: expand(events, sod(now), addDays(sod(now), 1)).map(o => `${fmtLocal(o.s)} ${o.title} [${o.type}]`),
       upcoming: expand(events, addDays(sod(now), 1), addDays(sod(now), 8)).filter(o => ['exam', 'deadline', 'competition'].includes(o.type)).map(o => `${o.s.toDateString()} ${o.title}`),
       metrics: todayMetrics(events, rules, milestones, now), goals: goals.map(g => g.title) });
