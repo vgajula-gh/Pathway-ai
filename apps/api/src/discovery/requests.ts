@@ -8,6 +8,8 @@ import {catalogCoverage,publicCatalogCoverage} from './catalog.js';
 import { transaction,stateIn,refreshDays } from './refresh.js';
 import { failureMessage,FailureInfo,operationalFailure,primaryFailure } from './failures.js';
 import {searchDiagnostics} from './diagnostics.js';
+import {discoveryPreferences} from '../domain/discovery-preferences.js';
+import {dkey,wallNow} from '../domain/time.js';
 
 type Binding={key:string;since:string;cached?:boolean};
 const pending=['queued','running'];
@@ -74,6 +76,8 @@ export async function enqueueSearch(studentId:string,kind:'initial'|'manual'|'mo
       return {requested:false,catalog};
     }
     const bindings:Binding[]=[];
+    const prefs=discoveryPreferences(student.discoveryPreferences);
+    const context={today:dkey(wallNow(student.timezone,now)),gradeBand:student.grade<=10?'9-10':'11-12',interests:groups.map(g=>g.topic),region:student.region||'US',city:prefs.city,state:prefs.state,format:student.format==='virtual'?'online':prefs.format};
     for(const {group,buckets} of coverage.groups) {
       const old=await tx.discoveryGroup.findUnique({where:{key:group.key}});
       if(old&&groupPending.includes(old.status)) {
@@ -82,8 +86,8 @@ export async function enqueueSearch(studentId:string,kind:'initial'|'manual'|'mo
         bindings.push({key:group.key,since:(old.requestedAt||old.lastDiscoveredAt||now).toISOString()});
         continue;
       }
-      await tx.discoveryGroup.upsert({where:{key:group.key},create:{...group,status:'queued_manual',pendingBuckets:JSON.stringify(buckets),requestedAt:now},
-        update:{status:'queued_manual',pendingBuckets:JSON.stringify(buckets),requestedAt:now,error:''}});
+      await tx.discoveryGroup.upsert({where:{key:group.key},create:{...group,context:JSON.stringify(context),status:'queued_manual',pendingBuckets:JSON.stringify(buckets),requestedAt:now},
+        update:{context:JSON.stringify(context),status:'queued_manual',pendingBuckets:JSON.stringify(buckets),requestedAt:now,error:''}});
       bindings.push({key:group.key,since:now.toISOString()});
     }
     const request=await tx.opportunitySearchRequest.create({data:{studentId,kind:requestKind,signature,groupBindings:JSON.stringify(bindings),manualSlot,cycleStartedAt:state.cycleStartedAt,createdAt:now}});
@@ -97,8 +101,8 @@ export async function enqueueSearch(studentId:string,kind:'initial'|'manual'|'mo
   return result;
 }
 
-async function boundRuns(bindings:Binding[]) {
-  return Promise.all(bindings.map(binding=>binding.cached?null:prisma.discoveryRun.findFirst({where:{groupKey:binding.key,kind:'discovery',startedAt:{gte:new Date(binding.since)}},orderBy:{startedAt:'asc'}})));
+export async function boundRuns(bindings:Binding[]) {
+  return Promise.all(bindings.map(binding=>binding.cached?null:prisma.discoveryRun.findFirst({where:{OR:[{groupKey:binding.key},{groupLinks:{some:{groupKey:binding.key}}}],kind:'discovery',startedAt:{gte:new Date(binding.since)}},orderBy:{startedAt:'asc'}})));
 }
 
 /** Another student's run may have filled this gap since it was queued. Check before spending. */
@@ -131,10 +135,10 @@ export async function settleSearchRequests(studentId?:string) {
     const bindings=j<Binding[]>(request.groupBindings,[]).filter(b=>!b.cached),runs=await boundRuns(bindings);
     const groups=await prisma.discoveryGroup.findMany({where:{key:{in:bindings.map(b=>b.key)}}});
     if(runs.some(r=>r?.status==='running')||runs.some((r,i)=>!r&&groups.some(g=>g.key===bindings[i].key&&groupPending.includes(g.status))))continue;
-    const complete=runs.filter((r):r is NonNullable<typeof r>=>!!r);
+    const complete=[...new Map(runs.filter((r):r is NonNullable<typeof r>=>!!r).map(r=>[r.id,r])).values()];
     let ids=[...new Set(complete.flatMap(r=>snapshot(r.usage).savedIds||[]))];
     const failures=complete.flatMap(r=>snapshot(r.usage).failures||[]);
-    const failed=complete.length<bindings.length||complete.some(r=>r.status!=='complete')||!ids.length&&failures.some(operationalFailure);
+    const failed=runs.some(r=>!r)||complete.some(r=>r.status!=='complete')||!ids.length&&failures.some(operationalFailure);
     const limited=groups.some(g=>['limited','limited_manual'].includes(g.status));
     let status=!bindings.length?'cached':ids.length?'complete':limited?'limited':failed?'failed':'empty';
     if(['cached','complete','empty'].includes(status))try{ids=(await personalPicks(request.studentId,true)).map(p=>p.id);}catch{status='failed';}

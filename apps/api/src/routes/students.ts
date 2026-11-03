@@ -51,6 +51,8 @@ export default async function routes(app: FastifyInstance) {
     await prisma.student.update({ where: { id: s.id }, data: { discoveryPreferences:b.discoveryPreferences && JSON.stringify({...discoveryPreferences(s.discoveryPreferences),...b.discoveryPreferences}), name: b.name, region: b.region, grade: b.grade, location: b.location, aiConsent: b.aiConsent, budget: b.budget, format: b.format,
       interests: b.interests && JSON.stringify(b.interests), skills: b.skills && JSON.stringify(b.skills), settings: b.settings && JSON.stringify({ ...j(s.settings, {}), ...b.settings }), provenance: JSON.stringify(prov) } });
     if(b.interests)await noteInterestChange(s.id,j(s.interests,[]),b.interests);
+    if(b.aiConsent===false||b.discoveryPreferences||b.region!==undefined||b.grade!==undefined||b.format!==undefined||b.budget!==undefined||b.interests)
+      await prisma.opportunitySearchRequest.updateMany({where:{studentId:s.id,status:{in:['queued','running']}},data:{status:'cancelled',finishedAt:new Date()}});
     if (b.availability) await prisma.availability.upsert({ where: { studentId: s.id }, update: { ...b.availability, source: 'edited', lastVerified: new Date() }, create: { studentId: s.id, ...b.availability } });
     if (b.aiConsent !== undefined) await audit(s.id, 'student', b.aiConsent ? 'Turned on AI help' : 'Turned off AI help');
     else if (b.settings?.voice !== undefined) await audit(s.id, 'student', b.settings.voice ? 'Turned on Voice' : 'Turned off Voice');

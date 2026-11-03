@@ -12,11 +12,14 @@ import {qualifyScout,type Qualification} from './qualify.js';
 import {PROMPT_VERSION,publicSearchContext,scoutPrompt,type PublicSearchContext} from './prompts.js';
 import {scoutSettings} from './settings.js';
 import {ScoutFacts} from './schema.js';
+import {balancedLeads} from './planning.js';
+import {identity} from '../discovery/groups.js';
 import type {LLMUsage} from '../agent/llm/types.js';
 import {privateWorkflow,workflowConfig,type WorkflowStep} from '../workflows/privacy.js';
 
 type Stage='research'|'candidate'|'fetch'|'extract'|'qualify'|'finish';
 export type ScoutState={stage:Stage;context:PublicSearchContext;groupKeys:string[];candidateId:string|null;inFlight:Stage|null;repairUsed:boolean;maxCandidates:number;query:string;
+  stopRequested?:boolean;diagnostic?:boolean;
   calls:{kind:'research'|'extract'|'repair';usage:LLMUsage;durationMs:number}[];startedAt:string};
 type Run=Awaited<ReturnType<typeof prisma.discoveryRun.findUniqueOrThrow>>;
 export type ScoutDependencies={research:typeof research;fetch:typeof fetchOfficialPage;extract:typeof extractScout;qualify:typeof qualifyScout;save:typeof storeCandidate;provider:NonNullable<ReturnType<typeof getSearch>>};
@@ -54,15 +57,15 @@ export async function advanceScout(run:Run,overrides:Partial<ScoutDependencies>=
   const persist=()=>prisma.discoveryRun.update({where:{id:run.id},data:{state:JSON.stringify(state),usage:scoutUsage(budget,state),promptVersion:PROMPT_VERSION}});
   const step=(node:string,status:'completed'|'failed',reason?:WorkflowStep['reason'])=>{budget.workflow.push({node,status,...(reason?{reason}:{})});};
   const claim=async(stage:Stage)=>{state.inFlight=stage;await persist();};
-  const addCall=async(usage:LLMUsage,kind:'research'|'extract'|'repair',durationMs=0)=>{
+  const addCall=async(usage:LLMUsage,kind:'research'|'extract'|'repair',durationMs=0,replacePending=true)=>{
     const last=state.calls.at(-1);
-    if(last?.kind===kind&&last.usage.inputTokens==null&&last.usage.outputTokens==null&&last.usage.responseId==null)state.calls[state.calls.length-1]={kind,usage,durationMs};
+    if(replacePending&&last?.kind===kind&&last.usage.inputTokens==null&&last.usage.outputTokens==null&&last.usage.responseId==null)state.calls[state.calls.length-1]={kind,usage,durationMs};
     else state.calls.push({kind,usage,durationMs});
     budget.usage.tokens+=(usage.inputTokens||0)+(usage.outputTokens||0);await persist();
   };
   const callStarted=async(kind:'research'|'extract'|'repair')=>{
     const model=kind==='research'?budget.models.search:budget.models.extraction;
-    if(model.provider==='openai'||model.provider==='anthropic'||model.provider==='ollama')await addCall({provider:model.provider,model:model.model||'',inputTokens:null,outputTokens:null,responseId:null},kind);
+    if(model.provider==='openai'||model.provider==='anthropic'||model.provider==='ollama')await addCall({provider:model.provider,model:model.model||'',inputTokens:null,outputTokens:null,responseId:null},kind,0,false);
   };
   // A crash after a paid call may leave no response. Never repeat that paid stage silently.
   if(state.inFlight) {
@@ -76,6 +79,7 @@ export async function advanceScout(run:Run,overrides:Partial<ScoutDependencies>=
     }
     state.inFlight=null;
   }
+  if(state.stopRequested)state.stage='finish';
   const execute=async(stage:Stage)=>{
     if(stage==='research') {
       budget.phase='searching';
@@ -83,19 +87,20 @@ export async function advanceScout(run:Run,overrides:Partial<ScoutDependencies>=
       budget.take('searches');await claim('research');await callStarted('research');const started=Date.now();
       const response=await deps.research({research:provider.research},state.context,Math.min(6,state.maxCandidates),!state.repairUsed,async(u,k)=>{if(k==='repair')state.repairUsed=true;await addCall(u,k,Date.now()-started);},async()=>{state.repairUsed=true;await callStarted('repair');await persist();});
       state.repairUsed||=response.repaired;
-      const seen=new Set<string>();
-      for(const lead of response.output.candidates) {
-        if(seen.has(lead.officialUrl))continue;seen.add(lead.officialUrl);budget.candidates.found++;
+      const seen=new Set<string>(),programs=new Set<string>();
+      for(const lead of balancedLeads(response.output.candidates)) {
         const url=httpsSourceURL(lead.officialUrl),mediaType=url?fileSourceType(url):null;
+        const key=url?identity(url.hostname,lead.name):lead.officialUrl;
+        if(seen.has(url?.href||lead.officialUrl)||programs.has(key))continue;seen.add(url?.href||lead.officialUrl);programs.add(key);budget.candidates.found++;
         const filtered=!url||!!mediaType;
         if(filtered) {budget.candidates.filtered++;budget.failures.push({stage:'fetch',code:url?'unsupported_content':'invalid_url',...(url?{sourceHost:url.hostname}:{}),...(mediaType?{mediaType}:{})});}
         const full=budget.candidates.queued>=state.maxCandidates;
-        await prisma.researchCandidate.upsert({where:{runId_url:{runId:run.id,url:lead.officialUrl}},create:{runId:run.id,url:lead.officialUrl,name:lead.name,status:filtered||full?'excluded':'found',reasons:JSON.stringify(filtered?[{field:'source',reason:'unsupported_content'}]:full?[{field:'budget',reason:'candidate_limit'}]:[])},update:{}});
+        await prisma.researchCandidate.upsert({where:{runId_url:{runId:run.id,url:lead.officialUrl}},create:{id:run.id+'-'+String(budget.candidates.found).padStart(2,'0'),runId:run.id,url:lead.officialUrl,name:lead.name,status:filtered||full?'excluded':'found',reasons:JSON.stringify(filtered?[{field:'source',reason:'unsupported_content'}]:full?[{field:'budget',reason:'candidate_limit'}]:[])},update:{}});
         if(!filtered&&!full)budget.candidates.queued++;
       }
       step('search_candidates','completed');state.stage='candidate';state.inFlight=null;
     } else if(stage==='candidate') {
-      candidate=await prisma.researchCandidate.findFirst({where:{runId:run.id,status:{in:['found','fetched','extracted']}},orderBy:{createdAt:'asc'}});
+      candidate=await prisma.researchCandidate.findFirst({where:{runId:run.id,status:{in:['found','fetched','extracted']}},orderBy:[{createdAt:'asc'},{id:'asc'}]});
       state.candidateId=candidate?.id||null;
       state.stage=!candidate?'finish':candidate.status==='extracted'?'qualify':candidate.status==='fetched'?'extract':'fetch';
     } else if(stage==='fetch'&&candidate) {
