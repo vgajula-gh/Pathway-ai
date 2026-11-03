@@ -94,11 +94,11 @@ it('recovers already-paid rejected leads without another provider call and prese
   expect(remote.research).not.toHaveBeenCalled();expect(remote.extract).not.toHaveBeenCalled();expect(remote.fetch).not.toHaveBeenCalled();expect(await db.opportunity.count()).toBe(1);
  }finally{await app.close();}
 });
-it('bounds five interest groups to three funded research calls and retains private profile data locally',async()=>{
+it('covers five interest groups in two funded research calls and retains private profile data locally',async()=>{
  await db.student.update({where:{id:studentId},data:{interests:'["AI","business","coding","engineering","entrepreneurship"]'}});
  const app=await buildApp();app.log.level='silent';try{
-  expect((await search(app)).finding).toBe(false);expect(remote.research).toHaveBeenCalledTimes(3);expect((await db.discoveryUsage.findFirstOrThrow()).runs).toBe(3);
-  expect(remote.research.mock.calls.every(c=>c[1].focusInterests.length<=2)).toBe(true);
+  expect((await search(app)).finding).toBe(false);expect(remote.research).toHaveBeenCalledTimes(2);expect((await db.discoveryUsage.findFirstOrThrow()).runs).toBe(2);
+  expect(remote.research.mock.calls.every(c=>c[1].focusInterests.length<=3)).toBe(true);expect(new Set(remote.research.mock.calls.flatMap(c=>c[1].focusInterests)).size).toBe(5);
   expect(JSON.stringify(remote.research.mock.calls.map(c=>c[1]))).not.toContain('private');
  }finally{await app.close();}
 });

@@ -1,7 +1,7 @@
 import {setting} from '../discovery/config.js';
 export const scoutSettings=()=>({
   sourceMode:process.env.SCOUT_SOURCE_MODE==='fetch_and_extract'?'fetch_and_extract':'research_evidence',
-  researchCalls:setting('SCOUT_MAX_CALLS_PER_SEARCH',3,3),
+  researchCalls:setting('SCOUT_MAX_CALLS_PER_SEARCH',2,3),
   webToolCalls:Math.max(1,setting('SCOUT_MAX_TOOL_CALLS',5,10)),
   researchTimeoutMs:Math.max(1000,setting('SCOUT_RESEARCH_TIMEOUT_SECONDS',150,150)*1000),
   extractionTimeoutMs:Math.max(1000,setting('SCOUT_EXTRACTION_TIMEOUT_SECONDS',90,90)*1000),

@@ -34,6 +34,14 @@ export async function stateIn(tx: Prisma.TransactionClient, studentId: string, n
     update: {},
   });
   const cycle = currentCycle(initial, now, refreshDays());
+  // Repair earlier empty-result charges once, without touching paid usage.
+  const empty=await tx.opportunitySearchRequest.findMany({where:{studentId,status:'empty',cycleStartedAt:cycle.cycleStartedAt,countedAt:{not:null}}});
+  if(empty.length){
+    cycle.manualUsed=Math.max(0,cycle.manualUsed-empty.filter(r=>r.manualSlot==='base').length);
+    if(empty.some(r=>r.manualSlot==='bonus')&&!await tx.opportunitySearchRequest.count({where:{studentId,status:'complete',manualSlot:'bonus',cycleStartedAt:cycle.cycleStartedAt,countedAt:{not:null}}}))cycle.extraUsed=false;
+    await tx.opportunitySearchRequest.updateMany({where:{id:{in:empty.map(r=>r.id)}},data:{countedAt:null}});
+    await tx.auditEvent.create({data:{studentId,actor:'system',event:'Restored search allowance for empty results'}});
+  }
   return tx.pickRefreshState.update({
     where: { studentId },
     data: {

@@ -99,3 +99,13 @@ it('preserves a known past deadline when later extraction cannot confirm a repla
  const run=await finish(id,deps);expect(JSON.parse(run.usage).savedIds).not.toContain(o.id);
  const stored=await db.opportunity.findUniqueOrThrow({where:{id:o.id}});expect(stored.deadline).toBe('2000-01-01');expect(JSON.parse(stored.evidence).deadline.quote).toContain('2000');
 });
+
+it('settles actual observed search estimates once and releases unused reserved spending',async()=>{
+ vi.stubEnv('SCOUT_SOURCE_MODE','research_evidence');vi.stubEnv('SCOUT_WEB_SEARCH_PRICE_USD','0.1');vi.stubEnv('SCOUT_INPUT_PRICE_PER_MILLION','0');vi.stubEnv('SCOUT_OUTPUT_PRICE_PER_MILLION','0');
+ const id=await start(),deps=dependencies();deps.research=async(_provider,_context,_count,_repair,onCall)=>{
+  await onCall({provider:'openai',model:'test',inputTokens:100,outputTokens:50,responseId:'cost',webSearches:2},'research');return {output:{candidates:[],searchThemesUsed:[]},repaired:false,query:'test'};
+ };
+ const run=await finish(id,deps);expect(JSON.parse(run.usage)).toMatchObject({estimatedCost:0.2,calls:[{estimatedCost:0.2,usage:{webSearches:2}}]});
+ const ledger=await db.aIUsage.findUniqueOrThrow({where:{key:'discovery-spend:'+run.startedAt.toISOString().slice(0,7)}});expect(ledger.count).toBe(2000);
+ await advanceScout(run,deps);expect((await db.aIUsage.findUniqueOrThrow({where:{key:ledger.key}})).count).toBe(2000);
+});

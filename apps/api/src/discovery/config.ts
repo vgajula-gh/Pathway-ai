@@ -2,6 +2,7 @@ import type {WorkflowStep} from '../workflows/privacy.js';
 import { env } from '../lib/env.js';
 import type { FailureInfo } from './failures.js';
 import {extractionSettings} from '../agent/llm/extraction.js';
+import type {SpendReservation} from './spend.js';
 export const safeModelId=(value:string|undefined)=>value&&value.length<=160&&/^[a-zA-Z0-9][a-zA-Z0-9_.:/-]*$/.test(value)&&!/^(sk-|rk-|sess-|https?:|postgres)/i.test(value)?value:null;
 export function discoveryModels(){
   const extraction=extractionSettings(),provider=process.env.SEARCH_PROVIDER;
@@ -32,6 +33,7 @@ export type Usage = {
   estimatedCost: number;
 };
 export class RunBudget {
+  spendReservation?:SpendReservation;
   candidates={found:0,filtered:0,queued:0};
   readonly models=discoveryModels();
   readonly workflow: WorkflowStep[] = [];

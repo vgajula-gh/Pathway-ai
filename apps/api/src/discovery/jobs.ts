@@ -20,6 +20,7 @@ import { failureInfo, failureMessage, FailureStage, DiscoveryFailure, operationa
 import { settleSearchRequests,neededGroupBuckets } from './requests.js';
 export {withJobLock} from '../lib/job-lock.js';
 import {withJobLock} from '../lib/job-lock.js';
+import {reserveDiscoverySpend} from './spend.js';
 export async function reserveRun(groupKey: string, kind: 'discovery' | 'recheck' | 'knowledge', now = new Date()) {
   const month = now.toISOString().slice(0, 7),
     field = kind === 'discovery' ? 'runs' : 'rechecks',
@@ -39,7 +40,8 @@ export async function reserveRun(groupKey: string, kind: 'discovery' | 'recheck'
           });
           if (!held.count) return null;
           await reserveMonthlyAI(tx,now);
-          return tx.discoveryRun.create({ data: { groupKey, kind, startedAt: now } });
+          const reservation=kind==='discovery'?await reserveDiscoverySpend(tx,now):undefined;
+          return tx.discoveryRun.create({ data: { groupKey, kind, startedAt: now,...(reservation?{usage:JSON.stringify({spendReservation:reservation})}:{}) } });
         },
         { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
       );

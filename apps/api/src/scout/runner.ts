@@ -19,6 +19,8 @@ import {activeOpportunity} from '../domain/opportunity-active.js';
 import {confirmedDate} from '../domain/scout-qualification.js';
 import {resolveEvidence,sourcePassages} from './passages.js';
 import {confirmedResearchFacts,researchWarnings} from '../domain/research-evidence.js';
+import {estimatedCallCost} from './costs.js';
+import {settleDiscoverySpend} from '../discovery/spend.js';
 import type {LLMUsage} from '../agent/llm/types.js';
 import {privateWorkflow,workflowConfig,type WorkflowStep} from '../workflows/privacy.js';
 
@@ -47,11 +49,12 @@ export function restoreScoutBudget(run:Run) {
   if(old&&typeof old==='object') {
     for(const key of Object.keys(budget.usage) as (keyof Usage)[])if(typeof old[key]==='number'&&Number.isFinite(old[key])&&old[key]>=0)budget.usage[key]=old[key];
     budget.workflow.push(...(old.workflow||[]));budget.failures.push(...(old.failures||[]));budget.savedIds=old.savedIds||[];budget.candidates=old.candidates||budget.candidates;
+    if(old.spendReservation&&typeof old.spendReservation.month==='string'&&typeof old.spendReservation.units==='number')budget.spendReservation=old.spendReservation;
   }
   budget.deadlineAt=Date.now()+scoutSettings().timeoutMs;
   return budget;
 }
-export const scoutUsage=(budget:RunBudget,state:ScoutState)=>JSON.stringify({...budget.usage,models:budget.models,promptVersion:PROMPT_VERSION,candidates:budget.candidates,phase:budget.phase,savedIds:budget.savedIds,workflow:budget.workflow,failures:budget.failures,calls:state.calls,query:state.query,groupKeys:state.groupKeys,tokensAreEstimates:state.calls.some(c=>c.usage.inputTokens==null||c.usage.outputTokens==null)});
+export const scoutUsage=(budget:RunBudget,state:ScoutState)=>JSON.stringify({...budget.usage,estimatedCost:state.calls.reduce((sum,c)=>sum+estimatedCallCost(c.usage,c.kind),0),spendReservation:budget.spendReservation,models:budget.models,promptVersion:PROMPT_VERSION,candidates:budget.candidates,phase:budget.phase,savedIds:budget.savedIds,workflow:budget.workflow,failures:budget.failures,calls:state.calls.map(c=>({...c,estimatedCost:estimatedCallCost(c.usage,c.kind)})),query:state.query,groupKeys:state.groupKeys,tokensAreEstimates:state.calls.some(c=>c.usage.inputTokens==null||c.usage.outputTokens==null)});
 
 /** Caller holds the shared job lease. One graph node executes per HTTP/cron invocation. */
 export async function advanceScout(run:Run,overrides:Partial<ScoutDependencies>={}) {
@@ -201,11 +204,12 @@ export async function advanceScout(run:Run,overrides:Partial<ScoutDependencies>=
       const status=failure?'failed':'complete',error=failure?failureMessage(failure):'';
       const unconfirmed=await prisma.researchCandidate.count({where:{runId:run.id,status:{not:'verified'}}});
       budget.phase=budget.savedIds.length?budget.failures.length||unconfirmed?'partial':'complete':failure?'failed':'empty';
-      const usage=j<any>(scoutUsage(budget,state),{});usage.estimatedCost=budget.usage.searches*0.03+budget.usage.tokens/1e6*4;
+      const usage=j<any>(scoutUsage(budget,state),{});
       // status condition prevents a second final usage debit on a later poll.
       await prisma.$transaction(async tx=>{
         const updated=await tx.discoveryRun.updateMany({where:{id:run.id,status:'running'},data:{status,error,finishedAt:new Date(),usage:JSON.stringify(usage),state:JSON.stringify(state)}});
         if(updated.count) {
+          await settleDiscoverySpend(tx,budget.spendReservation,usage.estimatedCost);
           const {runs:_,...totals}=budget.usage;totals.estimatedCost=usage.estimatedCost;
           await tx.discoveryUsage.update({where:{month:run.startedAt.toISOString().slice(0,7)},data:Object.fromEntries(Object.entries(totals).map(([key,value])=>[key,{increment:value}]))});
           await tx.discoveryGroup.updateMany({where:{key:{in:state.groupKeys}},data:{status:failure?'error':'idle',pendingBuckets:'[]',error}});
