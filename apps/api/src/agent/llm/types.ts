@@ -5,11 +5,13 @@ export interface ChatTurn { role: 'user' | 'assistant'; content: string }
 export interface ImageInput { mediaType: 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif'; base64: string }
 export interface ToolResult { content: string; isError?: boolean }
 export interface JSONSchema { name: string; schema: Record<string, unknown> }
+export interface LLMUsage {provider:'openai'|'anthropic'|'ollama';model:string;inputTokens:number|null;outputTokens:number|null;responseId:string|null}
 export interface RunToolsOptions {
   system: string; history: ChatTurn[]; tools: ToolSpec[]; maxRounds: number; maxTokens?: number;
   exec: (name: string, input: unknown) => Promise<ToolResult>;
 }
 export interface LLM {
+  readonly lastUsage?:LLMUsage|null;
   readonly provider: 'anthropic' | 'openai' | 'ollama';
   /** Tool-use loop: the model may call tools up to maxRounds times; returns the final text. */
   runTools(opts: RunToolsOptions): Promise<string>;

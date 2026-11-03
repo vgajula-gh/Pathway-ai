@@ -3,6 +3,7 @@ import type {SourceType} from './source-urls.js';
 import {OpportunityEvidenceError,type VerificationIssue} from '../domain/opportunity-evidence.js';
 export type FailureStage = 'search' | 'robots' | 'fetch' | 'extract' | 'verify' | 'store' | 'index';
 const messages = {
+  interrupted:'This research step was interrupted. Completed results were kept; paid work was not repeated.',
   robots_blocked: 'The official website does not allow automated reading of this page.',
   robots_unavailable: 'The official website’s crawling rules could not be checked.',
   http_error: 'The official website returned an unsuccessful response.',

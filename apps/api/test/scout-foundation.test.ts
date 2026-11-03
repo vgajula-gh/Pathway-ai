@@ -4,6 +4,7 @@ import {ScoutFacts,ResearchOutput,ResearchJSON,FactsJSON} from '../src/scout/sch
 import {scoutPrompt,publicSearchContext,PROMPT_VERSION} from '../src/scout/prompts.js';
 import {sourcePassages,resolveEvidence} from '../src/scout/passages.js';
 import {readable} from '../src/discovery/pages.js';
+import {interestBatches} from '../src/scout/planning.js';
 
 it('keeps optional preferences unknown and validates numeric limits',()=>{
  expect(discoveryPreferences('{}')).toMatchObject({radiusMiles:50,format:'both',hoursPerWeek:null,maxCost:null});
@@ -33,4 +34,8 @@ it('constructs literal evidence only from supplied source passage IDs',()=>{
  const passages=sourcePassages([page]);
  const facts={evidence:{name:[passages[0].id],organizer:['p99-s99']}} as unknown as import('../src/scout/schema.js').ScoutFacts;
  expect(resolveEvidence(facts,passages)).toEqual({name:{sourceUrl:page.sourceUrl,quote:page.text}});
+});
+it('covers focus interests with no more than two per bounded research call',()=>{
+ expect(interestBatches(['AI','coding','Business','engineering','entrepreneurship',' AI '])).toEqual([['ai','business'],['coding','engineering'],['entrepreneurship']]);
+ expect(interestBatches(['a','b','c'],1)).toEqual([['a','b']]);
 });

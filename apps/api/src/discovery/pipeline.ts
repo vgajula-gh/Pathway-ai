@@ -24,7 +24,7 @@ export type PipelineDependencies = {
   extract: typeof extract;
   ingest?: (id: string, budget: RunBudget) => Promise<void>;
 };
-async function storeCandidate(data: VerifiedOpportunity, pages: Page[], group: Group) {
+export async function storeCandidate(data: VerifiedOpportunity & {sourceReadAt?:Date|null;scoutFacts?:string;qualificationNotes?:string;promptVersion?:string}, pages: Page[], group: Group) {
   // Do not silently attribute opportunities to this group's age/region when pages omit them.
   const existing = (await prisma.opportunity.findMany()).find(
     (o) =>

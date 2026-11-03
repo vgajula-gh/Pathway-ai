@@ -1,6 +1,6 @@
 // OpenAI adapter (Chat Completions with function calling). Docs: https://platform.openai.com/docs
 import OpenAI from 'openai';
-import { LLM, RunToolsOptions, ImageInput, parseJSON, JSONSchema } from './types.js';
+import { LLM, RunToolsOptions, ImageInput, parseJSON, JSONSchema, LLMUsage } from './types.js';
 import {AIOutputError} from './output-error.js';
 
 export function openaiLLM(apiKey: string, model: string, options: { baseURL?: string; local?: boolean; maxRetries?: number; timeout?: number } = {}): LLM {
@@ -13,8 +13,10 @@ export function openaiLLM(apiKey: string, model: string, options: { baseURL?: st
   const tokenLimit = (maxTokens: number) => options.local ? { max_tokens: maxTokens }
     : nano ? { max_completion_tokens: maxTokens + 4096, reasoning_effort: 'low' as const }
     : { max_completion_tokens: maxTokens };
+  let lastUsage:LLMUsage|null=null;
   async function complete(request: OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming) {
     const res = await c.chat.completions.create(request);
+    lastUsage={provider:options.local?'ollama':'openai',model,inputTokens:res.usage?.prompt_tokens??null,outputTokens:res.usage?.completion_tokens??null,responseId:res.id||null};
     const choice = res.choices[0];
     if(choice?.message.refusal||choice?.finish_reason==='content_filter')throw new AIOutputError('refused_response',choice?.message.refusal?'refusal':'content_filter');
     // Never execute tools with truncated arguments, silently accept partial JSON,
@@ -27,6 +29,7 @@ export function openaiLLM(apiKey: string, model: string, options: { baseURL?: st
   }
   type Msg = OpenAI.Chat.Completions.ChatCompletionMessageParam;
   return {
+    get lastUsage(){return lastUsage;},
     provider: options.local ? 'ollama' : 'openai',
     async runTools({ system, history, tools, maxRounds, maxTokens = 1200, exec }: RunToolsOptions) {
       const messages: Msg[] = [{ role: 'system', content: system }, ...history.map(h => ({ role: h.role, content: h.content }) as Msg)];
