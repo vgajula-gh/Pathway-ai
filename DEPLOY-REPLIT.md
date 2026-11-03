@@ -1,5 +1,7 @@
 # Publish Pathway AI on Replit
 
+For the expiration-only Explore follow-up, there are **no new schema changes, Secrets or resets**. Merge/sync main, run `npm ci --include=dev`, build and publish. Earlier Scout schema additions must already be applied. Open Explore after publish: existing stored rejected links may recover without a new paid search. Only run another search if needed; unconfirmed links should remain visible even if extraction fails. See [the behavior and test checklist](docs/15-EXPLORE-SIMPLIFICATION.md).
+
 These steps work for a new invitation-only pilot or an update to an existing app. Keep your existing database, sign-in secret and calendar secret. This update adds database fields and tables; it does not reset profiles, applications or usage.
 
 ## 1. Get the code from GitHub

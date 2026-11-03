@@ -38,7 +38,7 @@ components:
     SearchProgress:
       type: object
       properties:
-        phase: { enum: [idle, queued, searching, reading_sources, checking_facts, indexing, cached, complete, empty, failed, limited, cancelled] }
+        phase: { enum: [idle, queued, searching, reading_sources, checking_facts, indexing, cached, complete, partial, empty, failed, limited, cancelled] }
         found: { type: integer, minimum: 0 }
         detail: { type: [string, 'null'] }
         startedAt: { type: [string, 'null'], format: date-time }
@@ -54,7 +54,7 @@ components:
     CatalogCoverage:
       type: object
       required: [complete, free, paid, missingInterests]
-      description: Current active eligible good matches, excluding saved/dismissed items. Complete means every selected interest is covered and the combined Free/Paid targets are met; reuse requires no paid allowance.
+      description: Relevant unexpired links, excluding saved/dismissed choices. Six links can meet total coverage despite unknown costs; every selected interest must be represented. Other qualification checks are warnings. Reuse uses no paid allowance.
       properties:
         complete: { type: boolean }
         free: { type: integer, minimum: 0 }
@@ -169,7 +169,7 @@ components:
         picks: { type: array, items: { $ref: '#/components/schemas/Opportunity' } }
         watchlist:
           type: array
-          description: Announced future openings, separate from active picks; up to six source-fresh matching programs
+          description: Deprecated compatibility array, now empty. Future openings display among normal results with warnings.
           items:
             allOf:
               - { $ref: '#/components/schemas/Opportunity' }
@@ -264,7 +264,7 @@ components:
         costLabel: { type: string }
         financialAidNote: { type: [string, 'null'] }
         feeFlag: { type: boolean }
-        verificationStatus: { description: Active source-backed picks may be verified or needs_verification; announced future openings are a separate watchlist, enum: [verified, needs_verification, watchlist, new_find, stale, expired] }
+        verificationStatus: { description: Only confirmed past deadlines hide results; unconfirmed links remain needs_verification. Historical watchlist/stale states do not hide a result, enum: [verified, needs_verification, watchlist, new_find, stale, expired] }
         verifiedAt: { type: [string, 'null'], format: date-time }
         sourceCheckedAt: { type: [string, 'null'], format: date-time }
         sourceReadAt: { type: [string, 'null'], format: date-time, description: Reading alone does not confer Verified }

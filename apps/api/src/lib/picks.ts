@@ -4,7 +4,7 @@ import { prisma, j } from './db.js';
 import { loadContext } from './context.js';
 import { addDays, sod } from '../domain/time.js';
 import { dayCapacity } from '../domain/schedule.js';
-import { bucketFor, costLabel, selectPicks,outsideInterest } from '../domain/picks.js';
+import { bucketFor, costLabel, selectPicks } from '../domain/picks.js';
 import { scoreOpportunity } from '../domain/scoring.js';
 import { env } from './env.js';
 import { countdown } from '../domain/applications.js';
@@ -20,7 +20,10 @@ export const toOpp = (o: Awaited<ReturnType<typeof prisma.opportunity.findMany>>
   region: j<string[]>(o.region, []),
   skills: j<string[]>(o.skills, []),
   tags: j<string[]>(o.tags, []),
-  checks: j<string[]>(o.checks, []),
+  checks: [...new Set([...j<string[]>(o.checks, []),
+    ...(o.applicationStatus==='closed'?['Applications are reported closed; confirm the current cycle']:[]),
+    ...(o.verificationStatus==='stale'?['Source details may be out of date; check the program page']:[]),
+  ])],
   publicFacts:publicScoutFacts(o),
   qualificationNotes:j<{field:string;reason:string}[]>(o.qualificationNotes,[]),
   sources:Object.entries(j<Record<string,{sourceUrl:string;quote:string}>>(o.evidence,{})).filter(([,e])=>e&&typeof e.sourceUrl==='string'&&e.sourceUrl.startsWith('https://')&&typeof e.quote==='string').map(([field,e])=>({field,url:e.sourceUrl,quote:e.quote.slice(0,1000)})),
@@ -54,7 +57,6 @@ export async function personalPicks(studentId: string, rebuild = false) {
               o &&
               p.bucket === bucketFor(o) &&
               !excluded.has(o.id) &&
-              !['expired', 'stale'].includes(o.verificationStatus) &&
               !scoreOpportunity(o, ctx, freeMin).excluded
             );
           });
@@ -82,10 +84,6 @@ export async function personalPicks(studentId: string, rebuild = false) {
                 ...[...keep, ...fill].slice(0, counts[bucket]).map((p, rank) => ({ ...p, bucket, rank })),
               );
             }
-          // Preserving a different bucket must not reintroduce a second outside-interest pick.
-          const outside=chosen.filter(p=>{const o=opps.find(o=>o.id===p.opportunityId)!,fit=scoreOpportunity(o,ctx,freeMin);return !fit.excluded&&outsideInterest(o,fit);});
-          const keepOutside=outside.find(p=>valid.some(v=>v.opportunityId===p.opportunityId))||outside[0];
-          chosen.splice(0,chosen.length,...chosen.filter(p=>!outside.some(x=>x.opportunityId===p.opportunityId)||p===keepOutside));
           const missing={free:counts.free-chosen.filter(p=>p.bucket==='free').length,paid:counts.paid-chosen.filter(p=>p.bucket==='paid').length};
           const refill=selectPicks(opps,ctx,freeMin,new Set([...excluded,...chosen.map(p=>p.opportunityId)]),missing,[],[],0,today);
           for(const p of refill)chosen.push({...p,rank:chosen.filter(x=>x.bucket===p.bucket).length});

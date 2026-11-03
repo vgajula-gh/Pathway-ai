@@ -41,12 +41,10 @@ export function selectPicks(
   today = new Date().toISOString().slice(0,10),
 ) {
   const candidates = opps
-    .filter((o) => !excluded.has(o.id) && !['expired', 'stale'].includes(o.verificationStatus || ''))
+    .filter((o) => !excluded.has(o.id))
     .flatMap((o) => {
       const fit = scoreOpportunity(o, student, freeMin);
       if (fit.excluded) return [];
-      const outside=outsideInterest(o,fit);
-      if(outside&&(stretches<1||o.feeFlag||fit.eligibility.status!=='eligible'||o.promptVersion==='scout-v1'&&o.verificationStatus!=='verified'))return [];
       const penalty =
         (reasons.includes('too much time') && /^high/i.test(o.commitment) ? 0.2 : 0) +
         (reasons.includes('cost') && bucketFor(o) === 'paid' ? 0.15 : 0) +
@@ -62,7 +60,7 @@ export function selectPicks(
   const typeCounts=new Map<string,number>();
   for (const bucket of ['free', 'paid'] as const)
     for (let rank = 0; rank < counts[bucket]; rank++) {
-      const available=candidates.filter((c) => bucketFor(c.o) === bucket && !used.has(c.o.id)&& (!outsideInterest(c.o,c.fit)||!selected.some(p=>p.isStretch)));
+      const available=candidates.filter((c) => bucketFor(c.o) === bucket && !used.has(c.o.id));
       const diverse=available.filter(c=>(typeCounts.get(typeKey(c.o.opportunityType||c.o.category))||0)<2);
       const choice = (diverse.length?diverse:available)
         .sort((a, b) => {
@@ -83,20 +81,7 @@ export function selectPicks(
       efforts.add(choice.o.commitment.split(':')[0]);
       choice.fit.matched.forEach(i=>interests.add(normalizeTopic(i)));
     }
-  const stretch = candidates
-    .filter((c) => c.o.promptVersion!=='scout-v1' && !c.o.feeFlag && !c.fit.matched.length && !c.fit.goalHit && c.fit.eligibility.status === 'eligible')
-    .sort((a, b) => Number(selected.some(p=>p.opportunityId===b.o.id&&p.isStretch))-Number(selected.some(p=>p.opportunityId===a.o.id&&p.isStretch))||b.score-a.score||a.o.id.localeCompare(b.o.id))
-    .find((c) => selected.some((p) => p.bucket === bucketFor(c.o)));
-  if (stretch && stretches > 0) {
-    const existing = selected.find((p) => p.opportunityId === stretch.o.id);
-    if (existing) existing.isStretch = true;
-    else {
-      const slot = [...selected].reverse().find((p) => p.bucket === bucketFor(stretch.o));
-      if (slot) {
-        slot.opportunityId = stretch.o.id;
-        slot.isStretch = true;
-      }
-    }
-  }
+  // Outside-interest badges are descriptive only; they never hide results.
+  let marked=false;for(const pick of selected){pick.isStretch=pick.isStretch&&!marked;if(pick.isStretch)marked=true;}
   return selected;
 }

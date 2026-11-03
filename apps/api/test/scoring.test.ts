@@ -5,9 +5,9 @@ const student = { grade: 10, interests: ['AI', 'Coding'], skills: ['basic Python
 const opp = { id: 'x', name: 'App Challenge', category: 'STEM competition', gradeMin: 9, gradeMax: 12, format: 'Virtual', cost: 'Free', commitment: 'Medium: weeks', skills: ['programming'], tags: ['coding', 'ai', 'apps'], checks: [] };
 
 describe('opportunity scoring', () => {
-  it('hard-excludes ineligible grades', () => {
+  it('reports ineligible grades as warnings without hiding a result', () => {
     expect(eligibility({ ...opp, gradeMin: 12 }, student).status).toBe('not_eligible');
-    expect(scoreOpportunity({ ...opp, gradeMin: 12 }, student, 600).excluded).toBe(true);
+    expect(scoreOpportunity({ ...opp, gradeMin: 12 }, student, 600).excluded).toBe(false);
   });
   it('hard-excludes passed deadlines', () => {
     expect(eligibility({ ...opp, deadline: '2000-01-01' }, student).status).toBe('not_eligible');

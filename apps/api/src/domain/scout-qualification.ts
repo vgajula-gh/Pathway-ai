@@ -50,7 +50,7 @@ export function freeParticipation(quote:string) {
 }
 
 /** Model facts are assertions. Only selected literal passages establish public program facts. */
-export function qualifyScout(facts:ScoutFacts,pages:Page[],trusted:Set<string>,now=new Date()):Qualification {
+export function qualifyScout(facts:ScoutFacts,pages:Page[],trusted:Set<string>,now=new Date(),lead?:{name:string|null;url:string}):Qualification {
   const reasons:QualificationReason[]=[],notes:string[]=[],add=(field:string,reason:string)=>{if(!reasons.some(r=>r.field===field&&r.reason===reason))reasons.push({field,reason});};
   if(!pages.length||pages.some(p=>!Number.isFinite(+new Date(p.checkedAt))))return {disposition:'excluded',reasons:[{field:'source',reason:'unverifiable'}]};
   const resolved=resolveEvidence(facts,sourcePassages(pages));
@@ -59,7 +59,8 @@ export function qualifyScout(facts:ScoutFacts,pages:Page[],trusted:Set<string>,n
   const keep=(field:keyof ScoutFacts)=>{if(resolved[field])evidence[field]=resolved[field];};
   const text=(field:keyof ScoutFacts):string|null=>{const value=facts[field];if(typeof value==='string'&&value&&literal(value,quote(field))){keep(field);return value;}return null;};
   const list=(field:'skills'|'tags'|'requirements')=>{const values=facts[field]?.filter(v=>literal(v,quote(field)))||[];if(values.length)keep(field);return values;};
-  const name=text('name'),organizer=text('organizer');
+  const evidencedName=text('name'),name=evidencedName||lead?.name||pages[0].pageTitle||facts.name,organizer=text('organizer');
+  if(!evidencedName){add('name','not_stated');notes.push('Program name comes from the search result; details are not confirmed');}
   if(!name)add('name',facts.name?'value_not_supported':'not_stated');
   if(!organizer)notes.push('Organizer not confirmed');
   const domain=new URL(pages[0].sourceUrl).hostname.replace(/^www\./,'').toLowerCase();
@@ -80,6 +81,7 @@ export function qualifyScout(facts:ScoutFacts,pages:Page[],trusted:Set<string>,n
   if(restrictedSchoolYear){add('gradeRange','not_stated');notes.push('Check the specific school-year requirement on the program page');}
   const collegeOnly=/\b(?:college|undergraduate|graduate|adult)[ -]only\b|\b(?:only|exclusively) (?:for|to) (?:college|undergraduate|graduate|adult)\b/i.test(pages[0].text);
   if(collegeOnly)add('schoolLevel','not_eligible');
+  if(collegeOnly)notes.push('The page lists college/adult-only eligibility; check whether you can apply');
   if(gradeConflict){gradeMin=null;gradeMax=null;add('gradeRange','value_not_supported');}
   if(!grades&&!hs){add('gradeMin','not_stated');notes.push('Check grade eligibility');}
   let minAge:number|null=null;
@@ -103,6 +105,7 @@ export function qualifyScout(facts:ScoutFacts,pages:Page[],trusted:Set<string>,n
   const today=now.toISOString().slice(0,10);
   if(deadline&&deadline<today)add('deadline','past_deadline');
   if(applicationStatus==='closed')add('applicationStatus','closed');
+  if(applicationStatus==='closed')notes.push('Applications are reported closed; confirm the current cycle');
   const active=applicationStatus!=='closed'&&(!openingDate||openingDate<=today)&&(!deadline||deadline>=today)&&(opportunityType==='competition'?!!deadline&&deadline>today:
     ['club','volunteering'].includes(opportunityType)?['open','rolling'].includes(applicationStatus)||!!activityDate&&activityDate>=today:
       !!deadline&&deadline>today||['open','rolling'].includes(applicationStatus));
@@ -131,9 +134,12 @@ export function qualifyScout(facts:ScoutFacts,pages:Page[],trusted:Set<string>,n
   const tags=list('tags'),skills=list('skills'),requirements=list('requirements');
   const sourceReadAt=new Date(Math.min(...pages.map(p=>+new Date(p.checkedAt))));
   if(+sourceReadAt>+now+60000||+now-+sourceReadAt>30*86400000)add('source','not_current');
-  const hard=!name||collegeOnly||reasons.some(r=>['past_deadline','closed'].includes(r.reason))||!active&&!upcoming||reasons.some(r=>r.field==='source');
-  const uncertain=!reviewed||!grades&&!hs||gradeConflict||restrictedSchoolYear||minAge!=null;
-  const disposition:Qualification['disposition']=hard?'excluded':upcoming?'watchlist':uncertain?'needs_verification':'verified';
+  if(!active&&!upcoming)notes.push('Application status or deadline is not confirmed; check the program page');
+  if(upcoming)notes.push(`Applications open ${openingDate}; check the program page`);
+  if(listing)notes.push('Search/listing page — check the linked program details');
+  const hard=!!deadline&&deadline<today;
+  const uncertain=!reviewed||!grades&&!hs||gradeConflict||restrictedSchoolYear||minAge!=null||!evidencedName||collegeOnly||!active||reasons.some(r=>r.field==='source');
+  const disposition:Qualification['disposition']=hard?'excluded':uncertain?'needs_verification':'verified';
   const supported={schoolLevel:hs?'high_school':'unknown',city,state,currency,costMin,costMax,additionalCosts:extra,hoursMin,hoursMax,openingDate,
     parentConsent:parentConsent?true:null,parentActionDetails:parentConsent?text('parentActionDetails'):null,projectBased:projectBased?true:null,portfolioValue:projectBased?facts.portfolioValue:'unknown'};
   if(disposition==='excluded')return {disposition,reasons};

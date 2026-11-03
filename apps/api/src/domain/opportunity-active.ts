@@ -15,21 +15,14 @@ export function opportunityKind(category:string,name='',description='') {
   return 'program';
 }
 export function activeOpportunity(o:ActiveOpportunity,today:string,now=new Date()) {
-  const checked=o.verificationStatus==='verified'&&o.verifiedAt?o.sourceCheckedAt:
-    o.verificationStatus==='needs_verification'&&o.promptVersion==='scout-v1'?o.sourceReadAt:null;
-  if(!checked)return false;
-  if(+now-+checked>30*86400000||+checked>+now+60000)return false;
-  if(o.applicationStatus==='closed'||(o.deadline&&o.deadline<today))return false;
-  let evidence:Record<string,{sourceUrl?:string;quote?:string}>={};
-  try{evidence=JSON.parse(o.evidence||'{}');}catch{return false;}
-  const proven=(field:string)=>{const fact=evidence[field];try{return !!fact?.quote&&new URL(fact.sourceUrl||'').protocol==='https:';}catch{return false;}};
-  if(o.verificationStatus==='needs_verification'&&!proven('name'))return false;
-  const inferred=opportunityKind(o.category,o.name),kind=inferred==='competition'?'competition':o.opportunityType||inferred;
-  const future=!!o.deadline&&o.deadline>today&&proven('deadline');
-  if(kind==='competition')return future;
-  const open=['open','rolling'].includes(o.applicationStatus||'')&&!!o.applicationStatusCheckedAt&&+now-+o.applicationStatusCheckedAt<=30*86400000&&proven('applicationStatus')&&explicitApplicationStatus(o.applicationStatus!,evidence.applicationStatus.quote!);
-  if(kind==='club'||kind==='volunteering')return open||!!o.activityDate&&o.activityDate>=today&&proven('activityDate');
-  return open||future;
+  return !deadlineExpired(o.deadline,today);
+}
+/** Stored deadlines are source-checked dates. Missing/invalid dates mean unknown,
+ * never expired. Other details inform warnings/ranking, not result admission. */
+export function deadlineExpired(deadline:string|null|undefined,today:string) {
+  if(!deadline||!/^\d{4}-\d{2}-\d{2}$/.test(deadline))return false;
+  const date=new Date(deadline+'T12:00:00Z');
+  return Number.isFinite(+date)&&date.toISOString().slice(0,10)===deadline&&deadline<today;
 }
 export function explicitApplicationStatus(value:string,quote:string) {
   if(value==='closed')return !/not closed|still open/i.test(quote)&&/\b(closed|not open|no longer accepting|applications? (?:have )?ended)\b/i.test(quote);

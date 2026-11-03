@@ -20,21 +20,22 @@ import { env } from '../lib/env.js';
 import { activeOpportunity } from '../domain/opportunity-active.js';
 import { wallNow } from '../domain/time.js';
 import { initializeKnowledge,knowledgeUnavailable } from '../knowledge/runtime.js';
-import {publicScoutFacts} from '../domain/scout-scoring.js';
+import {bucketFor,costLabel} from '../domain/picks.js';
+import {recoverStoredLeads} from '../scout/leads.js';
 
 
 
 async function scored(studentId: string) {
   const { events, rules, ctx } = await loadContext(studentId);
   let weekFree = 0; for (let d = 0; d < 7; d++) weekFree += dayCapacity(events, rules, addDays(sod(new Date()), d)).available;
-  const [opps, saved] = await Promise.all([prisma.opportunity.findMany({ where: env.demoMode ? {} : { isSample: false, source: { not: 'seed' } } }), prisma.savedOpportunity.findMany({ where: { studentId } })]);
-  return opps.map(toOpp).filter(o=>env.demoMode&&o.isSample||activeOpportunity(o,dkey(wallNow(ctx.timezone||'UTC')),new Date())).map(o => ({ ...o, verified:o.verificationStatus==='verified'&&!!o.sourceCheckedAt, status: saved.find(s => s.opportunityId === o.id)?.status || null, fit: scoreOpportunity(o, ctx, weekFree) }));
+  const [opps, saved, feedback] = await Promise.all([prisma.opportunity.findMany({ where: env.demoMode ? {} : { isSample: false, source: { not: 'seed' } } }), prisma.savedOpportunity.findMany({ where: { studentId } }),prisma.opportunityFeedback.findMany({where:{studentId}})]);
+  return opps.map(toOpp).filter(o=>env.demoMode&&o.isSample||activeOpportunity(o,dkey(wallNow(ctx.timezone||'UTC')),new Date())).map(o => ({ ...o, verified:o.verificationStatus==='verified'&&!!o.sourceCheckedAt, status: feedback.some(f=>f.opportunityId===o.id)?'dismissed':saved.find(s => s.opportunityId === o.id)?.status || null, fit: scoreOpportunity(o, ctx, weekFree) }));
 }
 
 export default async function routes(app: FastifyInstance) {
   app.get('/api/opportunities', async (req, reply) => {
     reply.header('Cache-Control', 'no-store');
-    const s = await requireStudent(req), list = await scored(s.id);
+    const s=await requireStudent(req);await recoverStoredLeads();const list=await scored(s.id);
     const ok = list.filter(o => !o.fit.excluded && o.status !== 'dismissed').sort((a, b) => ((b.fit as any).score - (a.fit as any).score));
     const [hasSearch,hasPicks,coverage]=await Promise.all([prisma.opportunitySearchRequest.count({where:{studentId:s.id}}),prisma.studentPick.count({where:{studentId:s.id}}),catalogCoverage(s.id)]);
     const picks = hasSearch||hasPicks?await personalPicks(s.id):[];
@@ -43,16 +44,11 @@ export default async function routes(app: FastifyInstance) {
     const runtime=s.aiConsent?await initializeKnowledge():null;
     const states=await knowledgeStates(await studentOpportunityIds(s.id),runtime);
     const interestedCount=await prisma.savedOpportunity.count({where:{studentId:s.id,status:{not:'dismissed'}}});
-    const {ctx}=await loadContext(s.id),today=dkey(wallNow(ctx.timezone||'UTC'));
-    const hidden=await prisma.opportunityFeedback.findMany({where:{studentId:s.id},select:{opportunityId:true}});
-    const watchlist=(await prisma.opportunity.findMany({where:{verificationStatus:'watchlist',isSample:false}})).map(toOpp).filter(o=>{
-      const f=publicScoutFacts(o),fit=scoreOpportunity(o,ctx,0);
-      return !!f.openingDate&&f.openingDate>today&&!!o.sourceReadAt&&Date.now()-+o.sourceReadAt<=30*86400000&&!fit.excluded&&(fit.matched.length>0||fit.goalHit)&&!hidden.some(h=>h.opportunityId===o.id);
-    }).slice(0,6).map(o=>({...o,openingDate:publicScoutFacts(o).openingDate}));
+    const watchlist:unknown[]=[];
     return { ...discovery, catalog:publicCatalogCoverage(coverage), discoveryEnabled:enabled, unavailable:availability.unavailable, knowledgeUnavailable:runtime?null:knowledgeUnavailable(), preparing:Object.values(states).includes('preparing'), interestedCount, knowledgeStates:states,canAskAll:Object.values(states).includes('ready'),
       watchlist,
       picks:picks.map(p=>({...p,canAsk:states[p.id]==='ready',knowledgeStatus:states[p.id]})),
-      recommended: ok, excluded: list.filter(o => o.fit.excluded).map(o => ({ id: o.id, name: o.name, reasons: o.fit.eligibility.reasons })), dismissed: list.filter(o => o.status === 'dismissed').length, sampleData: list.some(o => o.isSample) };
+      recommended:ok.map(o=>({...o,bucket:bucketFor(o),costLabel:costLabel(o),canAsk:states[o.id]==='ready',knowledgeStatus:states[o.id]})), excluded: list.filter(o => o.fit.excluded).map(o => ({ id: o.id, name: o.name, reasons: o.fit.eligibility.reasons })), dismissed: list.filter(o => o.status === 'dismissed').length, sampleData: list.some(o => o.isSample) };
   });
 
   app.get('/api/opportunities/:id', async req => {

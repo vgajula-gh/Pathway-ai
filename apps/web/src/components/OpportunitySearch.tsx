@@ -22,6 +22,7 @@ export default function OpportunitySearch({status,interests,onRefresh,busy=false
       cached?'Current matches are available in the shared program library. Search reuses them without a new web search.':
       !status.discoveryEnabled?status.unavailable?.message||"Opportunity search isn't available right now.":
       status.limited?limitMessage+' Your existing programs are still available.':
+      status.search?.phase==='partial'?'Search results are available below. Some details could not be confirmed.':
       status.error?'The search could not finish. A failed search does not use your search allowance.':
       !status.refresh.available?`Next search available on ${new Date(status.refresh.nextAvailableAt).toLocaleDateString()}`:
       status.search?.phase==='cached'?'Found in the shared program library. No new web search was needed.':

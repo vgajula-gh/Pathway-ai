@@ -233,10 +233,12 @@ it('rechecks a queued gap before funding it and settles a newly complete shared 
  expect(remote.discover).not.toHaveBeenCalled();expect(await db.discoveryRun.count()).toBe(0);expect((await db.discoveryUsage.findFirst())?.runs||0).toBe(0);expect(await db.aIUsage.count()).toBe(0);expect((await refreshStatus(studentId)).remaining).toBe(1);
  expect(await searchState(studentId)).toMatchObject({finding:false,search:{phase:'cached',found:6}});
 });
-it('keeps expired, closed and unverified records from preventing a necessary missing-bucket search',async()=>{
+it('reuses closed/unverified results and searches only when expired dates leave a shortfall',async()=>{
  await fillFree();await db.opportunity.update({where:{id:'free0'},data:{applicationStatus:'closed'}});await db.opportunity.update({where:{id:'free1'},data:{sourceCheckedAt:new Date(Date.now()-31*86400000)}});await db.opportunity.update({where:{id:'free2'},data:{verificationStatus:'unverified'}});
  const {enqueueSearch}=await import('../src/discovery/requests.js');
- expect(await enqueueSearch(studentId,'initial')).toMatchObject({requested:true,catalog:{complete:false,free:0}});
+ expect(await enqueueSearch(studentId,'initial')).toMatchObject({requested:false,catalog:{complete:true,free:3}});
+ await db.opportunity.updateMany({where:{id:{in:['free0','free1']}},data:{deadline:'2000-01-01'}});
+ expect(await enqueueSearch(studentId,'manual',new Date(),{explicit:true})).toMatchObject({requested:true,catalog:{complete:false,free:1}});
  expect(JSON.parse((await db.discoveryGroup.findFirstOrThrow()).pendingBuckets)).toEqual(['free']);
 });
 it('cancels unfunded queued work when consent is withdrawn or the student changes interests',async()=>{

@@ -17,10 +17,10 @@ export default function DiscoveryPreferencesEditor({me,onSaved,onClose}:{me:Stud
   }catch(e){setError((e as Error).message);}finally{setBusy(false);}};
   return <Sheet title="Opportunity preferences" onClose={onClose}>
     <form onSubmit={e=>{e.preventDefault();void save();}} className="discovery-preferences">
-      <p className="note">All extra details are optional. Saving updates your recommendations; it doesn’t start a web search or change your plan.</p>
+      <p className="note">All extra details are optional ranking preferences. Only a past deadline hides a result. Saving updates your recommendations; it doesn’t start a web search or change your plan.</p>
       <label htmlFor="scout-interests">Interests, separated by commas</label><input id="scout-interests" className="field" value={interests} maxLength={760} onChange={e=>setInterests(e.target.value)}/>
       <RegionSelect value={region} onChange={v=>{setRegion(v);if(v==='virtual')update('format','online');}}/>
-      <label htmlFor="scout-format">Participation</label><select id="scout-format" className="field" value={prefs.format} onChange={e=>update('format',e.target.value as DiscoveryPreferences['format'])}><option value="both">Online and in person</option><option value="online">Online only</option><option value="in_person">In person only</option></select>
+      <label htmlFor="scout-format">Participation</label><select id="scout-format" className="field" value={prefs.format} onChange={e=>update('format',e.target.value as DiscoveryPreferences['format'])}><option value="both">Online and in person</option><option value="online">Prefer online</option><option value="in_person">Prefer in person</option></select>
       <label htmlFor="scout-city">City (optional, no street address)</label><input id="scout-city" className="field" autoComplete="address-level2" value={prefs.city} maxLength={80} onChange={e=>update('city',e.target.value)}/>
       <label htmlFor="scout-state">State (optional)</label><select id="scout-state" className="field" value={prefs.state} onChange={e=>update('state',e.target.value)}><option value="">Not set</option>{states.map(s=><option key={s}>{s}</option>)}</select>
       <label htmlFor="scout-radius">Approximate travel radius (miles)</label><input id="scout-radius" className="field" type="number" min={1} max={1000} value={prefs.radiusMiles} onChange={e=>update('radiusMiles',Number(e.target.value))}/>
@@ -29,9 +29,9 @@ export default function DiscoveryPreferencesEditor({me,onSaved,onClose}:{me:Stud
       <label htmlFor="scout-project">A project you’re working on (optional)</label><textarea id="scout-project" className="field" value={prefs.personalProject} maxLength={1500} onChange={e=>update('personalProject',e.target.value)}/>
       <p className="note">Goals, project text, time and maximum cost are used privately to choose your recommendations. Web search uses your interests, grade band and broad location/format.</p>
       <label htmlFor="scout-hours">Hours available each week (optional)</label><input id="scout-hours" className="field" type="number" min={0} max={168} step="0.5" value={prefs.hoursPerWeek??''} onChange={e=>numeric('hoursPerWeek',e.target.value)}/>
-      <label htmlFor="scout-budget">Budget preference</label><select id="scout-budget" className="field" value={budget} onChange={e=>setBudget(e.target.value)}><option value="any">Show free and paid options</option><option value="free">Free first; keep paid options collapsed</option></select>
+      <label htmlFor="scout-budget">Budget preference</label><select id="scout-budget" className="field" value={budget} onChange={e=>setBudget(e.target.value)}><option value="any">Show free and paid options</option><option value="free">Prefer free options; show all results</option></select>
       <label htmlFor="scout-cost">Maximum program cost in USD (optional)</label><input id="scout-cost" className="field" type="number" min={0} max={100000} step="0.01" value={prefs.maxCost??''} onChange={e=>numeric('maxCost',e.target.value)}/>
-      <p className="note">Programs above a confirmed minimum fee are filtered out. Unknown fees or extras are flagged for checking.</p>
+      <p className="note">Programs above your budget and unknown fees are flagged for checking; they remain visible.</p>
       {error&&<p role="alert">{error}</p>}<button className="btn fill" type="submit" disabled={busy}>{busy?'Saving…':'Save preferences'}</button>
     </form>
   </Sheet>;

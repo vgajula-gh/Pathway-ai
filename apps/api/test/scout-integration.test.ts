@@ -58,6 +58,41 @@ it('shows an active source-review candidate instead of silently discarding it',a
   expect(pick).toMatchObject({verified:false,verificationStatus:'needs_verification',sourceCheckedAt:null});expect(pick.checks).toContain('Source needs owner review');
  }finally{await app.close();}
 });
+it('shows real search links immediately and retains all of them when every extraction returns unreadable JSON',async()=>{
+ remote.fixtures=Array.from({length:6},(_,i)=>scoutFixture('Unconfirmed Coding '+i));
+ const actual=await vi.importActual<typeof import('../src/scout/research.js')>('../src/scout/research.js');
+ const web=vi.fn(async()=>({text:'Programs found. This is not a JSON response.',citations:remote.fixtures.map(f=>f.page.sourceUrl),sources:remote.fixtures.map(f=>({name:f.facts.name,url:f.page.sourceUrl})),usage:{provider:'openai' as const,model:'test',inputTokens:20,outputTokens:10,responseId:'public-search'}}));
+ remote.research.mockImplementation((_provider,context,count,repair,onCall,beforeRepair,deadline)=>actual.research({research:web},context,count,repair,onCall,beforeRepair,deadline));
+ remote.extract.mockRejectedValue(new SyntaxError('unreadable'));
+ const app=await buildApp();app.log.level='silent';try{
+  const result=await search(app);expect(result.search.phase).toBe('partial');expect(result.error).toBeNull();expect(web).toHaveBeenCalledOnce();expect(remote.extract).toHaveBeenCalledTimes(6);
+  const response=(await app.inject({url:'/api/opportunities',headers:{'x-student-id':studentId}})).json();expect(response.recommended).toHaveLength(6);expect(response.recommended.every((o:any)=>!o.verified&&o.deadline===null&&o.costType==='unknown')).toBe(true);
+  expect(await db.sourcePage.count()).toBe(6);expect(await db.opportunity.count()).toBe(6);
+ }finally{await app.close();}
+});
+it('shows stale, closed, wrong-grade, distant and unknown-cost results while excluding only a confirmed past deadline',async()=>{
+ const template=await import('./fixtures/scout.js');const {storeCandidate}=await import('../src/discovery/pipeline.js');const {qualifyScout}=await import('../src/scout/qualify.js');
+ const group=await db.discoveryGroup.create({data:{key:'coding|9-10|NC',topic:'coding',gradeBand:'9-10',region:'NC'}});
+ const f=template.scoutFixture('Filter-free Coding'),data=qualifyScout(f.facts,[f.page],new Set()).data!;
+ const id=await storeCandidate(data,[f.page],group);
+ await db.opportunity.update({where:{id},data:{gradeMin:12,gradeMax:12,region:'["CA"]',format:'In person',applicationStatus:'closed',costType:'unknown',sourceCheckedAt:null,sourceReadAt:new Date('2000-01-01'),verificationStatus:'stale',deadline:null}});
+ await db.student.update({where:{id:studentId},data:{format:'virtual',discoveryPreferences:JSON.stringify({city:'Raleigh',state:'NC',radiusMiles:1,maxCost:0})}});
+ const app=await buildApp();app.log.level='silent';try{
+  const response=(await app.inject({url:'/api/opportunities',headers:{'x-student-id':studentId}})).json();expect(response.recommended.map((o:any)=>o.id)).toContain(id);expect(response.recommended[0].fit.eligibility.checks.join()).toContain('grade 12');
+  await db.opportunity.update({where:{id},data:{deadline:'2000-01-01'}});
+  expect((await app.inject({url:'/api/opportunities',headers:{'x-student-id':studentId}})).json().recommended).toEqual([]);
+ }finally{await app.close();}
+});
+it('recovers already-paid rejected leads without another provider call and preserves confirmed expiry evidence',async()=>{
+ const group=await db.discoveryGroup.create({data:{key:'coding|9-10|NC',topic:'coding',gradeBand:'9-10',region:'NC'}});
+ const run=await db.discoveryRun.create({data:{groupKey:group.key,kind:'discovery',status:'failed'}});
+ await db.researchCandidate.create({data:{runId:run.id,name:'Earlier Coding Result',url:'https://example.edu/earlier',status:'error',reasons:'[{"field":"extract","reason":"invalid_json"}]'}});
+ await db.researchCandidate.create({data:{runId:run.id,name:'Expired Coding Result',url:'https://example.edu/expired',status:'excluded',reasons:'[{"field":"deadline","reason":"past_deadline"}]'}});
+ const app=await buildApp();app.log.level='silent';try{
+  for(let n=0;n<2;n++){const response=(await app.inject({url:'/api/opportunities',headers:{'x-student-id':studentId}})).json();expect(response.recommended.map((o:any)=>o.name)).toEqual(['Earlier Coding Result']);}
+  expect(remote.research).not.toHaveBeenCalled();expect(remote.extract).not.toHaveBeenCalled();expect(remote.fetch).not.toHaveBeenCalled();expect(await db.opportunity.count()).toBe(1);
+ }finally{await app.close();}
+});
 it('bounds five interest groups to three funded research calls and retains private profile data locally',async()=>{
  await db.student.update({where:{id:studentId},data:{interests:'["AI","business","coding","engineering","entrepreneurship"]'}});
  const app=await buildApp();app.log.level='silent';try{

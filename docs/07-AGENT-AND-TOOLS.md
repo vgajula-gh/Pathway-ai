@@ -1,5 +1,7 @@
 # 07 · Agent & Tool Contracts
 
+Current Explore policy: [Explore simplification](15-EXPLORE-SIMPLIFICATION.md) supersedes older active-only/eligible/source-fresh admission, separate watchlist, cost-hint quotas and six-card visibility rules below. Only a confirmed past deadline hides a result. Other details remain warnings/ranking factors. SQL stores search links before enrichment; unreadable details produce visible unconfirmed results. Source evidence, privacy, proposals, knowledge scope and AI limits remain enforced. This simplification adds no schema migration.
+
 **One orchestrating agent ("Buddy")** with tool use on **Claude or OpenAI** (`LLM_PROVIDER`). The loop lives in each adapter (`apps/api/src/agent/llm/anthropic.ts`, `openai.ts`); `buddy.ts` supplies the prompt, history and tool executor. Max 6 tool rounds per turn. System prompt: `agent/prompts.ts`.
 
 ## Tools (all deterministic code)

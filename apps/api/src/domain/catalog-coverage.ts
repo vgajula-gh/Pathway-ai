@@ -3,7 +3,8 @@ import { bucketFor, type Bucket, type PickOpportunity } from './picks.js';
 import { scoreOpportunity } from './scoring.js';
 import type { StudentContext } from './types.js';
 
-/** Inputs have already passed source freshness and active checks. No model decides coverage. */
+/** Plan paid searches from unexpired catalog links and public topic provenance.
+ * Preferences rank results; they do not decide visibility. */
 export function planCatalogSearch(
   opportunities: PickOpportunity[], student: StudentContext, freeMinutes: number,
   excluded: Set<string>, targets = { free: 3, paid: 3 },
@@ -12,12 +13,12 @@ export function planCatalogSearch(
   const groups = interestGroups(student, 20);
   const candidates = opportunities.filter(o => !excluded.has(o.id)).flatMap(o => {
     const fit = scoreOpportunity(o, student, freeMinutes);
-    return !fit.excluded && fit.score >= 0.38 && fit.matched.length
+    return !fit.excluded && fit.matched.length
       ? [{ id: o.id, bucket: bucketFor(o), interests: fit.matched.map(normalizeTopic) }] : [];
   });
   const enabled = (['free', 'paid'] as const).filter(b => targets[b] > 0);
   const counts = { free: candidates.filter(c => c.bucket === 'free').length, paid: candidates.filter(c => c.bucket === 'paid').length };
-  const shortBuckets = enabled.filter(b => counts[b] < targets[b]);
+  const shortBuckets = candidates.length>=targets.free+targets.paid?[]:enabled.filter(b=>counts[b]<targets[b]);
   const missing = enabled.length ? groups.filter(g => !candidates.some(c => c.interests.includes(g.topic))) : [];
   const planned = new Map<string, { group: typeof groups[number]; buckets: Bucket[] }>();
   const add = (group: typeof groups[number], buckets: Bucket[]) => {

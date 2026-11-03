@@ -10,7 +10,7 @@ export async function advanceOrStartScout(groupKeys?:string[]) {
     ...(groupKeys?{OR:[{groupKey:{in:groupKeys}},{groupLinks:{some:{groupKey:{in:groupKeys}}}}]}:{})},orderBy:{startedAt:'asc'}});
   if(running) {
     const state=j<ScoutState>(running.state,{} as ScoutState);
-    const needed=await Promise.all((state.groupKeys||[]).map(k=>neededGroupBuckets(k)));
+    const needed=await Promise.all((state.groupKeys||[]).map(k=>neededGroupBuckets(k,true)));
     if(!needed.some(b=>b.length)&&!state.diagnostic) {
       state.stopRequested=true;
       await prisma.discoveryRun.update({where:{id:running.id},data:{state:JSON.stringify(state)}});

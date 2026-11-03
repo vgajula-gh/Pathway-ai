@@ -14,6 +14,10 @@ import {scoutSettings} from './settings.js';
 import {ScoutFacts,type ResearchOutput} from './schema.js';
 import {balancedLeads} from './planning.js';
 import {identity} from '../discovery/groups.js';
+import {storeLead} from './leads.js';
+import {activeOpportunity} from '../domain/opportunity-active.js';
+import {confirmedDate} from '../domain/scout-qualification.js';
+import {resolveEvidence,sourcePassages} from './passages.js';
 import type {LLMUsage} from '../agent/llm/types.js';
 import {privateWorkflow,workflowConfig,type WorkflowStep} from '../workflows/privacy.js';
 
@@ -96,13 +100,20 @@ export async function advanceScout(run:Run,overrides:Partial<ScoutDependencies>=
         const url=httpsSourceURL(lead.officialUrl),mediaType=url?fileSourceType(url):null;
         const key=url?identity(url.hostname,lead.name):lead.officialUrl;
         if(seen.has(url?.href||lead.officialUrl)||programs.has(key))continue;seen.add(url?.href||lead.officialUrl);programs.add(key);budget.candidates.found++;
-        const filtered=!url||!!mediaType;
-        if(filtered) {budget.candidates.filtered++;budget.failures.push({stage:'fetch',code:url?'unsupported_content':'invalid_url',...(url?{sourceHost:url.hostname}:{}),...(mediaType?{mediaType}:{})});}
+        const filtered=!url;
+        if(filtered) {budget.candidates.filtered++;budget.failures.push({stage:'fetch',code:'invalid_url'});}
         const bucket=lead.costHint==='free'?'free':'paid';
-        const allowance=state.candidateAllowance||{free:scoutSettings().freeCandidates,paid:scoutSettings().paidCandidates};
-        const full=budget.candidates.queued>=state.maxCandidates||state.queuedCostHints[bucket]>=allowance[bucket];
-        await prisma.researchCandidate.upsert({where:{runId_url:{runId:run.id,url:lead.officialUrl}},create:{id:run.id+'-'+String(budget.candidates.found).padStart(2,'0'),runId:run.id,url:lead.officialUrl,name:lead.name,status:filtered||full?'excluded':'found',reasons:JSON.stringify(filtered?[{field:'source',reason:'unsupported_content'}]:full?[{field:'budget',reason:'candidate_limit'}]:[])},update:{}});
-        if(!filtered&&!full){budget.candidates.queued++;state.queuedCostHints[bucket]++;}
+        const full=budget.candidates.queued>=Math.min(state.maxCandidates,scoutSettings().freeCandidates+scoutSettings().paidCandidates,16);
+        await prisma.researchCandidate.upsert({where:{runId_url:{runId:run.id,url:lead.officialUrl}},create:{id:run.id+'-'+String(budget.candidates.found).padStart(2,'0'),runId:run.id,url:lead.officialUrl,name:lead.name,status:filtered?'excluded':full?'needs_verification':'found',reasons:JSON.stringify(filtered?[{field:'source',reason:'unsupported_content'}]:full?[{field:'budget',reason:'candidate_limit'}]:[])},update:{}});
+        if(!filtered){
+          if(!full){budget.candidates.queued++;state.queuedCostHints[bucket]++;}
+          const group=await prisma.discoveryGroup.findUniqueOrThrow({where:{key:state.groupKeys[0]}});
+          const leadRecord=await storeLead(lead.name,lead.officialUrl,group);
+          await prisma.opportunity.update({where:{id:leadRecord.id},data:{discoveredFor:JSON.stringify([...new Set([...j<string[]>(leadRecord.discoveredFor,[]),...state.groupKeys])])}});
+          await prisma.researchCandidate.update({where:{runId_url:{runId:run.id,url:lead.officialUrl}},data:{opportunityId:leadRecord.id}});
+          if(mediaType)await prisma.researchCandidate.update({where:{runId_url:{runId:run.id,url:lead.officialUrl}},data:{status:'needs_verification',reasons:JSON.stringify([{field:'source',reason:'unsupported_content'}])}});
+          if(activeOpportunity(leadRecord,state.context.today)&&!budget.savedIds.includes(leadRecord.id))budget.savedIds.push(leadRecord.id);
+        }
       }
       step('search_candidates','completed');state.stage='candidate';state.inFlight=null;
     } else if(stage==='candidate') {
@@ -122,6 +133,15 @@ export async function advanceScout(run:Run,overrides:Partial<ScoutDependencies>=
           try{pages.push(await deps.fetch(url,budget));}catch(error){budget.failures.push(failureInfo(error,'fetch'));}
         }
         candidate=await prisma.researchCandidate.update({where:{id:candidate.id},data:{pages:JSON.stringify(pages),status:'fetched'}});state.stage='extract';
+        if(candidate.opportunityId) {
+          const o=await prisma.opportunity.findUniqueOrThrow({where:{id:candidate.opportunityId}});
+          if(!o.sourceCheckedAt&&!await prisma.sourcePage.count({where:{opportunityId:o.id}})) {
+            await prisma.$transaction(async tx=>{
+              for(const page of pages)await tx.sourcePage.upsert({where:{opportunityId_sourceUrl:{opportunityId:o.id,sourceUrl:page.sourceUrl}},create:{opportunityId:o.id,sourceUrl:page.sourceUrl,pageTitle:page.pageTitle,text:page.text,contentHash:page.contentHash,checkedAt:page.checkedAt},update:{}});
+              await tx.opportunity.update({where:{id:o.id},data:{sourceReadAt:main.checkedAt}});
+            });
+          }
+        }
       }
       step('fetch_official_pages','completed');
     } else if(stage==='extract'&&candidate) {
@@ -134,18 +154,30 @@ export async function advanceScout(run:Run,overrides:Partial<ScoutDependencies>=
     } else if(stage==='qualify'&&candidate) {
       budget.phase='checking_facts';
       const pages=pagesOf(candidate.pages),facts=ScoutFacts.parse(j(candidate.facts,{}));
-      const result:Qualification=deps.qualify(facts,pages,trustedDomains());
-      let opportunityId:string|null=null;
+      const result:Qualification=deps.qualify(facts,pages,trustedDomains(),new Date(),candidate);
+      let opportunityId:string|null=candidate.opportunityId;
       if(result.data&&result.disposition!=='excluded') {
         const g=await prisma.discoveryGroup.findUniqueOrThrow({where:{key:state.groupKeys[0]}});
-        opportunityId=await deps.save({...result.data,promptVersion:PROMPT_VERSION},pages,g as Group);
+        opportunityId=await deps.save({...result.data,promptVersion:PROMPT_VERSION},pages,g as Group,candidate.opportunityId||undefined);
         for(const key of state.groupKeys.slice(1)) {
           const o=await prisma.opportunity.findUniqueOrThrow({where:{id:opportunityId}});
           await prisma.opportunity.update({where:{id:opportunityId},data:{discoveredFor:JSON.stringify([...new Set([...j<string[]>(o.discoveredFor,[]),key])])}});
         }
-        if(result.disposition!=='watchlist'&&!budget.savedIds.includes(opportunityId))budget.savedIds.push(opportunityId);
+        const stored=await prisma.opportunity.findUniqueOrThrow({where:{id:opportunityId}});
+        if(activeOpportunity(stored,state.context.today)&&!budget.savedIds.includes(opportunityId))budget.savedIds.push(opportunityId);
+        else if(!activeOpportunity(stored,state.context.today))budget.savedIds=budget.savedIds.filter(id=>id!==opportunityId);
         step('verify_facts','completed');step('store_catalog','completed');
       } else {
+        if(candidate.opportunityId) {
+          // An explicit expired deadline retires a provisional link too.
+          budget.savedIds=budget.savedIds.filter(id=>id!==candidate!.opportunityId);
+          const deadlineEvidence=resolveEvidence(facts,sourcePassages(pages)).deadline;
+          const deadline=confirmedDate(facts.deadline,deadlineEvidence?.quote||'','deadline');
+          if(deadline){
+            const stored=await prisma.opportunity.findUniqueOrThrow({where:{id:candidate.opportunityId}});
+            await prisma.opportunity.update({where:{id:stored.id},data:{deadline,evidence:JSON.stringify({...j<Record<string,unknown>>(stored.evidence,{}),deadline:deadlineEvidence}),verificationStatus:'expired',verifiedAt:null,sourceCheckedAt:null}});
+          }
+        }
         budget.failures.push({stage:'verify',code:result.reasons.some(r=>r.reason==='past_deadline')?'deadline_passed':'missing_evidence',verification:result.reasons as NonNullable<FailureInfo['verification']>});
         step('verify_facts','failed','unconfirmed_facts');
       }
@@ -154,7 +186,8 @@ export async function advanceScout(run:Run,overrides:Partial<ScoutDependencies>=
     } else if(stage==='finish') {
       const failure=!budget.savedIds.length&&budget.failures.some(operationalFailure)?primaryFailure(budget.failures):undefined;
       const status=failure?'failed':'complete',error=failure?failureMessage(failure):'';
-      budget.phase=budget.savedIds.length?budget.failures.length?'partial':'complete':failure?'failed':'empty';
+      const unconfirmed=await prisma.researchCandidate.count({where:{runId:run.id,status:{not:'verified'}}});
+      budget.phase=budget.savedIds.length?budget.failures.length||unconfirmed?'partial':'complete':failure?'failed':'empty';
       const usage=j<any>(scoutUsage(budget,state),{});usage.estimatedCost=budget.usage.searches*0.03+budget.usage.tokens/1e6*4;
       // status condition prevents a second final usage debit on a later poll.
       await prisma.$transaction(async tx=>{

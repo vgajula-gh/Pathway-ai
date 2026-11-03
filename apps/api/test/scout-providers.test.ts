@@ -83,3 +83,12 @@ it('distinguishes rejected web research from rejected format repair, preserving 
  const {diagnostics}=searchDiagnostics([{id:'error',usage:JSON.stringify({failures:[info]})}]);
  expect(diagnostics.failures[0]).toMatchObject({operation:'repair',providerCode:'invalid_json_schema',providerParam:'response_format',httpStatus:400});expect(JSON.stringify(diagnostics)).not.toContain('private');expect(sdk.chat).toHaveBeenCalledOnce();
 });
+it('recovers literal search links from unreadable prose without another model request',async()=>{
+ const provider={research:vi.fn(async()=>({text:'Found [Coding Studio](https://example.edu/studio), but this response is not JSON.',citations:[],usage:{provider:'openai' as const,model:'test',inputTokens:1,outputTokens:1,responseId:null}}))};
+ const result=await research(provider,context,6,false,async()=>{});expect(result.output.candidates[0]).toMatchObject({name:'Coding Studio',officialUrl:'https://example.edu/studio',costHint:'unknown'});expect(sdk.chat).not.toHaveBeenCalled();
+});
+it('keeps actual provider citations even when the final response was truncated',async()=>{
+ sdk.responses.mockResolvedValue({id:'partial',status:'incomplete',output:[{type:'message',content:[{type:'output_text',text:'Here are the program links, unfinished',annotations:[{type:'url_citation',url:'https://example.edu/program',title:'Example Program'}]}]}],usage:{input_tokens:10,output_tokens:5}});
+ const result=await research({research:openaiSearch().research!},context,6,false,async()=>{});
+ expect(result.output.candidates[0]).toMatchObject({name:'Example Program',officialUrl:'https://example.edu/program'});expect(sdk.responses).toHaveBeenCalledOnce();expect(sdk.chat).not.toHaveBeenCalled();
+});

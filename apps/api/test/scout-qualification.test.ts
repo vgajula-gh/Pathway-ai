@@ -34,20 +34,20 @@ it('does not hide active unknown eligibility or convert uncertain age into a par
  const result=check(age);expect(result.disposition).toBe('needs_verification');expect(JSON.parse(result.data!.scoutFacts!).parentConsent).toBeNull();
  expect(result.data?.minAge).toBe(16);
 });
-it('keeps confirmed closed, expired and college-only programs excluded',()=>{
+it('excludes only confirmed past deadlines and warns about closed/college-only programs',()=>{
  const old=scoutFixture();old.facts.deadline='2028-12-01';old.page.text=old.page.text.replace('December 1, 2030','December 1, 2028');expect(check(old).disposition).toBe('excluded');
- const closed=scoutFixture();closed.facts.applicationStatus='closed';closed.page.text=closed.page.text.replace('Applications are now open.','Applications are closed.');expect(check(closed).disposition).toBe('excluded');
+ const closed=scoutFixture();closed.facts.applicationStatus='closed';closed.page.text=closed.page.text.replace('Applications are now open.','Applications are closed.');expect(check(closed).disposition).toBe('needs_verification');
  const college=scoutFixture('College program','free','This is exclusively for undergraduate students.');expect(check(college).reasons).toContainEqual({field:'schoolLevel',reason:'not_eligible'});
 });
-it('requires a confirmed future competition deadline even with open registration',()=>{
+it('keeps competitions with an unknown deadline visible and unconfirmed',()=>{
  const f=scoutFixture('Robotics Challenge');f.facts.deadline=null;f.facts.evidence.deadline=null;
- expect(check(f)).toMatchObject({disposition:'excluded',reasons:expect.arrayContaining([{field:'deadline',reason:'no_confirmed_deadline'}])});
+ expect(check(f)).toMatchObject({disposition:'needs_verification',reasons:expect.arrayContaining([{field:'deadline',reason:'no_confirmed_deadline'}])});
  const normal=scoutFixture();normal.facts.deadline=null;expect(check(normal).disposition).toBe('verified');
 });
-it('routes announced future application openings to Coming soon and unknown availability to exclusions',()=>{
+it('keeps future openings and unknown availability visible with warnings',()=>{
  const f=scoutFixture('Future program','free','Applications open on February 1, 2029.');f.facts.deadline=null;f.facts.applicationStatus='opening_soon';f.facts.openingDate='2029-02-01';f.facts.evidence.openingDate=['p0-s0'];
- expect(check(f).disposition).toBe('watchlist');expect(activeOpportunity(check(f).data!,'2029-01-01',now)).toBe(false);
- f.facts.openingDate=null;expect(check(f).disposition).toBe('excluded');
+ expect(check(f).disposition).toBe('needs_verification');expect(activeOpportunity(check(f).data!,'2029-01-01',now)).toBe(true);
+ f.facts.openingDate=null;expect(check(f).disposition).toBe('needs_verification');
 });
 it('does not convert application or program dates into an unsupported deadline',()=>{
  expect(confirmedDate('2030-12-01','Program starts December 1, 2030.','deadline')).toBeNull();
@@ -76,9 +76,9 @@ it('keeps restricted school years uncertain and preserves literal state/country 
  expect(check(f).disposition).toBe('needs_verification');
  const regional=scoutFixture('Regional program','free','Only United States residents are eligible.');regional.facts.region=['United States'];regional.facts.evidence.region=['p0-s0'];expect(JSON.parse(check(regional).data!.region)).toEqual(['US']);
 });
-it('rejects unsupported program names and source references without inventing replacement quotes',()=>{
- const f=scoutFixture();f.facts.name='Invented program';expect(check(f).disposition).toBe('excluded');
- const bad=scoutFixture();bad.facts.evidence.name=['p99-s99'];expect(check(bad).disposition).toBe('excluded');
+it('keeps source-title fallbacks unverified without inventing evidence quotes',()=>{
+ const f=scoutFixture();f.facts.name='Invented program';expect(check(f).disposition).toBe('needs_verification');
+ const bad=scoutFixture();bad.facts.evidence.name=['p99-s99'];expect(check(bad).disposition).toBe('needs_verification');expect(JSON.parse(check(bad).data!.evidence)).not.toHaveProperty('name');
 });
 it('recognizes present accepting statements without allowing future or negative statements',()=>{
  expect(explicitApplicationStatus('open','Currently accepting applications.')).toBe(true);
@@ -86,6 +86,6 @@ it('recognizes present accepting statements without allowing future or negative 
  expect(explicitApplicationStatus('open','Applications open February 1, 2030.')).toBe(false);
  expect(explicitApplicationStatus('open','We are not accepting applications.')).toBe(false);
 });
-it('keeps search-result pages and listicles out of the program catalog',()=>{
- const f=scoutFixture();f.page.pageTitle='Top 10 Robotics Programs';expect(check(f)).toMatchObject({disposition:'excluded',reasons:expect.arrayContaining([{field:'source',reason:'low_quality_source'}])});
+it('labels listing pages without hiding their search result',()=>{
+ const f=scoutFixture();f.page.pageTitle='Top 10 Robotics Programs';expect(check(f)).toMatchObject({disposition:'needs_verification',reasons:expect.arrayContaining([{field:'source',reason:'low_quality_source'}])});
 });

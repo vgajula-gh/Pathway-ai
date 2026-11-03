@@ -106,7 +106,7 @@ export async function boundRuns(bindings:Binding[]) {
 }
 
 /** Another student's run may have filled this gap since it was queued. Check before spending. */
-export async function neededGroupBuckets(key:string) {
+export async function neededGroupBuckets(key:string,keepRunning=false) {
   const requests=await prisma.opportunitySearchRequest.findMany({where:{status:{in:pending}}});
   const buckets=new Set<'free'|'paid'>();
   for(const request of requests) {
@@ -119,6 +119,7 @@ export async function neededGroupBuckets(key:string) {
       await prisma.opportunitySearchRequest.updateMany({where:{id:request.id,status:{in:pending}},data:{status:'cancelled',finishedAt:new Date()}});
       continue;
     }
+    if(keepRunning){buckets.add('free');continue;}
     const coverage=await catalogCoverage(request.studentId);
     const needed=coverage.groups.find(g=>g.group.key===key);
     if(needed)needed.buckets.forEach(b=>buckets.add(b));
@@ -173,10 +174,11 @@ export async function searchState(studentId:string) {
   const {diagnostics,failures}=searchDiagnostics(runs.filter((r):r is NonNullable<typeof r>=>!!r));
   const allowed=['searching','reading_sources','checking_facts','indexing'];
   const finding=pending.includes(request.status),limited=!finding&&monthlyAllowance.limited;
-  const phase=finding?running&&allowed.includes(value?.phase||'')?value!.phase!:'queued':limited?'limited':request.status==='limited'?'idle':request.status;
+  const partial=request.status==='complete'&&runs.some(r=>r&&snapshot(r.usage).phase==='partial');
+  const phase=finding?running&&allowed.includes(value?.phase||'')?value!.phase!:'queued':limited?'limited':request.status==='limited'?'idle':partial?'partial':request.status;
   const ids=j<string[]>(request.resultIds,[]);
   const primary=primaryFailure(failures),error=request.status==='failed'?(primary?failureMessage(primary):request.error):null;
-  const detail=limited?monthlyLimitMessage(monthlyAllowance):request.status==='limited'?'Search allowance is available again.':error||request.error||null;
+  const detail=limited?monthlyLimitMessage(monthlyAllowance):request.status==='limited'?'Search allowance is available again.':partial?'Search results are available. Some program details could not be confirmed.':error||request.error||null;
   return {finding,limited,monthlyAllowance,diagnostics,error,resultIds:ids,
     search:{phase,found:ids.length,detail,startedAt:request.createdAt.toISOString(),finishedAt:request.finishedAt?.toISOString()||null}};
 }
