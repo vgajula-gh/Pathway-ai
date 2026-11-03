@@ -37,6 +37,11 @@ it('does not repair or repeat a provider timeout',async()=>{
  const provider={research:vi.fn().mockRejectedValue(new DOMException('private error','AbortError'))};
  await expect(research(provider,context,6,true,async()=>{})).rejects.toThrow();expect(provider.research).toHaveBeenCalledOnce();expect(sdk.chat).not.toHaveBeenCalled();
 });
+it('fits a format repair into the remaining worker deadline and skips repair once that deadline has passed',async()=>{
+ const provider={research:vi.fn(async()=>({text:'invalid JSON',citations:[],usage:{provider:'openai' as const,model:'test',inputTokens:1,outputTokens:1,responseId:null}}))};
+ await research(provider,context,6,true,async()=>{},undefined,Date.now()+5000);expect(sdk.options.at(-1).timeout).toBeLessThanOrEqual(5000);
+ const calls=sdk.chat.mock.calls.length;await expect(research(provider,context,6,true,async()=>{},undefined,Date.now()-1)).rejects.toMatchObject({info:{code:'run_limit'}});expect(sdk.chat).toHaveBeenCalledTimes(calls);
+});
 it('extracts source passage references with strict schema and no generated quotations',async()=>{
  const f=scoutFixture();sdk.chat.mockResolvedValue({id:'chat',choices:[{finish_reason:'stop',message:{content:JSON.stringify(f.facts)}}],usage:{prompt_tokens:20,completion_tokens:10}});
  const result=await extractScout([f.page]);expect(result.facts.name).toBe('Example Robotics');expect(result.usage?.inputTokens).toBe(20);

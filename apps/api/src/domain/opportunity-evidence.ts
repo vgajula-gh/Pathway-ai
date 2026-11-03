@@ -1,6 +1,6 @@
 /** Controlled verification details. Never put page text, URLs or model values here. */
-export const verificationFields = ['name','organizer','officialDomain','gradeMin','gradeMax','gradeRange','format','deadline','applicationStatus','activityDate'] as const;
-export const verificationReasons = ['not_stated','source_not_fetched','quote_not_found','value_not_supported','unreviewed_domain','invalid_grade_range','not_current','closed','past_deadline'] as const;
+export const verificationFields = ['name','organizer','officialDomain','gradeMin','gradeMax','gradeRange','format','deadline','applicationStatus','activityDate','source','schoolLevel'] as const;
+export const verificationReasons = ['not_stated','source_not_fetched','quote_not_found','value_not_supported','unreviewed_domain','invalid_grade_range','not_current','closed','past_deadline','unverifiable','low_quality_source','not_eligible','no_confirmed_deadline'] as const;
 export type VerificationIssue = {field:typeof verificationFields[number];reason:typeof verificationReasons[number]};
 export class OpportunityEvidenceError extends Error {
   constructor(public verification:VerificationIssue[],message='Program name or organizer lacks page evidence') {super(message);}

@@ -29,6 +29,7 @@ export default function OpportunitySearch({status,interests,onRefresh,busy=false
       'Search checks the shared library first. New web searches are limited to one each month, plus one extra after your interests change.'}</p>
     {!cached&&status.discoveryEnabled&&status.limited&&status.monthlyAllowance?.resetsAt&&<p className="note">Monthly usage resets on {new Date(status.monthlyAllowance.resetsAt).toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit',timeZoneName:'short'})}.</p>}
     {(error||!cached&&status.error)&&<p className="note" role="alert">{error||status.error}</p>}
+    {!searching&&!status.error&&status.search?.phase==='empty'&&status.search.detail&&<p className="note">{status.search.detail}</p>}
     {searching&&status.diagnostics&&<p className="note" aria-live="polite">{status.diagnostics.candidates?.found??0} candidates found · {status.diagnostics.steps.fetch.completed} pages read · {status.diagnostics.steps.verify.completed} qualified. Keep Explore open to continue; completed results are saved.</p>}
     <button className="btn" disabled={!interests.length||searching||(!cached&&(!status.discoveryEnabled||status.limited||!status.refresh.available&&!!status.search?.startedAt))} aria-describedby="opportunity-search-status" onClick={onRefresh}>{busy?'Starting search…':status.error&&!cached?'Try again':cached?'Refresh library picks':status.search?.startedAt?'Search for more':'Search for opportunities'}</button>
   </div>;

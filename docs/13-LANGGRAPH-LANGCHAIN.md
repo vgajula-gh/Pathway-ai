@@ -46,7 +46,7 @@ flowchart TD
 
 `discovery/graph.ts` defines typed LangGraph Annotation channels and conditional edges. `discovery/pipeline.ts` supplies existing search, safe fetch, extraction, verification, transactional catalog storage and ingestion services. It invokes the compiled graph under the privacy context. The unchanged job runner still reserves overall/monthly budgets and owns the durable lease/cooldown. Search failures reach the job failure handler; candidate failures skip that candidate. No automatic graph retry policy is installed.
 
-The same caps remain: two searches, ten candidate URLs, five extraction calls, twenty fetches (including robots/redirects), four embedding calls, one hundred vector writes and the existing work-time bound. A model cannot update graph control state or mark a fact verified. Verification remains `domain/opportunity-verification.ts`.
+The older pipeline retains its legacy caps for compatibility. Production Scout now uses `scout/runner.ts`: SQL-checkpointed research/leads/candidate/fetch/extract/qualify/finish nodes, one foreground network stage, up to three funded batches and sixteen queued leads per search, one format-only repair and a thirty-day accepted-source cache. `domain/scout-qualification.ts` handles deterministic source evidence; a model cannot update control state or mark facts verified. Shared embedding caps and provider retries are unchanged. See [Scout](14-OPPORTUNITY-SCOUT.md).
 
 ## Program-question graph
 

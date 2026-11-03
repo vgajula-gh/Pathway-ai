@@ -4,6 +4,7 @@ import {normalizeTopic} from '../discovery/groups.js';
 import {dkey,wallNow} from './time.js';
 import { StudentContext } from './types.js';
 import {publicScoutFacts,scoutPreferenceChecks,scoutScore} from './scout-scoring.js';
+import {normalizedRegion} from './regions.js';
 
 export interface Opp { id: string; name: string; category: string; gradeMin: number | null; gradeMax: number | null; region?: string[]; verificationStatus?: string; minAge?: number | null; format: string; cost: string; commitment: string; skills: string[]; tags: string[]; checks: string[]; sourceCheckedAt?: Date | null; deadline?: string | null; sourceReadAt?:Date|null;scoutFacts?:string;promptVersion?:string;costType?:string }
 export type FactorState = 'ok' | 'mid' | 'no' | 'na';
@@ -16,7 +17,7 @@ export function eligibility(o: Opp, s: StudentContext) {
   if ((o.gradeMin == null || o.gradeMax == null)&&publicScoutFacts(o).schoolLevel!=='high_school') checks.push('Grade eligibility is not confirmed');
   if (o.verificationStatus === 'expired') reasons.push('The deadline has passed');
   if (s.region === 'virtual' && !/virtual|online/i.test(o.format)) reasons.push('You chose virtual opportunities only');
-  if (s.region && s.region !== 'virtual' && o.region?.length && !o.region.some(r => ['virtual', 'US', s.region].includes(r))) reasons.push('Outside your selected region');
+  if (s.region && s.region !== 'virtual' && o.region?.length && !o.region.some(r => ['virtual', 'US', normalizedRegion(s.region!)].includes(normalizedRegion(r)))) reasons.push('Outside your selected region');
   if (o.minAge) checks.push(`Minimum age ${o.minAge}`);
   if (s.budget === 'free' && !/^free/i.test(o.cost)) checks.push(`Cost: ${o.cost}`);
   if (s.format === 'virtual' && !/virtual|online|application/i.test(o.format)) checks.push('In-person participation');

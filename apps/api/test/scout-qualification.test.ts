@@ -67,6 +67,15 @@ it('keeps tuition-free programs with mandatory charges out of Free and preserves
  const internship=scoutFixture('Internship','free','This internship pays students USD $500.');internship.facts.costType='paid';
  expect(check(internship).data?.costType).toBe('free');
 });
+it('does not call tuition-free participation Free when mandatory extras are unpriced',()=>{
+ const f=scoutFixture();f.page.text=f.page.text.replace('Participation is free.','Tuition is free. Mandatory materials fees apply.');
+ expect(check(f).data?.costType).not.toBe('free');
+});
+it('keeps restricted school years uncertain and preserves literal state/country restrictions',()=>{
+ const f=scoutFixture();f.page.text=f.page.text.replace('Open to grades 9–12 and high school students.','Open to high school students. Only high school seniors may apply.');f.facts.gradeMin=null;f.facts.gradeMax=null;
+ expect(check(f).disposition).toBe('needs_verification');
+ const regional=scoutFixture('Regional program','free','Only United States residents are eligible.');regional.facts.region=['United States'];regional.facts.evidence.region=['p0-s0'];expect(JSON.parse(check(regional).data!.region)).toEqual(['US']);
+});
 it('rejects unsupported program names and source references without inventing replacement quotes',()=>{
  const f=scoutFixture();f.facts.name='Invented program';expect(check(f).disposition).toBe('excluded');
  const bad=scoutFixture();bad.facts.evidence.name=['p99-s99'];expect(check(bad).disposition).toBe('excluded');

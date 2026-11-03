@@ -41,6 +41,19 @@ it('persists a bounded graph stage per invocation and finishes real catalog stor
  expect(deps.research).toHaveBeenCalledOnce();expect(deps.extract).toHaveBeenCalledOnce();
  const old=await db.discoveryUsage.findFirstOrThrow();await advanceScout(run,deps);expect(await db.discoveryUsage.findFirstOrThrow()).toEqual(old);
 });
+it('retains research leads before processing and resumes a saved response without another web request',async()=>{
+ const id=await start(),deps=dependencies();const run=await db.discoveryRun.findUniqueOrThrow({where:{id}}),state=JSON.parse(run.state);
+ state.inFlight='research';state.researchOutput=(await deps.research!({research:deps.provider!.research!},state.context,1,false)).output;
+ await db.discoveryRun.update({where:{id},data:{state:JSON.stringify(state)}});vi.mocked(deps.research!).mockClear();
+ await finish(id,deps);expect(deps.research).not.toHaveBeenCalled();expect(deps.extract).toHaveBeenCalledOnce();expect(await db.opportunity.count()).toBe(1);
+});
+it('enforces the free/paid lead pool and preserves excluded identities for diagnostics',async()=>{
+ vi.stubEnv('SCOUT_FREE_CANDIDATES','2');vi.stubEnv('SCOUT_PAID_CANDIDATES','2');
+ const fixtures=Array.from({length:16},(_,i)=>scoutFixture('Pool '+i,i<8?'free':'paid')),id=await start(),deps=dependencies(fixtures);
+ vi.mocked(deps.research!).mockResolvedValue({output:{candidates:fixtures.map((f,i)=>({name:f.facts.name!,officialUrl:f.page.sourceUrl,interests:['coding'],costHint:i<8?'free':'paid'})),searchThemesUsed:['coding']},query:'pool fixture',repaired:false});
+ const run=await finish(id,deps);expect(JSON.parse(run.state).queuedCostHints).toEqual({free:2,paid:2});
+ expect(await db.researchCandidate.count()).toBe(16);expect(await db.researchCandidate.count({where:{status:'excluded'}})).toBe(12);expect(deps.extract).toHaveBeenCalledTimes(4);expect(await db.opportunity.count()).toBe(4);
+});
 it('keeps researched pages after an extraction timeout and continues with another candidate',async()=>{
  const id=await start(),deps=dependencies([scoutFixture('One'),scoutFixture('Two')]);
  vi.mocked(deps.extract!).mockRejectedValueOnce(new DOMException('private provider text','AbortError'));

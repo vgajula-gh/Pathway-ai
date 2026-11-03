@@ -1,4 +1,4 @@
-import OpenAI from 'openai';
+import {openaiEmbeddingClient} from '../../agent/llm/embedding-openai.js';
 import { pineconeClient } from '../adapters/pinecone-client.js';
 import { Embedder } from '../contracts.js';
 import { setting } from '../../discovery/config.js';
@@ -6,7 +6,7 @@ export function getEmbedder(): Embedder | null {
   const provider = process.env.EMBEDDING_PROVIDER || 'none',
     model = process.env.EMBEDDING_MODEL;
   if (provider === 'openai' && process.env.OPENAI_API_KEY) {
-    const c = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, maxRetries: 0, timeout: 20000 });
+    const c = openaiEmbeddingClient({apiKey:process.env.OPENAI_API_KEY!,timeout:20000});
     return {
       provider,
       model: model || 'text-embedding-3-small',
@@ -58,13 +58,7 @@ export function getEmbedder(): Embedder | null {
       },
     };
   if (provider === 'ollama') {
-    const c = new OpenAI({
-      apiKey: 'ollama',
-      baseURL: process.env.OLLAMA_BASE_URL || 'http://localhost:11434/v1',
-      defaultHeaders: { Authorization: null },
-      maxRetries: 0,
-      timeout: 60000,
-    });
+    const c=openaiEmbeddingClient({apiKey:'ollama',baseURL:process.env.OLLAMA_BASE_URL||'http://localhost:11434/v1',timeout:60000,local:true});
     return {
       provider,
       model: model || 'nomic-embed-text',

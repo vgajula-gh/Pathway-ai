@@ -3,6 +3,7 @@ import { Opp, scoreOpportunity } from './scoring.js';
 import { StudentContext } from './types.js';
 export type Bucket = 'free' | 'paid';
 export type PickOpportunity = Opp & { costType: string; costVerifiedAt?: Date | null; feeFlag: boolean; deadline?:string|null; opportunityType?:string };
+export const outsideInterest=(o:Pick<Opp,'promptVersion'>,fit:{matched:string[];goalHit:boolean})=>!fit.matched.length&&(o.promptVersion==='scout-v1'||!fit.goalHit);
 export function seedCostType(cost: string): string {
   return /^free(?:\s|$|\()/i.test(cost) ? 'free' : /fees?|dues|\$\d/i.test(cost) ? 'paid' : 'unknown';
 }
@@ -44,7 +45,7 @@ export function selectPicks(
     .flatMap((o) => {
       const fit = scoreOpportunity(o, student, freeMin);
       if (fit.excluded) return [];
-      const outside=!fit.matched.length&&!fit.goalHit;
+      const outside=outsideInterest(o,fit);
       if(outside&&(stretches<1||o.feeFlag||fit.eligibility.status!=='eligible'||o.promptVersion==='scout-v1'&&o.verificationStatus!=='verified'))return [];
       const penalty =
         (reasons.includes('too much time') && /^high/i.test(o.commitment) ? 0.2 : 0) +
@@ -61,7 +62,7 @@ export function selectPicks(
   const typeCounts=new Map<string,number>();
   for (const bucket of ['free', 'paid'] as const)
     for (let rank = 0; rank < counts[bucket]; rank++) {
-      const available=candidates.filter((c) => bucketFor(c.o) === bucket && !used.has(c.o.id)&& (c.fit.matched.length>0||c.fit.goalHit||!selected.some(p=>p.isStretch)));
+      const available=candidates.filter((c) => bucketFor(c.o) === bucket && !used.has(c.o.id)&& (!outsideInterest(c.o,c.fit)||!selected.some(p=>p.isStretch)));
       const diverse=available.filter(c=>(typeCounts.get(typeKey(c.o.opportunityType||c.o.category))||0)<2);
       const choice = (diverse.length?diverse:available)
         .sort((a, b) => {
@@ -75,7 +76,7 @@ export function selectPicks(
           return verified(b)-verified(a)||(quality(b)+urgency(b)) - (quality(a)+urgency(a)) || (a.o.deadline||'9999').localeCompare(b.o.deadline||'9999') || a.o.id.localeCompare(b.o.id);
         })[0];
       if (!choice) break;
-      selected.push({ opportunityId: choice.o.id, bucket, rank, isStretch: !choice.fit.matched.length&&!choice.fit.goalHit });
+      selected.push({ opportunityId: choice.o.id, bucket, rank, isStretch:outsideInterest(choice.o,choice.fit) });
       used.add(choice.o.id);
       types.add(typeKey(choice.o.opportunityType||choice.o.category));
       const type=typeKey(choice.o.opportunityType||choice.o.category);typeCounts.set(type,(typeCounts.get(type)||0)+1);

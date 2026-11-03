@@ -6,20 +6,20 @@ import RegionSelect from './RegionSelect';
 const states='AL AK AZ AR CA CO CT DE FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY DC'.split(' ');
 const defaults:DiscoveryPreferences={city:'',state:'',radiusMiles:50,format:'both',goals:'',personalProject:'',hoursPerWeek:null,maxCost:null,currency:'USD'};
 export default function DiscoveryPreferencesEditor({me,onSaved,onClose}:{me:Student;onSaved:(s:Student)=>void;onClose:()=>void}) {
-  const [prefs,setPrefs]=useState({...defaults,...me.discoveryPreferences,format:me.format==='virtual'?'online' as const:me.discoveryPreferences?.format||'both'});
+  const [prefs,setPrefs]=useState({...defaults,...me.discoveryPreferences,format:me.format==='virtual'||me.region==='virtual'?'online' as const:me.discoveryPreferences?.format||'both'});
   const [interests,setInterests]=useState(me.interests.join(', ')),[region,setRegion]=useState(me.region||''),[budget,setBudget]=useState(me.budget);
   const [busy,setBusy]=useState(false),[error,setError]=useState('');
   const update=<K extends keyof DiscoveryPreferences>(key:K,value:DiscoveryPreferences[K])=>setPrefs(p=>({...p,[key]:value}));
   const numeric=(key:'maxCost'|'hoursPerWeek',value:string)=>update(key,value===''?null:Number(value));
   const save=async()=>{setBusy(true);setError('');try {
-    const student=await api<Student>('/api/me',{method:'PATCH',body:{interests:[...new Set(interests.split(',').map(s=>s.trim()).filter(Boolean))],region,budget,format:prefs.format==='online'?'virtual':prefs.format==='in_person'?'in_person':'any',discoveryPreferences:prefs}});
+    const student=await api<Student>('/api/me',{method:'PATCH',body:{interests:[...new Set(interests.split(',').map(s=>s.trim()).filter(Boolean))],region:region==='virtual'&&prefs.format!=='online'?'':region,budget,format:prefs.format==='online'?'virtual':prefs.format==='in_person'?'in_person':'any',discoveryPreferences:prefs}});
     onSaved(student);onClose();
   }catch(e){setError((e as Error).message);}finally{setBusy(false);}};
   return <Sheet title="Opportunity preferences" onClose={onClose}>
     <form onSubmit={e=>{e.preventDefault();void save();}} className="discovery-preferences">
       <p className="note">All extra details are optional. Saving updates your recommendations; it doesn’t start a web search or change your plan.</p>
       <label htmlFor="scout-interests">Interests, separated by commas</label><input id="scout-interests" className="field" value={interests} maxLength={760} onChange={e=>setInterests(e.target.value)}/>
-      <RegionSelect value={region} onChange={setRegion}/>
+      <RegionSelect value={region} onChange={v=>{setRegion(v);if(v==='virtual')update('format','online');}}/>
       <label htmlFor="scout-format">Participation</label><select id="scout-format" className="field" value={prefs.format} onChange={e=>update('format',e.target.value as DiscoveryPreferences['format'])}><option value="both">Online and in person</option><option value="online">Online only</option><option value="in_person">In person only</option></select>
       <label htmlFor="scout-city">City (optional, no street address)</label><input id="scout-city" className="field" autoComplete="address-level2" value={prefs.city} maxLength={80} onChange={e=>update('city',e.target.value)}/>
       <label htmlFor="scout-state">State (optional)</label><select id="scout-state" className="field" value={prefs.state} onChange={e=>update('state',e.target.value)}><option value="">Not set</option>{states.map(s=><option key={s}>{s}</option>)}</select>

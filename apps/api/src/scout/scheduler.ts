@@ -52,10 +52,12 @@ export async function advanceOrStartScout(groupKeys?:string[]) {
       return 0;
     }
     const input:PublicSearchContext={today:new Date().toISOString().slice(0,10),gradeBand:primary.gradeBand,region:primary.region,
-      interests:context.interests||groups.map(g=>g.topic),focusInterests:groups.map(g=>g.topic),city:context.city,state:context.state,format:context.format,buckets:[...buckets]};
+      interests:context.interests||groups.map(g=>g.topic),focusInterests:groups.map(g=>g.topic),city:context.city,state:context.state,format:context.format,buckets:[...buckets],excludeUrls:used.flatMap(r=>j<Partial<ScoutState>>(r.state,{}).researchOutput?.candidates.map(c=>c.officialUrl)||[]).slice(0,32)};
     const pendingGroups=queued.filter(g=>intentKeys.includes(g.key)).length;
     const batchesLeft=Math.max(1,Math.min(scoutSettings().researchCalls-used.length,Math.ceil(pendingGroups/2)));
     const state=newScoutState(input,groups.map(g=>g.key),Math.ceil(remaining/batchesLeft));
+    const consumed=used.reduce((n,r)=>{const hints=j<Partial<ScoutState>>(r.state,{}).queuedCostHints;return {free:n.free+(hints?.free||0),paid:n.paid+(hints?.paid||0)};},{free:0,paid:0});
+    state.candidateAllowance={free:Math.max(0,scoutSettings().freeCandidates-consumed.free),paid:Math.max(0,scoutSettings().paidCandidates-consumed.paid)};
     state.repairUsed=used.some(r=>j<any>(r.state,{}).repairUsed===true);
     const budget=restoreScoutBudget(run);
     const started=await prisma.discoveryRun.update({where:{id:run.id},data:{state:JSON.stringify(state),promptVersion:PROMPT_VERSION,

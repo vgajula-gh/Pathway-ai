@@ -90,3 +90,12 @@ it('enables catalog reuse even with AI unavailable and both shared and personal 
  const button=renderer.root.findAllByType('button').find(b=>b.children.join('')==='Refresh library picks')!;expect(button.props.disabled).toBe(false);
  expect(JSON.stringify(renderer.toJSON())).toContain('without a new web search');expect(JSON.stringify(renderer.toJSON())).not.toContain('Monthly usage resets');
 });
+it('saves optional preferences without starting web research or a plan write',async()=>{
+ const me={budget:'any',format:'any',region:'NC',interests:['Robotics']} as any,setMe=vi.fn();state.api.mockResolvedValue({...me,discoveryPreferences:{personalProject:'A robotics prototype'}});
+ await act(async()=>{renderer=create(createElement(Explore,{me,ask:vi.fn(),setMe}));});
+ act(()=>renderer.root.findAllByType('button').find(b=>b.children.join('')==='Edit interests and preferences')!.props.onClick());
+ expect(renderer.root.findByProps({htmlFor:'scout-project'}).children.join('')).toContain('optional');
+ act(()=>renderer.root.findByProps({id:'scout-project'}).props.onChange({target:{value:'A robotics prototype'}}));
+ await act(async()=>renderer.root.findByType('form').props.onSubmit({preventDefault(){}}));
+ expect(state.api).toHaveBeenCalledOnce();expect(state.api).toHaveBeenCalledWith('/api/me',expect.objectContaining({method:'PATCH',body:expect.objectContaining({discoveryPreferences:expect.objectContaining({personalProject:'A robotics prototype'})})}));expect(setMe).toHaveBeenCalledOnce();
+});

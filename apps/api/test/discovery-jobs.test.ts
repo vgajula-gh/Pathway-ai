@@ -12,7 +12,8 @@ vi.mock('../src/scout/runner.js',async()=>{
   const budget=actual.restoreScoutBudget(run),state=JSON.parse(run.state),group=await db.discoveryGroup.findUniqueOrThrow({where:{key:run.groupKey}});
   let error:unknown;
   try{budget.savedIds=await remote.discover(group,state.context.buckets,budget);}catch(e){error=e;}
-  const updated=await db.discoveryRun.update({where:{id:run.id},data:{usage:actual.scoutUsage(budget,state)}});
+  if(budget.candidates.found)state.stage='finish'; // This legacy fixture already supplied its completed candidate audit.
+  const updated=await db.discoveryRun.update({where:{id:run.id},data:{state:JSON.stringify(state),usage:actual.scoutUsage(budget,state)}});
   return actual.advanceScout(updated,{provider:{search:async()=>({urls:[],tokens:0}),research:async()=>({text:'',citations:[],usage:{provider:'openai',model:'test',inputTokens:0,outputTokens:0,responseId:'test'}})},
    research:async()=>{if(error)throw error;return {output:{candidates:[],searchThemesUsed:[]},query:'public fixture',repaired:false};}});
  }};

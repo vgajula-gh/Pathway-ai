@@ -11,15 +11,16 @@ import {extractScout} from './extract.js';
 import {qualifyScout,type Qualification} from './qualify.js';
 import {PROMPT_VERSION,publicSearchContext,scoutPrompt,type PublicSearchContext} from './prompts.js';
 import {scoutSettings} from './settings.js';
-import {ScoutFacts} from './schema.js';
+import {ScoutFacts,type ResearchOutput} from './schema.js';
 import {balancedLeads} from './planning.js';
 import {identity} from '../discovery/groups.js';
 import type {LLMUsage} from '../agent/llm/types.js';
 import {privateWorkflow,workflowConfig,type WorkflowStep} from '../workflows/privacy.js';
 
-type Stage='research'|'candidate'|'fetch'|'extract'|'qualify'|'finish';
+type Stage='research'|'leads'|'candidate'|'fetch'|'extract'|'qualify'|'finish';
 export type ScoutState={stage:Stage;context:PublicSearchContext;groupKeys:string[];candidateId:string|null;inFlight:Stage|null;repairUsed:boolean;maxCandidates:number;query:string;
   stopRequested?:boolean;diagnostic?:boolean;
+  researchOutput?:ResearchOutput;candidateAllowance?:{free:number;paid:number};queuedCostHints?:{free:number;paid:number};
   calls:{kind:'research'|'extract'|'repair';usage:LLMUsage;durationMs:number}[];startedAt:string};
 type Run=Awaited<ReturnType<typeof prisma.discoveryRun.findUniqueOrThrow>>;
 export type ScoutDependencies={research:typeof research;fetch:typeof fetchOfficialPage;extract:typeof extractScout;qualify:typeof qualifyScout;save:typeof storeCandidate;provider:NonNullable<ReturnType<typeof getSearch>>};
@@ -71,7 +72,7 @@ export async function advanceScout(run:Run,overrides:Partial<ScoutDependencies>=
   if(state.inFlight) {
     if(state.inFlight==='research') {
       const stored=await prisma.researchCandidate.count({where:{runId:run.id}});
-      if(stored)state.stage='candidate';else {budget.failures.push({stage:'search',code:'interrupted'});state.stage='finish';}
+      if(state.researchOutput)state.stage='leads';else if(stored)state.stage='candidate';else {budget.failures.push({stage:'search',code:'interrupted'});state.stage='finish';}
     } else if(state.inFlight==='extract'&&candidate?.status==='extracted')state.stage='qualify';
     else if(state.inFlight==='extract') {
       if(candidate)await prisma.researchCandidate.update({where:{id:candidate.id},data:{status:'error',reasons:JSON.stringify([{field:'extract',reason:'interrupted'}])}});
@@ -85,18 +86,23 @@ export async function advanceScout(run:Run,overrides:Partial<ScoutDependencies>=
       budget.phase='searching';
       if(!provider?.research)throw new Error('Search provider is not configured');
       budget.take('searches');await claim('research');await callStarted('research');const started=Date.now();
-      const response=await deps.research({research:provider.research},state.context,state.maxCandidates,!state.repairUsed,async(u,k)=>{if(k==='repair')state.repairUsed=true;await addCall(u,k,Date.now()-started);},async()=>{state.repairUsed=true;await callStarted('repair');await persist();});
+      const response=await deps.research({research:provider.research},state.context,state.maxCandidates,!state.repairUsed,async(u,k)=>{if(k==='repair')state.repairUsed=true;await addCall(u,k,Date.now()-started);},async()=>{budget.check();state.repairUsed=true;await callStarted('repair');await persist();},budget.deadlineAt);
       state.repairUsed||=response.repaired;
+      state.researchOutput=response.output;state.stage='leads';await persist();
+    } else if(stage==='leads') {
+      budget.candidates={found:0,filtered:0,queued:0};state.queuedCostHints={free:0,paid:0};
       const seen=new Set<string>(),programs=new Set<string>();
-      for(const lead of balancedLeads(response.output.candidates)) {
+      for(const lead of balancedLeads(state.researchOutput?.candidates||[])) {
         const url=httpsSourceURL(lead.officialUrl),mediaType=url?fileSourceType(url):null;
         const key=url?identity(url.hostname,lead.name):lead.officialUrl;
         if(seen.has(url?.href||lead.officialUrl)||programs.has(key))continue;seen.add(url?.href||lead.officialUrl);programs.add(key);budget.candidates.found++;
         const filtered=!url||!!mediaType;
         if(filtered) {budget.candidates.filtered++;budget.failures.push({stage:'fetch',code:url?'unsupported_content':'invalid_url',...(url?{sourceHost:url.hostname}:{}),...(mediaType?{mediaType}:{})});}
-        const full=budget.candidates.queued>=state.maxCandidates;
+        const bucket=lead.costHint==='free'?'free':'paid';
+        const allowance=state.candidateAllowance||{free:scoutSettings().freeCandidates,paid:scoutSettings().paidCandidates};
+        const full=budget.candidates.queued>=state.maxCandidates||state.queuedCostHints[bucket]>=allowance[bucket];
         await prisma.researchCandidate.upsert({where:{runId_url:{runId:run.id,url:lead.officialUrl}},create:{id:run.id+'-'+String(budget.candidates.found).padStart(2,'0'),runId:run.id,url:lead.officialUrl,name:lead.name,status:filtered||full?'excluded':'found',reasons:JSON.stringify(filtered?[{field:'source',reason:'unsupported_content'}]:full?[{field:'budget',reason:'candidate_limit'}]:[])},update:{}});
-        if(!filtered&&!full)budget.candidates.queued++;
+        if(!filtered&&!full){budget.candidates.queued++;state.queuedCostHints[bucket]++;}
       }
       step('search_candidates','completed');state.stage='candidate';state.inFlight=null;
     } else if(stage==='candidate') {
@@ -120,7 +126,7 @@ export async function advanceScout(run:Run,overrides:Partial<ScoutDependencies>=
       step('fetch_official_pages','completed');
     } else if(stage==='extract'&&candidate) {
       budget.phase='checking_facts';await claim('extract');await callStarted('extract');
-      const started=Date.now(),result=await deps.extract(pagesOf(candidate.pages));
+      budget.check();const started=Date.now(),result=await deps.extract(pagesOf(candidate.pages),budget.deadlineAt-Date.now());
       if(result.usage)await addCall(result.usage,'extract',Date.now()-started);
       else budget.usage.tokens+=Math.ceil(candidate.pages.length/3)+4096;
       candidate=await prisma.researchCandidate.update({where:{id:candidate.id},data:{facts:JSON.stringify(result.facts),status:'extracted'}});
@@ -140,7 +146,7 @@ export async function advanceScout(run:Run,overrides:Partial<ScoutDependencies>=
         if(result.disposition!=='watchlist'&&!budget.savedIds.includes(opportunityId))budget.savedIds.push(opportunityId);
         step('verify_facts','completed');step('store_catalog','completed');
       } else {
-        budget.failures.push({stage:'verify',code:result.reasons.some(r=>r.reason==='past_deadline')?'deadline_passed':'missing_evidence'});
+        budget.failures.push({stage:'verify',code:result.reasons.some(r=>r.reason==='past_deadline')?'deadline_passed':'missing_evidence',verification:result.reasons as NonNullable<FailureInfo['verification']>});
         step('verify_facts','failed','unconfirmed_facts');
       }
       await prisma.researchCandidate.update({where:{id:candidate.id},data:{status:result.disposition,reasons:JSON.stringify(result.reasons),opportunityId}});
@@ -164,7 +170,7 @@ export async function advanceScout(run:Run,overrides:Partial<ScoutDependencies>=
   let networkDone=false,finished=false;
   const node=Annotation.Root({done:Annotation<boolean>({reducer:(_a,b)=>b,default:()=>false})});
   const route=()=>finished?END:networkDone&&['research','fetch','extract'].includes(state.stage)?END:state.stage;
-  const stages:Stage[]=['research','candidate','fetch','extract','qualify','finish'];
+  const stages:Stage[]=['research','leads','candidate','fetch','extract','qualify','finish'];
   const executeNode=(stage:Stage)=>async()=>{
     if(['research','fetch','extract'].includes(stage))networkDone=true;
     try{await execute(stage);if(stage==='finish')finished=true;}catch(error) {
@@ -179,11 +185,11 @@ export async function advanceScout(run:Run,overrides:Partial<ScoutDependencies>=
   };
   // Process cheap SQL transitions together, but stop before a second network/model stage.
   const graph=new StateGraph(node)
-    .addNode('research',executeNode('research')).addNode('candidate',executeNode('candidate'))
+    .addNode('research',executeNode('research')).addNode('leads',executeNode('leads')).addNode('candidate',executeNode('candidate'))
     .addNode('fetch',executeNode('fetch')).addNode('extract',executeNode('extract'))
     .addNode('qualify',executeNode('qualify')).addNode('finish',executeNode('finish'))
     .addConditionalEdges(START,route,[...stages,END])
-    .addConditionalEdges('research',route,[...stages,END]).addConditionalEdges('candidate',route,[...stages,END])
+    .addConditionalEdges('research',route,[...stages,END]).addConditionalEdges('leads',route,[...stages,END]).addConditionalEdges('candidate',route,[...stages,END])
     .addConditionalEdges('fetch',route,[...stages,END]).addConditionalEdges('extract',route,[...stages,END])
     .addConditionalEdges('qualify',route,[...stages,END]).addConditionalEdges('finish',route,[...stages,END])
     .compile({name:'pathway_resumable_scout'});

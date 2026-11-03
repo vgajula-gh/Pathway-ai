@@ -72,7 +72,11 @@ Opportunity Gap Finder · Opportunity Creator (design your own project/club) · 
 
 ## Opportunity evidence regression
 
-- Equivalent literal numeric grade ranges, ordinal ranges and contiguous lists verify; arbitrary model bounds, ages, rising grades, contradictory bounds and gaps in grade lists do not. Organizer/domain, literal-source, active-status, cost and deadline checks remain required.
+- Equivalent literal numeric grade ranges, ordinal ranges and contiguous lists verify; arbitrary model bounds, ages, rising grades, contradictory bounds and gaps in grade lists do not. Legacy verification retains organizer/domain rules. Scout separates optional details, source review and active qualification as described in the Scout contract.
 - Verification failures record controlled required-field/reason pairs, separated from persisted facts. Status summaries drop arbitrary fields, reasons, source URLs and rejected values. Old records retain unknown details.
 - Completed evidence rejections explain an empty search ahead of incidental fetch/exhaustion errors; setup/provider/extraction/storage failures retain priority. Allowances and automatic retry behavior remain unchanged.
 - Synthetic source/extraction fixtures pass through the real graph, SQL storage, selection and HTTP routes to produce three Free and three Paid recommendations for two students. The second student reuses the shared catalog without new search or extraction calls. External provider/source access and production success still require live verification.
+
+## Opportunity Scout acceptance
+
+Covered by scout-foundation, scout-providers, scout-runner, scout-qualification, scout-ranking, scout-integration, scout-ui and scout-diagnostics tests plus discovery/knowledge API and Explore UI suites: public/private input separation; actual source→six-cards→second-student reuse; one-network-stage durability/no paid replay; 3-batch/16-lead/one-repair bounds; grade/date/cost/watchlist evidence; optional preferences, radius, strict online, weighted factors and feedback; safe partial Buddy preparation/scope; protected read-only diagnostics and explicit funded sample job. Preserve all existing access-code, AI-cap, sign-in, calendar, proposals, Today and export tests. Final checks include types, production build and a PostgreSQL upgrade/start smoke check; real provider/Pinecone/phone acceptance remains a Replit owner check. See [14-OPPORTUNITY-SCOUT.md](14-OPPORTUNITY-SCOUT.md).

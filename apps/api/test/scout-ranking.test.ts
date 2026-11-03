@@ -23,6 +23,11 @@ describe('personal Scout ranking',()=>{
   expect(eligibility(unknown,student).checks).toContain('Grade eligibility is not confirmed');
   expect(eligibility(unknown,{...student,discovery:discoveryPreferences({format:'online'})}).status).toBe('not_eligible');
  });
+ it('recognizes literal US/state names without excluding a matching student',()=>{
+  expect(eligibility(opp('national',{region:['United States']}),{...student,region:'NC'}).status).toBe('eligible');
+  expect(eligibility(opp('local',{region:['North Carolina']}),{...student,region:'NC'}).status).toBe('eligible');
+  expect(eligibility(opp('wrong-state',{region:['California']}),{...student,region:'NC'}).status).toBe('not_eligible');
+ });
  it('filters confirmed cost above the maximum, while unknown total costs remain explicit checks',()=>{
   const s={...student,discovery:discoveryPreferences({maxCost:50})};
   expect(eligibility(opp('x',{costType:'paid',scoutFacts:JSON.stringify({currency:'USD',costMin:100,costMax:200})}),s).status).toBe('not_eligible');
@@ -44,5 +49,10 @@ describe('personal Scout ranking',()=>{
   const candidates=[opp('a',{costType:'paid'}),opp('b',{costType:'paid',format:'In person',commitment:'High',scoutFacts:JSON.stringify({schoolLevel:'high_school'})})];
   const picks=selectPicks(candidates,student,600,new Set(),{free:0,paid:1},[],['too much time','too far']);expect(picks[0].opportunityId).toBe('a');
   expect(selectPicks(candidates,student,600,new Set(['a']),{free:0,paid:1})[0].opportunityId).toBe('b');
+ });
+ it('keeps at most one outside-interest Scout pick even when several connect with a private goal',()=>{
+  const s={...student,goals:['Explore music'],discovery:discoveryPreferences({})};
+  const catalog=Array.from({length:6},(_,i)=>opp('music-'+i,{tags:['music'],skills:[],costType:i<3?'free':'paid'}));
+  const picks=selectPicks(catalog,s,600,new Set());expect(picks).toHaveLength(1);expect(picks[0].isStretch).toBe(true);
  });
 });

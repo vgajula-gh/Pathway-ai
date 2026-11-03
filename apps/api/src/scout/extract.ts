@@ -6,8 +6,8 @@ import {sourcePassages} from './passages.js';
 import {DiscoveryFailure} from '../discovery/failures.js';
 import type {LLMUsage} from '../agent/llm/types.js';
 
-export async function extractScout(pages:Page[]):Promise<{facts:ScoutFacts;usage:LLMUsage|null}> {
-  const llm=extractionLLM();
+export async function extractScout(pages:Page[],timeoutMs=30000):Promise<{facts:ScoutFacts;usage:LLMUsage|null}> {
+  const llm=extractionLLM({timeoutMs});
   const output=await llm.json(extractionSystem(),JSON.stringify({passages:sourcePassages(pages)}),[],4096,FactsJSON);
   const result=ScoutFacts.safeParse(output);
   if(!result.success) {

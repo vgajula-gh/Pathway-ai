@@ -51,7 +51,7 @@ export function primaryFailure(failures:FailureInfo[]) {
   const relevant=failures.filter(operationalFailure),verification=failures.filter(f=>f.stage==='verify');
   const pool=verification.length?[...relevant,...verification]:relevant.length?relevant:failures;
   const rank=(f:FailureInfo)=>['missing_model','provider_authorization','provider_request','provider_limit'].includes(f.code)?100:
-    f.code==='run_limit'&&verification.length?15:
+    (f.code==='run_limit'||f.code==='timeout'&&verification.length>=2)&&verification.length?15:
     ['unsupported_content','invalid_url'].includes(f.code)?5:
     ({search:70,robots:10,fetch:20,extract:80,verify:40,store:90,index:90}[f.stage]);
   return pool.reduce<FailureInfo|undefined>((best,f)=>!best||rank(f)>rank(best)?f:best,undefined);

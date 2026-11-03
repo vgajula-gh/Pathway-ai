@@ -27,3 +27,5 @@ Voice is off by default and enabled explicitly in You › Privacy. Browser Speec
 
 ## Safety behaviors (agent)
 No admissions predictions; no invented achievements or facts; academic integrity; non-judgmental tone; no pressure tactics or streaks; limited nudges.
+
+Scout optional goals/project/time/max-cost preferences are private local ranking inputs, included in the student's export/deletion. Public search receives only interests, grade band and broad location/format/cost-group context. Public ResearchCandidate/page/assertion audit is shared and visible only through JOBS_SECRET-protected owner diagnostics; reports omit student identities/private text and Secret values. Unknown age/parent consent are not inferred. No private preferences or feedback are embedded. Student status summaries expose controlled enums/counts, not the owner audit. See [Scout](14-OPPORTUNITY-SCOUT.md).

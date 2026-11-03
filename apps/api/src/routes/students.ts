@@ -14,6 +14,7 @@ import { env } from '../lib/env.js';
 import { noteInterestChange } from '../discovery/refresh.js';
 import { Region } from '../domain/regions.js';
 import {DiscoveryPreferencesPatch,discoveryPreferences} from '../domain/discovery-preferences.js';
+import {personalPicks} from '../lib/picks.js';
 const hhmm = z.string().regex(/^\d{2}:\d{2}$/);
 const Onboard = z.object({ credentials: Credentials.optional(), region: Region.default(''), name: z.string().min(1).max(60), grade: z.number().int().min(9).max(12), interests: z.array(z.string()).max(20).default([]), goal: z.string().max(140).optional(),
   aiConsent: z.boolean().default(true), timezone: z.string().refine(zone => { try { new Intl.DateTimeFormat('en', { timeZone: zone }); return true; } catch { return false; } }, 'Choose a valid timezone').default('America/New_York'), studyStart: hhmm.default('16:00'), studyEnd: hhmm.default('21:00'), downtimeStart: hhmm.default('21:00'), downtimeEnd: hhmm.default('23:00'), sampleWeek: z.boolean().default(false) });
@@ -47,6 +48,8 @@ export default async function routes(app: FastifyInstance) {
 
   app.patch('/api/me', async req => {
     const s = await requireStudent(req), b = Patch.parse(req.body), prov = j<Record<string, unknown>>(s.provenance, {}), at = new Date().toISOString(), src = 'You edited';
+    if(b.format!==undefined&&b.discoveryPreferences?.format===undefined)b.discoveryPreferences={...b.discoveryPreferences,format:b.format==='virtual'?'online':b.format==='in_person'?'in_person':'both'};
+    if(b.discoveryPreferences?.format!==undefined&&b.format===undefined)b.format=b.discoveryPreferences.format==='online'?'virtual':b.discoveryPreferences.format==='in_person'?'in_person':'any';
     if (b.interests) prov.interests = { src, at }; if (b.skills) prov.skills = { src, at }; if (b.availability) prov.availability = { src, at };
     await prisma.student.update({ where: { id: s.id }, data: { discoveryPreferences:b.discoveryPreferences && JSON.stringify({...discoveryPreferences(s.discoveryPreferences),...b.discoveryPreferences}), name: b.name, region: b.region, grade: b.grade, location: b.location, aiConsent: b.aiConsent, budget: b.budget, format: b.format,
       interests: b.interests && JSON.stringify(b.interests), skills: b.skills && JSON.stringify(b.skills), settings: b.settings && JSON.stringify({ ...j(s.settings, {}), ...b.settings }), provenance: JSON.stringify(prov) } });
@@ -54,6 +57,7 @@ export default async function routes(app: FastifyInstance) {
     if(b.aiConsent===false||b.discoveryPreferences||b.region!==undefined||b.grade!==undefined||b.format!==undefined||b.budget!==undefined||b.interests)
       await prisma.opportunitySearchRequest.updateMany({where:{studentId:s.id,status:{in:['queued','running']}},data:{status:'cancelled',finishedAt:new Date()}});
     if (b.availability) await prisma.availability.upsert({ where: { studentId: s.id }, update: { ...b.availability, source: 'edited', lastVerified: new Date() }, create: { studentId: s.id, ...b.availability } });
+    if((b.discoveryPreferences||b.region!==undefined||b.grade!==undefined||b.interests||b.skills||b.availability)&&await prisma.opportunitySearchRequest.count({where:{studentId:s.id}}))await personalPicks(s.id,true);
     if (b.aiConsent !== undefined) await audit(s.id, 'student', b.aiConsent ? 'Turned on AI help' : 'Turned off AI help');
     else if (b.settings?.voice !== undefined) await audit(s.id, 'student', b.settings.voice ? 'Turned on Voice' : 'Turned off Voice');
     else if (b.settings?.newsTopics !== undefined) await audit(s.id, 'student', 'Changed news topics', (b.settings.newsTopics || ['match interests']).join(', '));

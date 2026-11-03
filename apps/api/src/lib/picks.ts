@@ -4,7 +4,7 @@ import { prisma, j } from './db.js';
 import { loadContext } from './context.js';
 import { addDays, sod } from '../domain/time.js';
 import { dayCapacity } from '../domain/schedule.js';
-import { bucketFor, costLabel, selectPicks } from '../domain/picks.js';
+import { bucketFor, costLabel, selectPicks,outsideInterest } from '../domain/picks.js';
 import { scoreOpportunity } from '../domain/scoring.js';
 import { env } from './env.js';
 import { countdown } from '../domain/applications.js';
@@ -83,7 +83,7 @@ export async function personalPicks(studentId: string, rebuild = false) {
               );
             }
           // Preserving a different bucket must not reintroduce a second outside-interest pick.
-          const outside=chosen.filter(p=>{const fit=scoreOpportunity(opps.find(o=>o.id===p.opportunityId)!,ctx,freeMin);return !fit.excluded&&!fit.matched.length&&!fit.goalHit;});
+          const outside=chosen.filter(p=>{const o=opps.find(o=>o.id===p.opportunityId)!,fit=scoreOpportunity(o,ctx,freeMin);return !fit.excluded&&outsideInterest(o,fit);});
           const keepOutside=outside.find(p=>valid.some(v=>v.opportunityId===p.opportunityId))||outside[0];
           chosen.splice(0,chosen.length,...chosen.filter(p=>!outside.some(x=>x.opportunityId===p.opportunityId)||p===keepOutside));
           const missing={free:counts.free-chosen.filter(p=>p.bucket==='free').length,paid:counts.paid-chosen.filter(p=>p.bucket==='paid').length};
