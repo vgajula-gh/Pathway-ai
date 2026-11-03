@@ -29,7 +29,7 @@ export function searchConfigurationIssue(values: NodeJS.ProcessEnv, aiDisabled: 
     : values.SEARCH_PROVIDER === 'anthropic' ? 'ANTHROPIC_API_KEY' : null;
   if (!searchKey) return knowledgeIssue('search_not_configured', ['SEARCH_PROVIDER']);
   if (!values[searchKey]) return knowledgeIssue('search_not_configured', [searchKey]);
-  if(values.LLM_PROVIDER?.toLowerCase()==='openai'&&!values.AI_MODEL_EXTRACTION?.trim()&&!values.OPENAI_MODEL?.trim())
+  if(values.SCOUT_SOURCE_MODE==='fetch_and_extract'&&values.LLM_PROVIDER?.toLowerCase()==='openai'&&!values.AI_MODEL_EXTRACTION?.trim()&&!values.OPENAI_MODEL?.trim())
     return knowledgeIssue('extraction_not_configured',['AI_MODEL_EXTRACTION','OPENAI_MODEL']);
   return null;
 }

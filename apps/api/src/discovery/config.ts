@@ -73,7 +73,7 @@ export function discoveryConfigured() {
     process.env.DISCOVERY_ENABLED === 'true' &&
     process.env.AI_DISABLED !== 'true' &&
     !env.aiDisabled &&
-    !!extractionSettings().model &&
+    (process.env.SCOUT_SOURCE_MODE!=='fetch_and_extract'||!!extractionSettings().model) &&
     searchConfigured()
   );
 }

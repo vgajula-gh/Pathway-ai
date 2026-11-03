@@ -20,7 +20,8 @@ import {runJobs} from '../src/discovery/jobs.js';
 const previous={...env};let studentId='';
 beforeAll(async()=>{writeFileSync(join(dir,'test.db'),'');await promisify(execFile)(process.execPath,['../../node_modules/prisma/build/index.js','migrate','deploy','--schema','prisma/schema.prisma'],{env:{...process.env,DATABASE_URL:url}});},30000);
 beforeEach(async()=>{
- vi.unstubAllEnvs();vi.stubEnv('DISCOVERY_ENABLED','true');vi.stubEnv('AI_DISABLED','false');vi.stubEnv('SEARCH_PROVIDER','openai');vi.stubEnv('OPENAI_API_KEY','fake-key');vi.stubEnv('AI_MODEL_EXTRACTION','reader');vi.stubEnv('DISCOVERY_RECHECKS_PER_MONTH','0');
+ vi.stubEnv('SCOUT_SOURCE_MODE','fetch_and_extract');
+ vi.unstubAllEnvs();vi.stubEnv('SCOUT_SOURCE_MODE','fetch_and_extract');vi.stubEnv('DISCOVERY_ENABLED','true');vi.stubEnv('AI_DISABLED','false');vi.stubEnv('SEARCH_PROVIDER','openai');vi.stubEnv('OPENAI_API_KEY','fake-key');vi.stubEnv('AI_MODEL_EXTRACTION','reader');vi.stubEnv('DISCOVERY_RECHECKS_PER_MONTH','0');
  Object.assign(env,{provider:'openai',openaiKey:'fake-key',openaiModel:'reader',aiDisabled:false,accessCodes:[]});
  await db.student.deleteMany();await db.discoveryRun.deleteMany();await db.discoveryGroup.deleteMany();await db.opportunity.deleteMany();await db.jobLease.deleteMany();await db.discoveryUsage.deleteMany();await db.aIUsage.deleteMany();
  studentId=(await db.student.create({data:{name:'Private name sentinel',grade:10,region:'NC',interests:'["coding","robotics"]',discoveryPreferences:JSON.stringify({goals:'private goal sentinel',personalProject:'private project sentinel'})}})).id;
@@ -107,5 +108,27 @@ it('cancels a pending search after preferences change without starting extractio
   await app.inject({method:'POST',url:'/api/opportunities/refresh',headers});await app.inject({method:'POST',url:'/api/discovery/run',headers});
   await app.inject({method:'PATCH',url:'/api/me',headers,payload:{discoveryPreferences:{maxCost:25}}});
   await runJobs();expect(remote.extract).not.toHaveBeenCalled();expect(await db.opportunitySearchRequest.findFirstOrThrow()).toMatchObject({status:'cancelled'});
+ }finally{await app.close();}
+});
+
+it('confirms research evidence without extraction while retaining blocked, redirected and PDF links',async()=>{
+ vi.stubEnv('SCOUT_SOURCE_MODE','research_evidence');
+ const {ResearchDetails}=await import('../src/scout/schema.js');const {DiscoveryFailure}=await import('../src/discovery/failures.js');
+ const fixtures=Array.from({length:10},(_,i)=>scoutFixture('Research Coding '+i,i<3?'free':'paid'));
+ fixtures[9].page.sourceUrl='https://example.edu/program.pdf';
+ const leads=fixtures.map((f,i)=>({name:f.facts.name!,officialUrl:f.page.sourceUrl,interests:['coding','robotics'],costHint:i<3?'free':'paid',details:ResearchDetails.parse({
+  ...Object.fromEntries(Object.keys(ResearchDetails.shape).map(k=>[k,null])),organizer:'Example',costType:i<3?'free':'paid',costAmount:i<3?null:'USD $50',deadline:'2030-12-01',applicationStatus:'open',format:'online',
+  evidence:[['name',f.facts.name!],['organizer','Organized by Example.'],['gradeEligibility','Open to grades 9–12 and high school students.'],['costType',i<3?'Participation is free.':'Program fee USD $50.'],['costAmount','Program fee USD $50.'],['deadline','Application deadline December 1, 2030.'],['applicationStatus','Applications are now open.'],['format','Online.']].map(([field,quote])=>({field,quote,sourceUrl:f.page.sourceUrl}))
+ })}));
+ remote.research.mockResolvedValue({output:{candidates:leads,searchThemesUsed:['coding']},query:'public test',repaired:false});
+ remote.fetch.mockImplementation(async(url:string)=>{const i=leads.findIndex(l=>l.officialUrl===url);if(i>=3&&i<=6)throw new DiscoveryFailure({stage:'fetch',code:'http_error',httpStatus:403});return {...fixtures[i].page,...(i===7||i===8?{sourceUrl:'https://applications.example.edu/'+i}:{})};});
+ const app=await buildApp();app.log.level='silent';const headers={'x-student-id':studentId};try{
+  await app.inject({method:'POST',url:'/api/opportunities/refresh',headers});await app.inject({method:'POST',url:'/api/discovery/run',headers});
+  expect((await app.inject({url:'/api/opportunities',headers})).json().recommended).toHaveLength(10);
+  for(let i=0;i<15;i++){await app.inject({method:'POST',url:'/api/discovery/run',headers});if(!(await app.inject({url:'/api/discovery/status',headers})).json().finding)break;}
+  const list=(await app.inject({url:'/api/opportunities',headers})).json();expect(list.recommended).toHaveLength(10);expect(list.picks.filter((p:any)=>p.bucket==='free')).toHaveLength(3);expect(list.picks.filter((p:any)=>p.bucket==='paid')).toHaveLength(3);
+  expect(list.recommended.filter((o:any)=>o.verified)).toHaveLength(5);expect(list.recommended.filter((o:any)=>!o.verified)).toHaveLength(5);expect(list.search.phase).toBe('partial');
+  expect(remote.extract).not.toHaveBeenCalled();expect(remote.fetch).toHaveBeenCalledTimes(9);expect(await db.sourcePage.count()).toBe(5);
+  expect(await db.researchCandidate.count({where:{status:'needs_verification'}})).toBe(5);
  }finally{await app.close();}
 });

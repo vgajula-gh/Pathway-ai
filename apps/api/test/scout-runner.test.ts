@@ -15,7 +15,8 @@ import {PROMPT_VERSION} from '../src/scout/prompts.js';
 import {research} from '../src/scout/research.js';
 
 beforeAll(async()=>{writeFileSync(join(dir,'test.db'),'');await promisify(execFile)(process.execPath,['../../node_modules/prisma/build/index.js','migrate','deploy','--schema','prisma/schema.prisma'],{env:{...process.env,DATABASE_URL:url}});},30000);
-beforeEach(async()=>{await db.discoveryRun.deleteMany();await db.discoveryGroup.deleteMany();await db.opportunity.deleteMany();await db.discoveryUsage.deleteMany();await db.aIUsage.deleteMany();vi.unstubAllEnvs();});
+beforeEach(async()=>{
+ vi.stubEnv('SCOUT_SOURCE_MODE','fetch_and_extract');await db.discoveryRun.deleteMany();await db.discoveryGroup.deleteMany();await db.opportunity.deleteMany();await db.discoveryUsage.deleteMany();await db.aIUsage.deleteMany();vi.unstubAllEnvs();vi.stubEnv('SCOUT_SOURCE_MODE','fetch_and_extract');});
 afterAll(async()=>{vi.unstubAllEnvs();await db.$disconnect();rmSync(dir,{recursive:true,force:true});});
 async function start() {
  const group=await db.discoveryGroup.upsert({where:{key:'robotics|9-10|NC'},create:{key:'robotics|9-10|NC',topic:'robotics',gradeBand:'9-10',region:'NC',status:'running'},update:{status:'running'}});

@@ -1,4 +1,4 @@
-import {beforeEach,it,expect,vi} from 'vitest';
+import {afterEach,beforeEach,it,expect,vi} from 'vitest';
 import {EventEmitter} from 'node:events';
 import {gzipSync} from 'node:zlib';
 const remote=vi.hoisted(()=>({lookup:vi.fn(),get:vi.fn()}));
@@ -6,6 +6,7 @@ vi.mock('node:dns/promises',()=>({lookup:remote.lookup}));vi.mock('node:https',(
 import {fetchOfficialPage,readable} from '../src/discovery/pages.js';import {RunBudget} from '../src/discovery/config.js';
 const text='An official program offers a detailed activity for students with published rules and eligibility. '.repeat(3);
 function response(status:number,body:string|Buffer,headers:Record<string,string>={}) {return (url:any,options:any,cb:any)=>{const req=new EventEmitter() as any;req.destroy=(error:Error)=>{req.emit('error',error);req.emit('close');};queueMicrotask(()=>{const res=new EventEmitter() as any;res.statusCode=status;res.headers=headers;res.resume=()=>{};cb(res);res.emit('data',Buffer.isBuffer(body)?body:Buffer.from(body));res.emit('end');req.emit('close');});return req;};}
+afterEach(()=>vi.unstubAllEnvs());
 beforeEach(()=>{remote.lookup.mockReset().mockResolvedValue([{address:'93.184.216.34',family:4}]);remote.get.mockReset();});
 it('decompresses official HTML, shares robots lookups and pins the connection',async()=>{
  remote.get.mockImplementationOnce(response(404,'')).mockImplementation(response(200,gzipSync(`<main>${text}</main>`),{'content-encoding':'gzip','content-type':'text/html'}));const budget=new RunBudget();expect((await fetchOfficialPage('https://example.edu/program',budget)).text).toBe(text.trim());await fetchOfficialPage('https://example.edu/faq',budget);expect(remote.get).toHaveBeenCalledTimes(3);expect(remote.get.mock.calls.every(c=>typeof c[1].lookup==='function')).toBe(true);
@@ -48,4 +49,10 @@ it('keeps the decompressed size bound and reports oversized output accurately',a
 it('collects supporting HTML links before removing navigation and excludes downloads before the link cap',()=>{
  const page=readable(`<nav><a href="/rules.pdf">Download</a><a href="/fees.docx">Fees document</a><a href="/eligibility">Eligibility</a><a href="/faq">FAQ</a><a href="/apply">Apply</a></nav><main>${text}</main>`,'https://example.edu/program');
  expect(page.links).toEqual(['https://example.edu/eligibility','https://example.edu/faq','https://example.edu/apply']);expect(page.text).toBe(text.trim());
+});
+
+it('follows an owner-reviewed application redirect with destination DNS and robots checks',async()=>{
+ vi.stubEnv('SCOUT_REDIRECT_DOMAINS','application.example.org');
+ remote.get.mockImplementationOnce(response(404,'')).mockImplementationOnce(response(302,'',{location:'https://application.example.org/apply'})).mockImplementationOnce(response(404,'')).mockImplementationOnce(response(200,`<main>${text}</main>`));
+ const page=await fetchOfficialPage('https://example.edu/program',new RunBudget());expect(page.sourceUrl).toBe('https://application.example.org/apply');expect(remote.lookup).toHaveBeenCalledWith('application.example.org',{all:true});expect(remote.get.mock.calls[0][1].headers['user-agent']).toContain('PathwayOpportunityBot/1.0');
 });

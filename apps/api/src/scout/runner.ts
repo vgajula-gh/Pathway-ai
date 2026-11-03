@@ -18,19 +18,21 @@ import {storeLead} from './leads.js';
 import {activeOpportunity} from '../domain/opportunity-active.js';
 import {confirmedDate} from '../domain/scout-qualification.js';
 import {resolveEvidence,sourcePassages} from './passages.js';
+import {confirmedResearchFacts,researchWarnings} from '../domain/research-evidence.js';
 import type {LLMUsage} from '../agent/llm/types.js';
 import {privateWorkflow,workflowConfig,type WorkflowStep} from '../workflows/privacy.js';
 
 type Stage='research'|'leads'|'candidate'|'fetch'|'extract'|'qualify'|'finish';
 export type ScoutState={stage:Stage;context:PublicSearchContext;groupKeys:string[];candidateId:string|null;inFlight:Stage|null;repairUsed:boolean;maxCandidates:number;query:string;
   stopRequested?:boolean;diagnostic?:boolean;
+  sourceMode?:string;
   researchOutput?:ResearchOutput;candidateAllowance?:{free:number;paid:number};queuedCostHints?:{free:number;paid:number};
   calls:{kind:'research'|'extract'|'repair';usage:LLMUsage;durationMs:number}[];startedAt:string};
 type Run=Awaited<ReturnType<typeof prisma.discoveryRun.findUniqueOrThrow>>;
 export type ScoutDependencies={research:typeof research;fetch:typeof fetchOfficialPage;extract:typeof extractScout;qualify:typeof qualifyScout;save:typeof storeCandidate;provider:NonNullable<ReturnType<typeof getSearch>>};
 export function newScoutState(context:PublicSearchContext,groupKeys:string[],maxCandidates=16):ScoutState {
   const safe=publicSearchContext(context);
-  return {stage:'research',context:safe,groupKeys,candidateId:null,inFlight:null,repairUsed:false,maxCandidates:Math.max(0,Math.min(16,maxCandidates)),query:scoutPrompt(safe,maxCandidates),calls:[],startedAt:new Date().toISOString()};
+  return {stage:'research',sourceMode:scoutSettings().sourceMode,context:safe,groupKeys,candidateId:null,inFlight:null,repairUsed:false,maxCandidates:Math.max(0,Math.min(16,maxCandidates)),query:scoutPrompt(safe,maxCandidates),calls:[],startedAt:new Date().toISOString()};
 }
 function pagesOf(value:string):Page[] {return j<any[]>(value,[]).map(p=>({...p,checkedAt:new Date(p.checkedAt)}));}
 class ScoutBudget extends RunBudget {
@@ -56,6 +58,9 @@ export async function advanceScout(run:Run,overrides:Partial<ScoutDependencies>=
   if(run.status!=='running')return {done:true,saved:0};
   const state=j<ScoutState|null>(run.state,null);
   if(!state||!state.stage||!state.context)return {done:true,saved:0};
+  // Older persisted jobs retain their original extraction contract.
+  const evidenceFirst=state.sourceMode==='research_evidence';
+  const leadFor=(url:string)=>state.researchOutput?.candidates.find(c=>c.officialUrl===url);
   const budget=restoreScoutBudget(run),provider=overrides.provider||getSearch();
   const deps={research,fetch:fetchOfficialPage,extract:extractScout,qualify:qualifyScout,save:storeCandidate,...overrides};
   let candidate=state.candidateId?await prisma.researchCandidate.findUnique({where:{id:state.candidateId}}):null;
@@ -110,6 +115,8 @@ export async function advanceScout(run:Run,overrides:Partial<ScoutDependencies>=
           if(!full){budget.candidates.queued++;state.queuedCostHints[bucket]++;}
           const group=await prisma.discoveryGroup.findUniqueOrThrow({where:{key:state.groupKeys[0]}});
           const leadRecord=await storeLead(lead.name,lead.officialUrl,group);
+          const warnings=researchWarnings(lead);
+          if(warnings.length&&!leadRecord.sourceCheckedAt)await prisma.opportunity.update({where:{id:leadRecord.id},data:{checks:JSON.stringify([...new Set([...j<string[]>(leadRecord.checks,[]),...warnings])])}});
           await prisma.opportunity.update({where:{id:leadRecord.id},data:{discoveredFor:JSON.stringify([...new Set([...j<string[]>(leadRecord.discoveredFor,[]),...state.groupKeys])])}});
           await prisma.researchCandidate.update({where:{runId_url:{runId:run.id,url:lead.officialUrl}},data:{opportunityId:leadRecord.id}});
           if(mediaType)await prisma.researchCandidate.update({where:{runId_url:{runId:run.id,url:lead.officialUrl}},data:{status:'needs_verification',reasons:JSON.stringify([{field:'source',reason:'unsupported_content'}])}});
@@ -130,10 +137,14 @@ export async function advanceScout(run:Run,overrides:Partial<ScoutDependencies>=
         candidate=await prisma.researchCandidate.update({where:{id:candidate.id},data:{pages:cached.pages,facts:cached.facts,status:'extracted'}});state.stage='qualify';
       } else {
         const main=await deps.fetch(candidate.url,budget),pages=[main];
-        for(const url of main.links.filter(v=>{const u=httpsSourceURL(v);return u&&u.origin===new URL(main.sourceUrl).origin&&!fileSourceType(u);}).slice(0,2)) {
+        for(const url of (evidenceFirst?[]:main.links).filter(v=>{const u=httpsSourceURL(v);return u&&u.origin===new URL(main.sourceUrl).origin&&!fileSourceType(u);}).slice(0,2)) {
           try{pages.push(await deps.fetch(url,budget));}catch(error){budget.failures.push(failureInfo(error,'fetch'));}
         }
         candidate=await prisma.researchCandidate.update({where:{id:candidate.id},data:{pages:JSON.stringify(pages),status:'fetched'}});state.stage='extract';
+        if(evidenceFirst){
+          const lead=leadFor(candidate.url)||{name:candidate.name||main.pageTitle,officialUrl:candidate.url,interests:[],costHint:'unknown' as const};
+          candidate=await prisma.researchCandidate.update({where:{id:candidate.id},data:{facts:JSON.stringify(confirmedResearchFacts(lead,pages)),status:'extracted'}});state.stage='qualify';
+        }
         if(candidate.opportunityId) {
           const o=await prisma.opportunity.findUniqueOrThrow({where:{id:candidate.opportunityId}});
           if(!o.sourceCheckedAt&&!await prisma.sourcePage.count({where:{opportunityId:o.id}})) {
@@ -212,7 +223,7 @@ export async function advanceScout(run:Run,overrides:Partial<ScoutDependencies>=
       const failureStage=stage==='research'?'search':stage==='extract'?'extract':stage==='fetch'?'fetch':stage==='qualify'?'verify':'store';
       const failure=failureInfo(error,failureStage);budget.failures.push(failure);
       step(stage==='research'?'search_candidates':stage==='fetch'?'fetch_official_pages':stage==='extract'?'extract_facts':stage==='qualify'?'verify_facts':'store_catalog','failed',stage==='fetch'?'source_unavailable':'unconfirmed_facts');
-      if(candidate)await prisma.researchCandidate.update({where:{id:candidate.id},data:{status:'error',reasons:JSON.stringify([{field:failure.stage,reason:failure.code}])}});
+      if(candidate)await prisma.researchCandidate.update({where:{id:candidate.id},data:{status:evidenceFirst&&stage==='fetch'?'needs_verification':'error',reasons:JSON.stringify([{field:failure.stage,reason:failure.code}])}});
       state.inFlight=null;state.candidateId=null;state.stage=stage==='research'?'finish':'candidate';
     }
     return {done:finished};

@@ -23,6 +23,9 @@ export function officialUrl(value: string) {
 /** Only the canonical www/apex form of the same hostname may change origin. */
 export const canonicalRedirect = (from: URL, to: URL) =>
   from.hostname.replace(/^www\./, '') === to.hostname.replace(/^www\./, '');
+/** Cross-domain applications need explicit owner review, not a .org suffix. */
+export const reviewedRedirect=(to:URL)=>[...(process.env.DISCOVERY_TRUSTED_DOMAINS||'').split(','),...(process.env.SCOUT_REDIRECT_DOMAINS||'').split(',')]
+  .map(s=>s.trim().toLowerCase()).filter(Boolean).some(domain=>to.hostname===domain||to.hostname.endsWith('.'+domain));
 
 async function addressesFor(url: URL, stage: FailureStage, budget: RunBudget) {
   const host = url.hostname.replace(/^\[|\]$/g, '');
@@ -51,7 +54,7 @@ function request(url: URL, address: { address: string; family: number }, budget:
   return new Promise((resolve, reject) => {
     const req = get(url, {
       agent: false, lookup: pinnedLookup(address.address, address.family),
-      headers: { 'user-agent': agent, accept: 'text/html,application/xhtml+xml,text/plain', 'accept-encoding': 'gzip, br, deflate' },
+      headers: { 'user-agent': agent+'/1.0 (+https://github.com/vgajula-gh/Pathway-ai)', accept: 'text/html,application/xhtml+xml,text/plain', 'accept-encoding': 'gzip, br, deflate' },
     }, res => {
       if ([301, 302, 303, 307, 308].includes(res.statusCode || 0)) {
         res.resume(); resolve({ status: res.statusCode!, headers: res.headers, bytes: Buffer.alloc(0) }); return;
@@ -109,7 +112,7 @@ async function raw(value: string, budget: RunBudget, stage: 'robots' | 'fetch', 
     if (redirects >= 3) throw new DiscoveryFailure({ stage, code: 'redirect_limit', sourceHost: url.hostname });
     if (!response.headers.location) throw new DiscoveryFailure({ stage, code: 'http_error', sourceHost: url.hostname, httpStatus: response.status });
     const next = officialUrl(new URL(response.headers.location, url).href);
-    if (next.origin !== url.origin && !canonicalRedirect(url, next))
+    if (next.origin !== url.origin && !canonicalRedirect(url, next)&&!reviewedRedirect(next))
       throw new DiscoveryFailure({ stage, code: 'redirect_requires_review', sourceHost: url.hostname });
     // Each hop repeats DNS validation/pinning and checks the destination's robots rules.
     return raw(next.href, budget, stage, redirects + 1);
