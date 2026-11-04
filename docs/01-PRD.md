@@ -73,3 +73,7 @@ Headline promise (growth vs everyday support) · final name (Pathway vs Pathwise
 See [PDD](PDD.md) for the implemented screen order, expiration-only visibility, successful-search allowances and student-scoped shared program knowledge. Production starts without sample opportunities or a sample semester; real sourced news and words remain.
 
 Opportunity Scout: optional private selection preferences, bounded catalog-first web research, literal passage evidence, deterministic qualification and transparent 3-Free/3-Paid targets follow [the Scout design](14-OPPORTUNITY-SCOUT.md).
+
+## Growth Map Drop 1
+
+Growth Map is a separate private screen in You, connecting student-confirmed activities to skills and experience stages. Its first drop includes suggestions/manual tags, source-linked evidence, constellation/List, monthly focus, correction/hiding and starting states. Activity counts never imply measured ability. Existing Grow remains goals/captures. AI insights and monthly letters follow in separate drops. See [Growth Map](16-GROWTH-MAP.md).

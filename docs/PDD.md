@@ -37,3 +37,7 @@ Each public program’s source pages and approximately 500-word/50-word-overlap 
 Requirements buttons create proposals; approval revalidates source evidence, merges steps and reports VERIFIED/FAILED. Nothing submits an external application. Student data is exportable/deletable; no profile data is sent to Pinecone. DEMO_MODE defaults false; intentional sample demos are labeled. Manual sample cleanup protects student references and never runs at startup.
 
 The complete Scout contract, caps, ranking and owner test flow are in [14-OPPORTUNITY-SCOUT.md](14-OPPORTUNITY-SCOUT.md). The SQL LangGraph runner persists each stage; foreground calls advance one bounded network stage and never automatically replay an unknown paid outcome.
+
+## Growth Map — Drop 1
+
+A separate private module in You implements GM-1–14 from the Growth Map requirements: versioned catalog, explicit skill confirmation, source-linked evidence, constellation/List, ladder, monthly focus, personal correction/hiding and historical review. It uses no AI or shared vectors. [Growth Map contract and acceptance](16-GROWTH-MAP.md) defines source/date/deduplication policies, deployment and the deferred drops.

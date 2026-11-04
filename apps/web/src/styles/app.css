@@ -369,3 +369,56 @@ body[data-tab="today"] #root{padding-bottom:calc(100px + env(safe-area-inset-bot
 .discovery-preferences textarea { min-height: 80px; resize: vertical; }
 .opportunity-search blockquote { margin: 14px 0; padding-left: 12px; border-left: 2px solid var(--peri); overflow-wrap: anywhere; }
 .opportunity-search .foot { flex-wrap: wrap; }
+
+/* Growth Map is a separate private module. Layout remains usable without motion. */
+.growth-map{padding-top:20px;overflow-wrap:anywhere}
+.growth-map button,.growth-map input,.growth-map select,.growth-tags button,.growth-tags select{min-height:44px}
+.growth-heading{margin:24px 0}
+.growth-heading .display{font-size:clamp(30px,8vw,42px);margin:8px 0}
+.growth-entry,.growth-review-banner{display:grid;gap:12px}
+.growth-review-banner{margin-bottom:18px}
+.growth-start{display:grid;gap:12px;margin-bottom:16px}
+.growth-skeleton{min-height:220px;padding:36px 12px;border:1px dashed var(--line2);border-radius:24px}
+.growth-constellation{padding:12px 8px}
+.growth-sky{position:relative;height:530px;margin:0 22px 20px}
+.growth-lines{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
+.growth-lines line{stroke:var(--peri);stroke-opacity:.32;stroke-width:1}
+.growth-star{position:absolute;transform:translate(-50%,-50%);width:64px;height:64px;text-align:center}
+.growth-orb{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);border-radius:50%;box-shadow:0 0 18px var(--glow)}
+.growth-star-name{position:absolute;top:62px;left:50%;transform:translateX(-50%);width:82px;font-size:12px;line-height:1.2;font-weight:600;color:var(--text)}
+.growth-star.growing::before{content:'';position:absolute;inset:0;border:2px dashed var(--teal);border-radius:50%}
+.growth-star.focused::after{content:'';position:absolute;inset:-4px;border:2px solid var(--peach);border-radius:50%}
+.growth-growing{position:absolute;bottom:64px;left:50%;transform:translateX(-50%);font-size:10px;letter-spacing:.03em;color:var(--teal);font-weight:700}
+.growth-interest{position:absolute;transform:translate(-50%,-50%);display:grid;justify-items:center;gap:8px;width:78px;text-align:center;font-size:12px;color:var(--text2)}
+.growth-interest i{width:26px;height:26px;border:1px dashed var(--peri);border-radius:50%;background:var(--peri-s)}
+.growth-legend{padding:8px;font-size:12px}
+.growth-list>div+div{border-top:1px solid var(--line2);margin-top:10px;padding-top:10px}
+.growth-skill-row{width:100%;display:flex;align-items:center;gap:14px;text-align:left;padding:12px 4px}
+.growth-skill-row>span:last-child{display:grid;gap:4px;min-width:0}
+.growth-skill-dot{width:18px;height:18px;border-radius:50%;flex:none}
+.growth-focus{display:flex;align-items:center;gap:12px;justify-content:space-between;flex-wrap:wrap;margin-top:20px}
+.growth-focus h2{font-size:23px;margin-top:8px}
+.growth-tags{display:grid;gap:12px}
+.growth-tags .chips{display:flex;flex-wrap:wrap;gap:8px}
+.growth-tags .field{width:100%;min-width:0}
+.growth-tag-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;border-top:1px solid var(--line2);padding:12px 0}
+.growth-tag-row label{display:grid;gap:4px;font-size:12px}
+.growth-tag-row select{max-width:180px}
+.growth-tags blockquote{margin:0;border-left:2px solid var(--line2);padding-left:12px;white-space:pre-wrap}
+.growth-source-facts{display:grid;gap:8px;margin:0}
+.growth-source-facts dt{text-transform:capitalize;font-size:12px;color:var(--text2)}
+.growth-source-facts dd{margin:0;white-space:pre-wrap}
+.growth-activity{display:grid;gap:6px;width:100%;margin:12px 0;text-align:left}
+.growth-rung{border-left:2px solid var(--line2);padding:12px 12px 12px 18px}
+.growth-rung.reached{border-color:var(--peri)}
+.growth-rung.next{border-color:var(--teal)}
+.growth-rung.next b{color:var(--teal)}
+.growth-rung .link,.growth-evidence .link{display:block;min-height:44px;padding:10px 0}
+.growth-evidence{display:grid;gap:6px;margin-top:12px}
+@media(prefers-reduced-motion:reduce){.growth-map *{animation:none!important;transition:none!important}}
+.growth-map .note,.growth-tags .note{color:var(--text2)}
+.growth-map .note.c-rose,.growth-tags .note.c-rose{color:var(--rose)}
+.growth-map button,.growth-tags button{min-width:44px}
+@media(max-width:360px){.growth-star-name{width:70px;font-size:11.5px}}
+.growth-star-name{width:92px;overflow-wrap:normal;word-break:normal}
+@media(max-width:360px){.growth-star-name{width:78px}}

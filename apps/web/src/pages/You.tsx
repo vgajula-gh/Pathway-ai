@@ -1,3 +1,4 @@
+import GrowthMapEntry from '../components/growth-map/GrowthMapEntry';
 import RegionSelect from '../components/RegionSelect';
 import Notifications from '../components/Notifications';
 import Calendars from '../components/Calendars';
@@ -11,7 +12,7 @@ import { SignInResult } from '../lib/types';
 import NewsSheet from '../components/NewsSheet';
 import { THEMES, applyTheme } from '../lib/theme';
 
-export default function You({ me, setMe, onSignOut }: { me: Student; setMe: (s: Student | null) => void; onSignOut?: () => void }) {
+export default function You({ me, setMe, onSignOut, onOpenGrowthMap }: { me: Student; setMe: (s: Student | null) => void; onSignOut?: () => void; onOpenGrowthMap?:()=>void }) {
   const config = useLoad(() => api<{ feedbackUrl: string | null }>('/api/config'), []);
   const [account, setAccount] = useState({ phrase: '', confirmPhrase: '' }), [accountError, setAccountError] = useState(''), [accountBusy, setAccountBusy] = useState(false);
   const [changingPhrase, setChangingPhrase] = useState(false), [recoveryCode, setRecoveryCode] = useState<string | null>(null);
@@ -54,6 +55,7 @@ export default function You({ me, setMe, onSignOut }: { me: Student; setMe: (s: 
             {accountError && <p role="alert">{accountError}</p>}<button className="btn" disabled={accountBusy || !validPhrase(account.phrase, account.confirmPhrase)} type="submit">{accountBusy ? 'Saving…' : me.hasSignIn ? 'Save new phrase' : 'Enable sign-in'}</button></form>}
         </>}
       </div>
+      {onOpenGrowthMap&&<GrowthMapEntry onOpen={onOpenGrowthMap}/>}
       <div className="sec"><div className="sec-h"><h2>My Day</h2></div><div className="rows">
         <label className="frow"><span>Word of the day</span><input type="checkbox" className="switch" checked={me.settings.showWord} onChange={e => patch({ settings: { showWord: e.target.checked } })} /></label>
         <label className="frow"><span>News for you</span><input type="checkbox" className="switch" checked={me.settings.showNews} onChange={e => patch({ settings: { showNews: e.target.checked } })} /></label>

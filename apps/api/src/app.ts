@@ -23,6 +23,7 @@ import today from './routes/today.js';
 import opportunities from './routes/opportunities.js';
 import proposals from './routes/proposals.js';
 import growth from './routes/growth.js';
+import growthMap from './routes/growth-map.js';
 import ai from './routes/ai.js';
 import news from './routes/news.js';
 
@@ -55,6 +56,6 @@ export async function buildApp() {
       return reply.sendFile('index.html');
     });
   }
-  for (const r of [maintenance, diagnostics, discovery, accounts, notifications, calendars, applications, students, events, today, opportunities, proposals, growth, ai, news]) await app.register(r);
+  for (const r of [maintenance, diagnostics, discovery, accounts, notifications, calendars, applications, students, events, today, opportunities, proposals, growth, growthMap, ai, news]) await app.register(r);
   return app;
 }

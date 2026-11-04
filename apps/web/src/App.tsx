@@ -1,3 +1,4 @@
+import GrowthMap from './pages/GrowthMap';
 import { useEffect, useState } from 'react';
 import { api, session, access, ApiError } from './lib/api';
 import { Student, Tab, SignInResult } from './lib/types';
@@ -44,6 +45,9 @@ const requestedTab = (): Tab => { const value = new URLSearchParams(window.locat
 export default function App() {
   const [me, setMe] = useState<Student | null | undefined>(undefined);
   const [tab, setTab] = useState<Tab>(requestedTab);
+  const [growthOpen,setGrowthOpen]=useState(()=>new URLSearchParams(window.location?.search||'').get('view')==='growth-map');
+  const [growthCapture,setGrowthCapture]=useState(false);
+  useEffect(()=>{const back=()=>{setGrowthOpen(new URLSearchParams(window.location?.search||'').get('view')==='growth-map');setTab(requestedTab());};window.addEventListener?.('popstate',back);return()=>window.removeEventListener?.('popstate',back);},[]);
   const [buddyScope,setBuddyScope]=useState<string|undefined>();
   const [buddySeed, setBuddySeed] = useState<string | null>(null);
   const [buddyKey, setBuddyKey] = useState(0);
@@ -68,7 +72,7 @@ export default function App() {
   }, [attempt]);
   useEffect(() => { document.body.dataset.tab = tab; window.scrollTo(0, 0); }, [tab]);
   useEffect(() => { applyTheme((me?.settings.theme || 'dusk') as Theme); }, [me?.settings.theme]);
-  const onSignedOut = () => { setCreating(false); setRestoring(false); setMe(null); };
+  const onSignedOut = () => { setGrowthOpen(false);setGrowthCapture(false); setCreating(false); setRestoring(false); setMe(null); };
   const openDashboard = (s: Student) => { session.set(s.id); setCreating(false); setRestoring(false); setTab(creating ? 'explore' : requestedTab()); setMe(s); };
   const signedIn = (s: SignInResult) => { if (s.recoveryCode) setPending(s); else openDashboard(s); };
   if (pending?.recoveryCode) return <RecoveryCode code={pending.recoveryCode} onDone={() => { const { recoveryCode: _, ...profile } = pending; setPending(null); openDashboard(profile); }} />;
@@ -80,7 +84,8 @@ export default function App() {
     return <SignIn onDone={signedIn} onCreate={() => setCreating(true)} onRestoreLocal={session.get() ? () => setRestoring(true) : undefined} />;
   }
   const ask = (text: string, opportunityId?: string) => { setBuddyScope(opportunityId); setBuddySeed(text); setTab('buddy'); };
-  const go = (t: Tab) => { if (t === 'buddy') setBuddyKey(k => k + 1); setTab(t); };
+  const go = (t: Tab) => { if(growthOpen){setGrowthOpen(false);const url=new URL(window.location.href);url.searchParams.delete('view');url.searchParams.set('tab',t);window.history.replaceState(null,'',url);}  if (t === 'buddy') setBuddyKey(k => k + 1); setTab(t); };
+  const openGrowth=()=>{setGrowthOpen(true);const url=new URL(window.location.href);url.searchParams.set('view','growth-map');url.searchParams.set('tab','you');window.history.pushState(null,'',url);};
   const theme = (me.settings.theme || 'dusk') as Theme, th = THEMES.find(t => t[0] === theme)!;
   const cycleTheme = async () => { const t = nextTheme(theme); setMe({ ...me, settings: { ...me.settings, theme: t } }); toast(`Appearance: ${THEMES.find(x => x[0] === t)![1]}`); await api('/api/me', { method: 'PATCH', body: { settings: { theme: t } } }); };
   return (
@@ -91,11 +96,12 @@ export default function App() {
         <nav className="navpills" role="tablist" aria-label="Sections">{TABS.map(([k, l]) => <button key={k} className="navpill" role="tab" aria-selected={tab === k} onClick={() => go(k)}><span>{l}</span></button>)}</nav>
       </header>
       <main>
-        {tab === 'today' && <Today me={me} go={go} ask={ask} setMe={setMe} />}
-        {tab === 'explore' && <Explore me={me} ask={ask} setMe={setMe} />}
-        {tab === 'buddy' && <Buddy key={buddyKey} me={me} seed={buddySeed} opportunityId={buddyScope} clearSeed={() => {setBuddySeed(null);setBuddyScope(undefined);}} />}
-        {tab === 'grow' && <Grow me={me} ask={ask} go={go} />}
-        {tab === 'you' && <You me={me} setMe={setMe} onSignOut={onSignedOut} />}
+        {growthOpen&&<GrowthMap onClose={()=>go('you')} onCapture={()=>{setGrowthCapture(true);go('grow');}}/>}
+        {!growthOpen&&tab === 'today' && <Today me={me} go={go} ask={ask} setMe={setMe} />}
+        {!growthOpen&&tab === 'explore' && <Explore me={me} ask={ask} setMe={setMe} />}
+        {!growthOpen&&tab === 'buddy' && <Buddy key={buddyKey} me={me} seed={buddySeed} opportunityId={buddyScope} clearSeed={() => {setBuddySeed(null);setBuddyScope(undefined);}} />}
+        {!growthOpen&&tab === 'grow' && <Grow me={me} ask={ask} go={go} startCapture={growthCapture} onCaptureOpened={()=>setGrowthCapture(false)} />}
+        {!growthOpen&&tab === 'you' && <You me={me} setMe={setMe} onSignOut={onSignedOut} onOpenGrowthMap={openGrowth} />}
       </main>
     </>
   );
