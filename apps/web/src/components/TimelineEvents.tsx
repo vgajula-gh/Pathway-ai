@@ -1,3 +1,4 @@
+import ReviewSheet from './growth-map/ReviewSheet';
 import {useState} from 'react';
 import {api} from '../lib/api';
 import type {TimelineItem} from '../lib/types';
@@ -5,10 +6,11 @@ import {EMO,SOURCE_TAG,fmtTime} from '../lib/format';
 
 /** Both views share completion eligibility, source labels and conflict warnings. */
 export default function TimelineEvents({events,onChanged}:{events:TimelineItem[];onChanged:()=>void}) {
+  const [reviewStudy,setReviewStudy]=useState<string|null>(null);
   const [pending,setPending]=useState<string|null>(null),[error,setError]=useState<string|null>(null);
   const toggle=async(o:TimelineItem)=>{
     setPending(o.id);setError(null);
-    try {await api('/api/events/'+o.id,{method:'PATCH',body:{done:!o.done}});onChanged();}
+    try {await api('/api/events/'+o.id,{method:'PATCH',body:{done:!o.done}});onChanged();if(o.type==='study'&&!o.done)setReviewStudy(o.id);}
     catch(e){setError((e as Error).message);}
     finally{setPending(null);}
   };
@@ -21,6 +23,7 @@ export default function TimelineEvents({events,onChanged}:{events:TimelineItem[]
     finally{setPending(null);}
   };
   return <>
+    {reviewStudy&&<ReviewSheet source={{type:'study',id:reviewStudy}} onClose={()=>setReviewStudy(null)}/>}
     {error&&<p className="note c-rose" role="alert">{error}</p>}
     <div className="tl">{events.map(o=>{
       const flexible=!o.recurring&&!o.readOnly&&['study','reminder','personal'].includes(o.type);

@@ -1,3 +1,4 @@
+import ReviewSheet from '../components/growth-map/ReviewSheet';
 import DiscoveryPreferencesEditor from '../components/DiscoveryPreferencesEditor';
 import Applications from '../components/Applications';
 import { useEffect, useRef, useState } from 'react';
@@ -11,6 +12,7 @@ import OpportunitySearch, { OpportunitySearchStatus } from '../components/Opport
 type List = OpportunitySearchStatus & { watchlist?: (Opportunity & {openingDate:string})[]; picks: Opportunity[]; recommended: Opportunity[]; excluded: { id: string; name: string; reasons: string[] }[]; canAskAll?:boolean; knowledgeStates?:Record<string,string>; preparing?:boolean; interestedCount: number; dismissed: number; sampleData: boolean };
 
 export default function Explore({ me, ask, setMe }: { me: Student; ask: (t: string, opportunityId?: string) => void; setMe?: (s:Student)=>void }) {
+  const [growthReview,setGrowthReview]=useState<string|null>(null);
   const { data, error, reload, setData } = useLoad(() => api<List>('/api/opportunities'), []);
   const [dismiss, setDismiss] = useState<Opportunity | null>(null);
   const [open, setOpen] = useState<Opportunity | null>(null), [review, setReview] = useState<Proposal | null>(null), [cmp, setCmp] = useState<string[]>([]), [showCmp, setShowCmp] = useState(false);
@@ -30,7 +32,7 @@ export default function Explore({ me, ask, setMe }: { me: Student; ask: (t: stri
   },[data?.finding,data?.preparing,me.aiConsent,me.interests.join(',')]);
   const refresh=async()=>{if(busy)return;setBusy(true);setSearchError(null);try{const result=await api<OpportunitySearchStatus>('/api/opportunities/refresh',{method:'POST'});setData(old=>old?{...old,...result}:old);reload();}catch(e){setSearchError((e as Error).message);reload();}finally{setBusy(false);}};
   if (!data) return <section aria-label="Opportunity search"><h1>Opportunity search</h1>{error?<p role="alert">{error} <button className="btn" onClick={reload}>Try again</button></p>:<p role="status">Loading your interests… <Typing/></p>}</section>;
-  const status = async (id: string, s: 'saved' | 'dismissed' | 'none', reason?: string) => { try {await api(`/api/opportunities/${id}/status`, { body: { status: s, reason } }); toast(s === 'saved' ? 'Added to Interested' : s === 'dismissed' ? 'Hidden' : 'Removed'); reload();return true;}catch(e){toast((e as Error).message);return false;} };
+  const status = async (id: string, s: 'saved' | 'dismissed' | 'none', reason?: string) => { try {await api(`/api/opportunities/${id}/status`, { body: { status: s, reason } }); if(s==='saved')setGrowthReview(id);toast(s === 'saved' ? 'Added to Interested' : s === 'dismissed' ? 'Hidden' : 'Removed'); reload();return true;}catch(e){toast((e as Error).message);return false;} };
   const prep = async (id: string) => { try { setReview(await api<Proposal>(`/api/opportunities/${id}/prep`, { method: 'POST' })); setOpen(null); } catch (e) { toast((e as Error).message); } };
   const candidates=[...new Map([...data.recommended,...data.picks].map(o=>[o.id,o])).values()].filter(o=>!o.status&&!o.fit.excluded);
   const visible=(['free','paid'] as const).flatMap(bucket=>candidates.filter(o=>o.bucket===bucket)
@@ -65,6 +67,7 @@ export default function Explore({ me, ask, setMe }: { me: Student; ask: (t: stri
       </section>
       {cmp.length >= 2 && <div className="cmpbar"><button className="btn fill" onClick={() => setShowCmp(true)}>Compare {cmp.length}</button></div>}
 
+      {growthReview&&<ReviewSheet source={{type:'application',id:growthReview}} onClose={()=>setGrowthReview(null)}/>}
       {dismiss && <Sheet title="Not for me" onClose={()=>setDismiss(null)}><p className="sub">What didn’t fit? This helps us choose next time.</p><div className="rows">{['not my interest','too much time','too far','cost','other'].map(reason=><button className="r" key={reason} onClick={async()=>{if(await status(dismiss.id,'dismissed',reason))setDismiss(null);}}>{reason}</button>)}</div></Sheet>}
       {open && <Sheet onClose={() => setOpen(null)}>
         <div style={{ textAlign: 'center', padding: '4px 0 14px' }}><p style={{ fontSize: 40 }}>{CEMO[open.category] || '✨'}</p><h2 className="serif" style={{ fontSize: 27, marginTop: 6 }}>{open.name}</h2><p className="muted small">{open.organizer}</p><p style={{ marginTop: 10 }}><span className={`fit ${open.fit.fit}`}>{FIT_LABEL[open.fit.fit!]}</span></p></div>
