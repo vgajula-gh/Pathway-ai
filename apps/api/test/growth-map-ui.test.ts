@@ -50,11 +50,12 @@ it('retains a review on save failure and recovers safely from unavailable or mal
  await act(async()=>{renderer=create(createElement(SkillTagReview,{type:'portfolio',id:'p',onSaved:saved}));});await click('Coding');await click('Confirm selected skills');expect(text()).toContain('Could not save tags');expect(saved).not.toHaveBeenCalled();
  act(()=>renderer.unmount());state.api.mockResolvedValue({});await act(async()=>{renderer=create(createElement(SkillTagReview,{type:'portfolio',id:'bad',onSaved:saved}));});expect(text()).toContain('Your saved activity is safe.');
 });
-it('shows evidence-backed stages only and opens the actual source for review',async()=>{
+it('keeps both confirmed stages on grouped evidence and opens each stage’s actual source',async()=>{
+ state.detail.evidence[0].sources=[{type:'milestone',id:'m',title:'Build the prototype',date:'2030-01-07',stage:'Build'},{type:'portfolio',id:'p',title:'Present the prototype',date:'2030-01-07',stage:'Present'}];state.detail.evidence[0].stage='Present';state.detail.ladder.forEach((r:any)=>{r.reached=['Build','Present'].includes(r.stage);});
  state.map={...state.map,skills:[coding()],activityCount:3};await act(async()=>{renderer=create(createElement(GrowthMap,props()));});
  await click('Coding: 3 evidence, Build, 2 recent, last activity 2030-01-07, Growing');
- const reached=renderer.root.findAllByType('div').filter(n=>n.props.className==='growth-rung reached');expect(reached).toHaveLength(1);expect(text()).toContain('They do not have to happen in order.');
- await click('My Python project');expect(text()).toContain('I built a working tool.');
+ const reached=renderer.root.findAllByType('div').filter(n=>n.props.className==='growth-rung reached');expect(reached).toHaveLength(2);expect(text()).toContain('They do not have to happen in order.');
+ await click('Present the prototype');expect(state.api).toHaveBeenCalledWith('/api/growth-map/activities/portfolio/p');expect(text()).toContain('I built a working tool.');
 });
 it('allows one focus, skill hiding/restoration and personal skill correction',async()=>{
  state.map={...state.map,skills:[coding()],activityCount:3};await act(async()=>{renderer=create(createElement(GrowthMap,props()));});
