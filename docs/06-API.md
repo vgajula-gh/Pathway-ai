@@ -190,3 +190,8 @@ All paths require the current student identity and return `Cache-Control: no-sto
 | POST | `/api/growth-map/skill-requests` | `{name}` 2–80 chars; stores an idempotent pending owner-review request; known names/synonyms return 422 |
 
 Source types: portfolio, milestone, study, application. Experience stages: Learn, Build, Apply, Present, Compete. Validation failures return 422; missing/non-owned sources or skills return 404; missing identity returns 401. Counts do not imply measured ability. Rules, dates, source lifecycle, weekly grouping, explicit same-activity links and hidden behavior are defined in [16-GROWTH-MAP.md](16-GROWTH-MAP.md). Export adds the student's growth records; account deletion cascades private rows while retaining the shared catalog. Existing application tracker audits now include the status/local date for future factual application evidence; no historical date is invented.
+
+
+## Growth Map Drop 2
+
+Authenticated no-store endpoints: GET /api/growth-map/insights; POST /api/growth-map/insights/refresh {mode:automatic|manual}; POST /api/growth-map/insights/:id/dismiss; GET /api/growth-map/skills/:id/next; POST /api/growth-map/skills/:id/goal {insightId?}. Goal returns a standard proposal, with existing approval endpoints authoritative. Owner-only GET /internal/growth-map/readiness uses JOBS_SECRET Bearer auth and reports zero-row column readiness (200/503). Export adds growthInsights; pending Drop 2 setup does not remove Drop 1 export. Exact contracts in OpenAPI and [Drop 2](17-GROWTH-INSIGHTS.md).

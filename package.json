@@ -25,7 +25,8 @@
     "start": "node scripts/start-production.mjs",
     "demo:workflows": "npm run demo:workflows --workspace apps/api --",
     "check:scout": "node --env-file-if-exists=.env scripts/check-scout.mjs",
-    "pilot:reset": "node --env-file-if-exists=.env scripts/pilot-reset.mjs"
+    "pilot:reset": "node --env-file-if-exists=.env scripts/pilot-reset.mjs",
+    "check:growth": "node --env-file-if-exists=.env --import tsx scripts/check-growth-readiness.mjs"
   },
   "engines": {
     "node": ">=20"

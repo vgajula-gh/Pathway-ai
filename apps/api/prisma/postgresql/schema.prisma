@@ -47,6 +47,8 @@ model Student {
   growthFocus GrowthFocus[]
   growthReviews GrowthReview[]
   skillRequests SkillRequest[]
+  growthInsights GrowthInsightState?
+  growthDismissals GrowthInsightDismissal[]
   availability Availability?
   events       Event[]
   goals        Goal[]
@@ -568,4 +570,27 @@ model SkillRequest {
   status String @default("pending")
   createdAt DateTime @default(now())
   @@unique([studentId,name])
+}
+
+// Drop 2 cache/claim state is separate from core Student fields.
+model GrowthInsightState {
+  studentId String @id
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  cards String @default("[]")
+  generatedAt DateTime?
+  automaticAt DateTime?
+  manualDay String @default("")
+  leaseToken String @default("")
+  leaseUntil DateTime?
+  retryAt DateTime?
+  status String @default("empty")
+}
+
+model GrowthInsightDismissal {
+  studentId String
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  signature String
+  type String
+  createdAt DateTime @default(now())
+  @@id([studentId, signature])
 }

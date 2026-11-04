@@ -43,3 +43,8 @@ One primary action per card · 44px minimum targets · 4.5:1 text contrast · co
 ## Growth Map
 
 Separate page with existing tokens, a 12-star constellation, area colors, Growing/focus outlines and readable labels. Size reflects evidence and brightness recency; outlines/text identify interest-only stars. List view exposes counts, stages, area, dates, connections and markers. All controls have at least 44px targets; note text uses text2, and reduced motion disables map transitions. Review chips remain unselected until chosen; source detail and stage selectors reuse existing sheets/forms.
+
+
+## Growth Map Drop 2
+
+Insight cards use existing card/text/accent tokens, evidence links, a dated cache/status line and one main action. Not me has a distinct accessible name per insight type. Next-rung program cards label unconfirmed facts. New controls have 44px targets; no extra animation is introduced. Map/List remain available independently of insights.

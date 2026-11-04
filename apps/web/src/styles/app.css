@@ -422,3 +422,14 @@ body[data-tab="today"] #root{padding-bottom:calc(100px + env(safe-area-inset-bot
 @media(max-width:360px){.growth-star-name{width:70px;font-size:11.5px}}
 .growth-star-name{width:92px;overflow-wrap:normal;word-break:normal}
 @media(max-width:360px){.growth-star-name{width:78px}}
+
+/* Growth Map Drop 2: evidence-first insight cards and next steps. */
+.growth-section-title{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.growth-insight-cards{display:grid;gap:14px;margin-top:12px}
+.growth-insight-cards>.card{padding:20px}
+.growth-insight-cards .label{margin-bottom:10px}
+.growth-source-link{display:block;min-height:44px;text-align:left;white-space:normal;padding:10px 0}
+.growth-match{margin-top:12px;padding:16px}
+.growth-match p,.growth-next>p{margin:10px 0}
+.growth-next .btn,.growth-insights .btn,.growth-insights .link{min-height:44px;min-width:44px}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}

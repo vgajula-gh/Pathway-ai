@@ -41,3 +41,8 @@ The complete Scout contract, caps, ranking and owner test flow are in [14-OPPORT
 ## Growth Map — Drop 1
 
 A separate private module in You implements GM-1–14 from the Growth Map requirements: versioned catalog, explicit skill confirmation, source-linked evidence, constellation/List, ladder, monthly focus, personal correction/hiding and historical review. It uses no AI or shared vectors. [Growth Map contract and acceptance](16-GROWTH-MAP.md) defines source/date/deduplication policies, deployment and the deferred drops.
+
+
+## Growth Map Drop 2
+
+Growth Map Drop 2 adds evidence-linked private insight cards, persistent Not me feedback, cached metered weekly/manual refresh, deterministic next-stage program matches and approval-only goal proposals (GM-15–19). Letters/charts remain Drop 3. See [Drop 2](17-GROWTH-INSIGHTS.md).

@@ -8,11 +8,20 @@ import {CalendarDate} from '../domain/applications.js';
 import {SKILL_CATALOG,AREAS,CATALOG_VERSION} from '../growth-map/catalog.js';
 import {STAGES,STAGE_DESCRIPTION,sourceKey} from '../domain/growth-map.js';
 import {growthSnapshot,confirmTags,editGrowthSkill,growthWrite} from '../growth-map/service.js';
+import {growthInsights,refreshGrowthInsights,dismissGrowthInsight,nextGrowthStep,proposeGrowthGoal} from '../growth-map/insights.js';
+import {growthReadiness} from '../growth-map/readiness.js';
+import {requireOwner} from '../lib/owner-auth.js';
 const params=z.object({type:z.enum(['portfolio','milestone','study','application']),id:z.string().min(1).max(200)});
 export default async function routes(app:FastifyInstance){
   // Isolate a pending migration from all existing session/Today/Explore routes.
   app.setErrorHandler((err,_req,reply)=>{if(err instanceof Prisma.PrismaClientKnownRequestError&&['P2021','P2022'].includes(err.code))return reply.code(503).send({error:'Growth Map setup is not ready yet. Your other Pathway features are available.'});throw err;});
   app.addHook('onRequest',async(_req,reply)=>{reply.header('Cache-Control','no-store');});
+  app.get('/internal/growth-map/readiness',async(req,reply)=>{requireOwner(req);const result=await growthReadiness();return reply.code(result.ready?200:503).send(result);});
+  app.get('/api/growth-map/insights',async req=>growthInsights(await requireStudent(req)));
+  app.post('/api/growth-map/insights/refresh',async req=>{const s=await requireStudent(req),{mode}=z.object({mode:z.enum(['automatic','manual']).default('manual')}).strict().parse(req.body??{});return refreshGrowthInsights(s,mode);});
+  app.post('/api/growth-map/insights/:id/dismiss',async req=>{const s=await requireStudent(req),{id}=z.object({id:z.string().regex(/^[a-f0-9]{64}$/)}).parse(req.params);return dismissGrowthInsight(s,id);});
+  app.get('/api/growth-map/skills/:id/next',async req=>{const s=await requireStudent(req),{id}=z.object({id:z.string().max(80)}).parse(req.params);return nextGrowthStep(s,id);});
+  app.post('/api/growth-map/skills/:id/goal',async req=>{const s=await requireStudent(req),{id}=z.object({id:z.string().max(80)}).parse(req.params),{insightId}=z.object({insightId:z.string().regex(/^[a-f0-9]{64}$/).optional()}).strict().parse(req.body??{});return proposeGrowthGoal(s,id,insightId);});
   app.get('/api/growth-map/catalog',async req=>{await requireStudent(req);return {version:CATALOG_VERSION,areas:AREAS,skills:SKILL_CATALOG};});
   app.get('/api/growth-map',async req=>{const s=await requireStudent(req),snapshot=await growthSnapshot(s);return {...snapshot.map,interests:j<string[]>(s.interests,[])};});
   app.get('/api/growth-map/activities',async req=>{
