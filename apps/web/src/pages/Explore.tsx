@@ -11,13 +11,14 @@ import OpportunitySearch, { OpportunitySearchStatus } from '../components/Opport
 
 type List = OpportunitySearchStatus & { watchlist?: (Opportunity & {openingDate:string})[]; picks: Opportunity[]; recommended: Opportunity[]; excluded: { id: string; name: string; reasons: string[] }[]; canAskAll?:boolean; knowledgeStates?:Record<string,string>; preparing?:boolean; interestedCount: number; dismissed: number; sampleData: boolean };
 
-export default function Explore({ me, ask, setMe }: { me: Student; ask: (t: string, opportunityId?: string) => void; setMe?: (s:Student)=>void }) {
+export default function Explore({ me, ask, setMe,initialOpportunityId,onInitialOpened }: { initialOpportunityId?:string|null;onInitialOpened?:()=>void; me: Student; ask: (t: string, opportunityId?: string) => void; setMe?: (s:Student)=>void }) {
   const [growthReview,setGrowthReview]=useState<string|null>(null);
   const { data, error, reload, setData } = useLoad(() => api<List>('/api/opportunities'), []);
   const [dismiss, setDismiss] = useState<Opportunity | null>(null);
   const [open, setOpen] = useState<Opportunity | null>(null), [review, setReview] = useState<Proposal | null>(null), [cmp, setCmp] = useState<string[]>([]), [showCmp, setShowCmp] = useState(false);
   const [busy,setBusy]=useState(false),[searchError,setSearchError]=useState<string|null>(null),[editing,setEditing]=useState(false);
   const worker=useRef(false);
+  useEffect(()=>{if(!initialOpportunityId)return;let active=true;void api<Opportunity>('/api/opportunities/'+initialOpportunityId).then(o=>{if(active){setOpen(o);onInitialOpened?.();}}).catch(e=>{if(active){setSearchError((e as Error).message);onInitialOpened?.();}});return()=>{active=false;};},[initialOpportunityId]);
   useEffect(()=>{
     if(!(data?.finding||data?.preparing)||!me.aiConsent)return;
     let active=true,timer:ReturnType<typeof setTimeout>;

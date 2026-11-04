@@ -47,6 +47,7 @@ export default function App() {
   const [tab, setTab] = useState<Tab>(requestedTab);
   const [growthOpen,setGrowthOpen]=useState(()=>new URLSearchParams(window.location?.search||'').get('view')==='growth-map');
   const [growthCapture,setGrowthCapture]=useState(false);
+  const [exploreOpportunity,setExploreOpportunity]=useState<string|null>(null);
   useEffect(()=>{const back=()=>{setGrowthOpen(new URLSearchParams(window.location?.search||'').get('view')==='growth-map');setTab(requestedTab());};window.addEventListener?.('popstate',back);return()=>window.removeEventListener?.('popstate',back);},[]);
   const [buddyScope,setBuddyScope]=useState<string|undefined>();
   const [buddySeed, setBuddySeed] = useState<string | null>(null);
@@ -96,9 +97,9 @@ export default function App() {
         <nav className="navpills" role="tablist" aria-label="Sections">{TABS.map(([k, l]) => <button key={k} className="navpill" role="tab" aria-selected={tab === k} onClick={() => go(k)}><span>{l}</span></button>)}</nav>
       </header>
       <main>
-        {growthOpen&&<GrowthMap onClose={()=>go('you')} onCapture={()=>{setGrowthCapture(true);go('grow');}}/>}
+        {growthOpen&&<GrowthMap onExplore={id=>{setExploreOpportunity(id);go('explore');}} onClose={()=>go('you')} onCapture={()=>{setGrowthCapture(true);go('grow');}}/>}
         {!growthOpen&&tab === 'today' && <Today me={me} go={go} ask={ask} setMe={setMe} />}
-        {!growthOpen&&tab === 'explore' && <Explore me={me} ask={ask} setMe={setMe} />}
+        {!growthOpen&&tab === 'explore' && <Explore me={me} ask={ask} setMe={setMe} initialOpportunityId={exploreOpportunity} onInitialOpened={()=>setExploreOpportunity(null)} />}
         {!growthOpen&&tab === 'buddy' && <Buddy key={buddyKey} me={me} seed={buddySeed} opportunityId={buddyScope} clearSeed={() => {setBuddySeed(null);setBuddyScope(undefined);}} />}
         {!growthOpen&&tab === 'grow' && <Grow me={me} ask={ask} go={go} startCapture={growthCapture} onCaptureOpened={()=>setGrowthCapture(false)} />}
         {!growthOpen&&tab === 'you' && <You me={me} setMe={setMe} onSignOut={onSignedOut} onOpenGrowthMap={openGrowth} />}
