@@ -3,18 +3,21 @@ import { NewsResponse, Student, Story } from '../lib/types';
 import { NEWS_EMOJI } from '../lib/theme';
 import { fmtDay } from '../lib/format';
 import { Sheet, Typing, toast, useLoad } from './ui';
+import NewsRefresh from './NewsRefresh';
 
 export const storyWhen = (iso: string) => { const d = Math.round((+new Date(new Date().toDateString()) - +new Date(iso + 'T00:00')) / 864e5); return d <= 0 ? 'today' : d === 1 ? 'yesterday' : fmtDay(iso); };
 export const explainAsk = (n: Story) => `Explain this news story to me simply, and why it might matter to a high school student. Only use these facts: ${n.headline}. ${n.summary} (Source: ${n.source})`;
 
 /** News for you: students choose topics; every story has a real source and link. */
 export default function NewsSheet({ me, setMe, onClose, ask }: { me: Student; setMe: (s: Student) => void; onClose: () => void; ask: (t: string) => void }) {
-  const { data, reload } = useLoad(() => api<NewsResponse>('/api/news'), []);
+  const { data, error, reload, setData } = useLoad(() => api<NewsResponse>('/api/news'), []);
   const setTopics = async (topics: string[] | null) => { const s = await api<Student>('/api/me', { method: 'PATCH', body: { settings: { newsTopics: topics } } }); setMe(s); reload(); };
   const toggle = (t: string) => { if (!data) return; const cur = data.topics.includes(t) ? data.topics.filter(x => x !== t) : [...data.topics, t]; if (!cur.length) return toast('Keep at least one topic'); setTopics(cur); };
   return (
     <Sheet title="News for you" onClose={onClose}>
-      {!data ? <div style={{ textAlign: 'center', padding: 30 }}><Typing /></div> : <>
+      <NewsRefresh onRefreshed={setData}/>
+      {error&&<p role="alert" className="note c-rose">Could not load news. <button className="link" onClick={reload}>Try again</button></p>}
+      {!data ? !error&&<div style={{ textAlign: 'center', padding: 30 }}><Typing /></div> : <>
         <p className="label">YOUR TOPICS</p><p className="muted small" style={{ marginTop: 4 }}>{data.custom ? 'Tap to add or remove.' : 'Picked from your interests. Tap to change.'}</p>
         <div className="chips" style={{ marginTop: 10 }}>{data.allTopics.map(t => <button key={t} className="chip" aria-pressed={data.topics.includes(t)} onClick={() => toggle(t)}>{NEWS_EMOJI[t]} {t}</button>)}</div>
         {data.custom && <button className="link" style={{ marginTop: 10 }} onClick={() => setTopics(null)}>Match my interests again</button>}

@@ -31,6 +31,8 @@ Dark-first, soft glow, rings with contributors, editorial serif for insights. Li
 - **Next best step card** — dot + label, serif title, why, actions: Do it · Later · Why this?
 - **Timeline** — time, glowing dot (rose on overlap), title with emoji, source tag (You added · Imported · Suggested · Sample), check for flexible items.
 - **Timeline views** — Today/Week pressed-button toggle; vertical seven-day agenda with dated selectable headers, Today/Selected labels, week navigation and empty-day copy. Use existing card/chip colors, 44px targets and wrapping titles; no horizontal calendar grid on phones. Completed titles are crossed out in both views.
+- **Timeline deletion** — small circled minus at the end of writable rows, accessible Delete event label and 44px target; confirm the event/whole series before removing. Stack beside completion controls to preserve phone title width.
+- **Extra sparks** — Next word / Today’s word and Next story / Refresh news reuse chip buttons with 44px targets; practice/news updates announce changes and retain current content during errors.
 - **Opportunity card** — category emoji, fit pill (Strong/Good/Worth a look), why line, factor dots (Interests · Eligible · Time · Cost · Ready), footer Save · Compare · Not for me.
 - **Review sheet** — What will happen · Info used · What changes · step chips Proposed → Approved → Saving → Verified.
 - **Bottom sheet** — grabber, centered title, Cancel/Done; spring slide-up; disabled with reduced motion.

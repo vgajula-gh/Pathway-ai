@@ -1,5 +1,5 @@
-// Starter news stories (real, sourced, October 2026) for development and demos.
-// Production: replace with the daily ingestion job in docs/08-OPPORTUNITY-AND-NEWS-SOURCING.md.
+// Sample news metadata for development and demos; hidden outside DEMO_MODE.
+// Production ingests public publisher RSS/Atom feeds on explicit Refresh news.
 export const NEWS_TOPICS = ['Space', 'Science', 'AI & Tech', 'Health & Medicine', 'Climate & Nature', 'Arts & Culture', 'Sports'] as const;
 export type NewsTopic = typeof NEWS_TOPICS[number];
 export const INTEREST_TO_TOPIC: Record<string, NewsTopic> = { AI: 'AI & Tech', Coding: 'AI & Tech', Robotics: 'AI & Tech', Engineering: 'AI & Tech', Business: 'AI & Tech', Entrepreneurship: 'AI & Tech', Space: 'Space', Science: 'Science', Math: 'Science', Medicine: 'Health & Medicine', Climate: 'Climate & Nature', Volunteering: 'Climate & Nature', Art: 'Arts & Culture', Writing: 'Arts & Culture', Music: 'Arts & Culture', Debate: 'Arts & Culture', Sports: 'Sports' };

@@ -8,6 +8,8 @@ import webpush from 'web-push';
 import { PrismaClient } from '@prisma/client';
 const remote = vi.hoisted(() => vi.fn());
 const sent = vi.hoisted(() => vi.fn());
+const newsRemote=vi.hoisted(()=>vi.fn());
+vi.mock('../src/lib/news-fetch.js',()=>({fetchNewsFeed:newsRemote}));
 vi.mock('../src/lib/push.js', async () => ({ ...await vi.importActual('../src/lib/push.js'), sendPush: sent }));
 const vapid = webpush.generateVAPIDKeys();
 vi.mock('../src/lib/calendar-fetch.js', async () => ({ ...await vi.importActual('../src/lib/calendar-fetch.js'), fetchCalendar: remote }));
@@ -27,6 +29,7 @@ beforeAll(async () => {
 }, 30000);
 beforeEach(async () => {
   remote.mockReset(); sent.mockReset(); sent.mockResolvedValue({ statusCode: 201 });
+  newsRemote.mockReset();
   vi.stubEnv('VAPID_PUBLIC_KEY', vapid.publicKey); vi.stubEnv('VAPID_PRIVATE_KEY', vapid.privateKey); vi.stubEnv('VAPID_SUBJECT', 'mailto:test@example.org');
   env.accessCodes = []; await db.student.deleteMany();
   const s = await db.student.create({ data: { name: 'Test', grade: 10, availability: { create: {} } } }); studentId = s.id;
@@ -194,4 +197,59 @@ it('keeps phrase-authenticated access to the student features and removes this d
     expect(await db.pushSubscription.count({ where: { studentId: registered.json().id } })).toBe(0);
     expect((await db.notificationSettings.findUniqueOrThrow({ where: { studentId: registered.json().id } })).enabled).toBe(false);
   } finally { await app.close(); }
+});
+
+it('deletes only the signed-in student event, audits it and updates both schedule views',async()=>{
+  const app=await buildApp();app.log.level='silent';
+  try {
+    const date='2030-01-07';
+    const own=await db.event.create({data:{studentId,title:'Study',type:'study',start:date+'T18:00',end:date+'T19:00'}});
+    const other=await db.student.create({data:{name:'Other',grade:10}});
+    const theirs=await db.event.create({data:{studentId:other.id,title:'Private',type:'study',start:own.start,end:own.end}});
+    expect((await app.inject({method:'DELETE',url:'/api/events/'+theirs.id,headers:headers()})).statusCode).toBe(404);
+    expect((await app.inject({method:'DELETE',url:'/api/events/'+own.id,headers:headers()})).statusCode).toBe(204);
+    expect(await db.event.findUnique({where:{id:own.id}})).toBeNull();expect(await db.event.findUnique({where:{id:theirs.id}})).not.toBeNull();
+    expect(await db.auditEvent.findFirst({where:{studentId,event:'Deleted event',record:'Study'}})).not.toBeNull();
+    const days=(await app.inject({url:'/api/week?from='+date,headers:headers()})).json();expect(days.flatMap((d:any)=>d.events)).toEqual([]);
+    const series=await db.event.create({data:{studentId,title:'Recurring class',type:'class',start:date+'T16:00',end:date+'T17:00',recurDays:'[1,3]'}});
+    expect((await app.inject({method:'DELETE',url:'/api/events/'+series.id,headers:headers()})).statusCode).toBe(204);
+    expect((await app.inject({url:'/api/week?from='+date,headers:headers()})).json().flatMap((d:any)=>d.events)).toEqual([]);
+  } finally {await app.close();}
+});
+it('serves validated word practice without AI calls or writes',async()=>{
+  const app=await buildApp();app.log.level='silent';
+  try {
+    const before=await db.aIUsage.count(),audit=await db.auditEvent.count();
+    const daily=await app.inject({url:'/api/words',headers:headers()});expect(daily.statusCode).toBe(200);expect(daily.headers['cache-control']).toBe('no-store');
+    const next=(await app.inject({url:'/api/words?offset=1',headers:headers()})).json();
+    expect(next.word.word).not.toBe(daily.json().word.word);expect(next.total).toBe(36);
+    expect((await app.inject({url:'/api/today',headers:headers()})).json().word).toEqual(daily.json().word);
+    for(const offset of ['-1','1.5','no','100001'])expect((await app.inject({url:'/api/words?offset='+offset,headers:headers()})).statusCode).toBe(422);
+    expect((await app.inject({url:'/api/words'})).statusCode).toBe(401);
+    expect(await db.aIUsage.count()).toBe(before);expect(await db.auditEvent.count()).toBe(audit);
+  } finally {await app.close();}
+});
+it('refreshes public publisher feeds explicitly, shares the cache and preserves stories on failure',async()=>{
+  const app=await buildApp();app.log.level='silent';const originalDemo=env.demoMode;env.demoMode=false;
+  try {
+    await db.newsStory.deleteMany();await db.jobLease.deleteMany({where:{key:{startsWith:'news-feed:'}}});
+    await db.student.update({where:{id:studentId},data:{interests:'["Space"]'}});
+    await db.newsStory.create({data:{id:'sample-news',topic:'Space',headline:'Sample',source:'Sample',url:'https://www.nasa.gov/sample',publishedAt:new Date().toISOString().slice(0,10),isSample:true}});
+    const usage=await db.aIUsage.count();
+    expect((await app.inject({url:'/api/news',headers:headers()})).json().top).toBeNull();expect(newsRemote).not.toHaveBeenCalled();
+    newsRemote.mockResolvedValue(`<rss><channel><item><title>Actual publisher title</title><link>https://www.nasa.gov/article/test-live</link><description>Actual publisher description</description><pubDate>${new Date().toUTCString()}</pubDate></item></channel></rss>`);
+    const responses=await Promise.all([1,2].map(()=>app.inject({method:'POST',url:'/api/news/refresh',headers:headers()})));
+    expect(newsRemote).toHaveBeenCalledOnce();expect(responses.every(r=>r.statusCode===200)).toBe(true);
+    const loaded=(await app.inject({url:'/api/news',headers:headers()})).json();expect(loaded.top.headline).toBe('Actual publisher title');expect(loaded.stories).toHaveLength(1);
+    expect(await db.newsStory.count({where:{isSample:false}})).toBe(1);
+    const cached=(await app.inject({method:'POST',url:'/api/news/refresh',headers:headers()})).json();expect(cached.refresh.status).toBe('cached');expect(newsRemote).toHaveBeenCalledOnce();
+    await db.jobLease.deleteMany({where:{key:{startsWith:'news-feed:'}}});newsRemote.mockRejectedValue(new Error('Publisher offline'));
+    const failed=(await app.inject({method:'POST',url:'/api/news/refresh',headers:headers()})).json();expect(failed.refresh.status).toBe('unavailable');expect(failed.refresh.feeds[0].reason).toBe('source_unavailable');expect(failed.top).toEqual(loaded.top);
+    await db.jobLease.deleteMany({where:{key:{startsWith:'news-feed:'}}});
+    await db.student.update({where:{id:studentId},data:{settings:JSON.stringify({newsTopics:['Space','Science']})}});
+    newsRemote.mockImplementation(async(feed:any)=>{if(feed.topic!=='Space')throw new Error('Offline');return `<rss><item><title>Another public article</title><link>https://www.nasa.gov/article/another</link><pubDate>${new Date().toUTCString()}</pubDate></item></rss>`;});
+    const partial=(await app.inject({method:'POST',url:'/api/news/refresh',headers:headers()})).json();expect(partial.refresh.status).toBe('partial');expect(partial.stories.length).toBeGreaterThan(0);
+    expect((await app.inject({method:'POST',url:'/api/news/refresh'})).statusCode).toBe(401);
+    expect(await db.aIUsage.count()).toBe(usage);
+  } finally {env.demoMode=originalDemo;await app.close();}
 });

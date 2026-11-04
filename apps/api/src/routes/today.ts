@@ -11,10 +11,16 @@ import { expand } from '../domain/schedule.js';
 import { headline, nudges, todayMetrics } from '../domain/metrics.js';
 import { askJSON, getLLM } from '../agent/llm/index.js';
 import { BRIEF_PROMPT, BRIEF_SYSTEM } from '../agent/prompts.js';
-import { WORDS } from '../data/words.js';
+import {z} from 'zod';
+import {practiceWord} from '../domain/words.js';
 import { dueEvents, greetingPart, timelineItems } from '../domain/today.js';
 
 export default async function routes(app: FastifyInstance) {
+  app.get('/api/words',async(req,reply)=>{
+    const s=await requireStudent(req),q=z.object({offset:z.coerce.number().int().min(0).max(100000).default(0)}).parse(req.query);
+    reply.header('Cache-Control','no-store');
+    return practiceWord(wallNow(s.timezone),q.offset);
+  });
   app.get('/api/today', async (req,reply) => {
     reply.header('Cache-Control','no-store');
     const s = await requireStudent(req), { events, rules, milestones, goals } = await loadContext(s.id), now = wallNow(s.timezone), today = dkey(now);
@@ -27,11 +33,11 @@ export default async function routes(app: FastifyInstance) {
     const nextAction = n[0] ? { title: n[0].title, why: n[0].body, ask: n[0].ask, source: 'Spotted automatically in your calendar', dataUsed: ['Your calendar for the next 7 days'] }
       : unplanned ? { title: 'Take the first step on a saved opportunity', why: 'You saved it but haven\u2019t planned it yet.', opportunityId: unplanned.opportunityId, source: 'Based on your saved opportunities', dataUsed: ['Saved opportunities'] }
       : null;
-    const word = WORDS[Math.floor((+sod(now) - +new Date(now.getFullYear(), 0, 0)) / 864e5) % WORDS.length];
+    const {word}=practiceWord(now);
     return { greetingPart:greetingPart(now), dueSoonEvents:dueEvents(events,now), dueSoon: dueSoon(await applicationsFor(s.id, today), today), date: today, headline: headline(events, rules, now), metrics: todayMetrics(events, rules, milestones, now), brief: brief ? j(brief.data, null) : null, nextAction, nudges: n,
       timeline: timelineItems(occ),
       comingUp: expand(events, addDays(sod(now), 1), addDays(sod(now), 8)).filter(o => ['exam', 'deadline', 'competition', 'reminder'].includes(o.type)).slice(0, 4).map(o => ({ id: o.id, title: o.title, type: o.type, start: fmtLocal(o.s) })),
-      pending: pending.map(p => ({ id: p.id, summary: p.summary, count: j<unknown[]>(p.actions, []).length })), word: { word: word[0], pos: word[1], meaning: word[2], example: word[3] } };
+      pending: pending.map(p => ({ id: p.id, summary: p.summary, count: j<unknown[]>(p.actions, []).length })), word };
   });
 
   app.post('/api/today/insight', async req => {
