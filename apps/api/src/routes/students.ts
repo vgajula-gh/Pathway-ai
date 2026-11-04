@@ -83,7 +83,9 @@ export default async function routes(app: FastifyInstance) {
     catch(e){if(!(e instanceof Error&&'code' in e&&['P2021','P2022'].includes(String(e.code))))throw e;}
     let growthInsights:unknown={available:false};
     try{const [state,dismissals]=await Promise.all([prisma.growthInsightState.findUnique({where:{studentId:s.id}}),prisma.growthInsightDismissal.findMany({where:{studentId:s.id}})]);growthInsights={state,dismissals};}catch(e){if(!(e instanceof Error&&'code' in e&&['P2021','P2022'].includes(String(e.code))))throw e;}
-    return { growthInsights, growthMap, opportunitySearches, pickRefresh, conversations, picks, opportunityFeedback, notifications, nudgeHistory, calendars, exportedAt: new Date().toISOString(), profile: { ...serializeStudent(s), accessCode: s.accessCode }, events, goals, portfolio, saved, proposals, activity: audits };
+    let growthLetters:unknown={available:false};
+    try{growthLetters=await prisma.growthLetter.findMany({where:{studentId:s.id}});}catch(e){if(!(e instanceof Error&&'code' in e&&['P2021','P2022'].includes(String(e.code))))throw e;}
+    return { growthLetters, growthInsights, growthMap, opportunitySearches, pickRefresh, conversations, picks, opportunityFeedback, notifications, nudgeHistory, calendars, exportedAt: new Date().toISOString(), profile: { ...serializeStudent(s), accessCode: s.accessCode }, events, goals, portfolio, saved, proposals, activity: audits };
   });
 
   app.delete('/api/me', async (req, reply) => { const s = await requireStudent(req); await prisma.$transaction([

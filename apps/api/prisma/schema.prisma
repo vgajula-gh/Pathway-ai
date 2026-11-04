@@ -49,6 +49,7 @@ model Student {
   skillRequests SkillRequest[]
   growthInsights GrowthInsightState?
   growthDismissals GrowthInsightDismissal[]
+  growthLetters GrowthLetter[]
   availability Availability?
   events       Event[]
   goals        Goal[]
@@ -207,6 +208,7 @@ model Milestone {
 }
 
 model PortfolioEntry {
+  growthLetter GrowthLetter? @relation("GrowthLetterPortfolio")
   id          String   @id @default(cuid())
   studentId   String
   student     Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
@@ -593,4 +595,24 @@ model GrowthInsightDismissal {
   type String
   createdAt DateTime @default(now())
   @@id([studentId, signature])
+}
+
+// Monthly private reflection cache; no new core Student scalar fields.
+model GrowthLetter {
+  studentId String
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  month String
+  content String @default("{}")
+  fingerprint String @default("")
+  status String @default("empty")
+  attemptedAt DateTime?
+  generatedAt DateTime?
+  leaseToken String @default("")
+  leaseUntil DateTime?
+  retryAt DateTime?
+  portfolioId String? @unique
+  portfolio PortfolioEntry? @relation("GrowthLetterPortfolio", fields: [portfolioId], references: [id], onDelete: SetNull)
+  savedFingerprint String @default("")
+  createdAt DateTime @default(now())
+  @@id([studentId, month])
 }

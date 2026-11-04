@@ -1,3 +1,4 @@
+import {runMonthlyLetters} from './growth-map/letters.js';
 import { runJobs } from './discovery/jobs.js';
 import { initializeKnowledge } from './knowledge/runtime.js';
 import { seedCatalog } from './lib/catalog.js';
@@ -18,6 +19,9 @@ app.addHook('onClose', async () => clearInterval(calendarTimer));
 const nudgeTimer = setInterval(() => { deliverDueNudges().catch(() => app.log.warn('Nudge scheduler unavailable')); }, 60000);
 nudgeTimer.unref();
 app.addHook('onClose', async () => clearInterval(nudgeTimer));
+const growthLetterTimer=setInterval(()=>{void runMonthlyLetters().catch(()=>app.log.warn('Monthly growth letters are unavailable; the map still works'));},3600000);
+growthLetterTimer.unref();
+app.addHook('onClose',async()=>clearInterval(growthLetterTimer));
 const discoveryTimer=setInterval(()=>{void runJobs().catch(()=>app.log.warn('Opportunity background jobs are unavailable; catalog browsing still works'));},60000);
 discoveryTimer.unref();
 app.addHook('onClose',async()=>clearInterval(discoveryTimer));

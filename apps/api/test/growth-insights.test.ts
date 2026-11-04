@@ -90,7 +90,7 @@ it('contains missing Drop 2 setup without breaking Drop 1, session, Today or its
 });
 it('checks required columns without loading records and protects owner readiness',async()=>{
  expect((await growthReadiness()).ready).toBe(true);expect((await call('GET','/internal/growth-map/readiness')).statusCode).toBe(503);vi.stubEnv('JOBS_SECRET','owner-secret-for-growth-readiness-only');expect((await app.inject({url:'/internal/growth-map/readiness',headers:{authorization:'Bearer owner-secret-for-growth-readiness-only'}})).json().ready).toBe(true);
- const spy=vi.spyOn(db,'$queryRawUnsafe').mockRejectedValue(new Error('missing'));try{const status=await growthReadiness();expect(status.ready).toBe(false);expect(status.checks).toHaveLength(9);}finally{spy.mockRestore();}
+ const spy=vi.spyOn(db,'$queryRawUnsafe').mockRejectedValue(new Error('missing'));try{const status=await growthReadiness();expect(status.ready).toBe(false);expect(status.checks).toHaveLength(10);}finally{spy.mockRestore();}
 });
 
 it('recovers a raised cap after cooldown and treats an abandoned lease as failed rather than spinning forever',async()=>{
