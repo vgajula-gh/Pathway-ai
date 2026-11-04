@@ -107,6 +107,13 @@ body[data-tab="buddy"] #root{padding-bottom:calc(120px + env(safe-area-inset-bot
 .timeline-card .tl-detail{min-width:0;overflow-wrap:anywhere}
 .timeline-card .chk{width:44px;height:44px}
 .timeline-card .chk:disabled{opacity:.5}
+.timeline-event-actions{display:flex;flex-direction:column;align-items:center;gap:4px}
+.event-delete{width:44px;height:44px;display:grid;place-items:center;border-radius:50%;color:var(--text2)}
+.event-delete span{width:24px;height:24px;border:1px solid var(--line2);border-radius:50%;display:grid;place-items:center;font-size:18px;line-height:1}
+.event-delete:hover,.event-delete:focus-visible{color:var(--rose);background:var(--rose-s)}
+.event-delete:disabled{opacity:.5}
+.spark .row{flex-wrap:wrap}
+.spark .chipbtn{min-height:44px}
 .week-nav{display:flex;justify-content:space-between;gap:6px;flex-wrap:wrap}
 .week-nav button{min-height:44px;flex:1;padding:7px 8px;text-align:center}
 .week-range{margin-top:12px}

@@ -4,13 +4,14 @@ import Calendars from '../components/Calendars';
 import AddEvent from '../components/AddEvent';
 import { useEffect,useState } from 'react';
 import { api } from '../lib/api';
-import { Proposal, Student, Tab, Today as TodayData, NewsResponse } from '../lib/types';
+import { Proposal, Student, Tab, Today as TodayData } from '../lib/types';
 import { fmtMins } from '../lib/format';
 import { Ring, Sheet, Typing, toast, useLoad } from '../components/ui';
 import ProposalReview from '../components/ProposalReview';
 import ScanSheet from './ScanSheet';
-import NewsSheet, { explainAsk, storyWhen } from '../components/NewsSheet';
-import { NEWS_EMOJI, partOfDay } from '../lib/theme';
+import WordSpark from '../components/WordSpark';
+import NewsSpark from '../components/NewsSpark';
+import { partOfDay } from '../lib/theme';
 
 const COLORS = { focus:'var(--peri)', freeTime:'var(--teal)', progress:'var(--peach)' } as const;
 const CLS = { focus:'c-peri', freeTime:'c-teal', progress:'c-peach' } as const;
@@ -18,9 +19,8 @@ type Surface = null | {k:'ring';v:keyof TodayData['metrics']} | {k:'why'} | {k:'
 
 export default function Today({ me, go, ask, setMe }: { me:Student; go:(t:Tab)=>void; ask:(t:string)=>void; setMe:(s:Student)=>void }) {
   const { data:d, error, reload } = useLoad(()=>api<TodayData>('/api/today'),[]);
-  const news = useLoad(()=>api<NewsResponse>('/api/news'),[me.settings.newsTopics?.join(',')]);
   const [view,setView]=useState<'today'|'week'>('today'),[selectedDate,setSelectedDate]=useState<string|null>(null);
-  const [newsOpen,setNewsOpen] = useState(false), [sheet,setSheet] = useState<Surface>(null);
+  const [sheet,setSheet] = useState<Surface>(null);
   const [snoozed,setSnoozed] = useState(false), [actionError,setActionError] = useState<string|null>(null);
   useEffect(()=>{
     const refresh=()=>{if(typeof document==='undefined'||document.visibilityState!=='hidden')reload();};
@@ -30,7 +30,7 @@ export default function Today({ me, go, ask, setMe }: { me:Student; go:(t:Tab)=>
     return()=>{clearInterval(timer);if(typeof document!=='undefined')document.removeEventListener('visibilitychange',refresh);if(typeof window!=='undefined')window.removeEventListener('focus',refresh);};
   },[reload]);
   if(!d) return error ? <p role="alert">{error} <button className="link" onClick={reload}>Try again</button></p> : <div className="splash"><Typing /></div>;
-  const m=d.metrics, na=d.nextAction, top=news.data?.top;
+  const m=d.metrics, na=d.nextAction;
   const part=d.greetingPart || partOfDay(), hello={morning:'Good morning',afternoon:'Good afternoon',evening:'Good evening',night:'Hello'}[part];
   const dateLabel=new Date(d.date+'T12:00').toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'});
   const ringVal=(k:keyof TodayData['metrics'])=>k==='progress' ? (m.progress.planned ? String(m.progress.done)+'/'+m.progress.planned : '—') : fmtMins(m[k].minutes);
@@ -79,9 +79,8 @@ export default function Today({ me, go, ask, setMe }: { me:Student; go:(t:Tab)=>
     </section>
 
     {(me.settings.showWord || me.settings.showNews) && <section className="sec" aria-labelledby="spark-title"><div className="sec-h"><h2 id="spark-title">Today's spark</h2></div><div className="sparks">
-      {me.settings.showWord && <div className="card spark"><div className="k"><p className="label">WORD OF THE DAY</p>{typeof window!=='undefined' && 'speechSynthesis' in window && <button className="chipbtn" onClick={()=>speechSynthesis.speak(new SpeechSynthesisUtterance(d.word.word))}>Hear it</button>}</div><h3 style={{fontSize:28,fontWeight:300}}>{d.word.word}</h3><p className="muted small">{d.word.pos} · {d.word.meaning}</p><p className="small"><i>{d.word.example}</i></p></div>}
-      {me.settings.showNews && (top ? <div className="card spark"><div className="k"><p className="label">{news.data?.personal?'NEWS FOR YOU':'TODAY’S HEADLINE'}</p><span className="tag">{NEWS_EMOJI[top.topic]} {top.topic}</span></div><button onClick={()=>setNewsOpen(true)} style={{textAlign:'left'}}><h3>{top.headline}</h3></button>{top.summary && <p className="muted small">{top.summary}</p>}<p className="src">{top.source} · {storyWhen(top.publishedAt)}</p><div className="row"><button className="chipbtn" onClick={()=>setNewsOpen(true)}>More for you</button><a className="chipbtn" href={top.url} target="_blank" rel="noreferrer">Read ↗</a>{me.aiConsent && <button className="chipbtn" onClick={()=>ask(explainAsk(top))}>Explain it simply</button>}</div></div>
-        : <div className="card spark"><p className="label">NEWS FOR YOU</p><p className="muted small">{news.error?'News is not available right now.':!news.data?'Loading stories…':'No stories for your topics yet.'}</p><button className="link" onClick={()=>setNewsOpen(true)}>Choose news topics</button></div>)}
+      {me.settings.showWord && <WordSpark key={d.date} dailyWord={d.word}/>}
+      {me.settings.showNews && <NewsSpark me={me} setMe={setMe} ask={ask}/>}
     </div></section>}
 
     {sheet?.k==='ring' && <Sheet title={m[sheet.v].label} onClose={()=>setSheet(null)}><div style={{textAlign:'center'}}><Ring pct={m[sheet.v].pct} color={COLORS[sheet.v]} size={150} width={9}>{ringVal(sheet.v)}</Ring><p className={CLS[sheet.v]}>{m[sheet.v].status}</p></div><p className="muted small">{sheet.v==='focus'?'Scheduled Study blocks for today compared with your daily limit. Marking an event done does not change planned time.':sheet.v==='freeTime'?'Unbooked minutes still ahead in your study window, based on your calendar. Protected downtime is reserved for rest and shown separately.':'Goal steps planned this week and how many you’ve finished.'}</p><div className="sec"><p className="label">CONTRIBUTORS</p><div className="card">
@@ -94,7 +93,6 @@ export default function Today({ me, go, ask, setMe }: { me:Student; go:(t:Tab)=>
     {sheet?.k==='add' && <AddEvent today={sheet.date} onClose={close} />}
     {sheet?.k==='scan' && <ScanSheet aiConsent={me.aiConsent} onClose={close} />}
     {sheet?.k==='calendar' && <Sheet title="Link calendar" onClose={close}><Calendars /></Sheet>}
-    {newsOpen && <NewsSheet me={me} setMe={setMe} onClose={()=>setNewsOpen(false)} ask={ask} />}
   </>;
 }
 const Contrib=({l,v,pct,c}:{l:string;v:string;pct:number;c:string})=><div className="contrib"><div className="h"><b>{l}</b><span className="muted">{v}</span></div><div className="cbar"><i style={{width:String(Math.round(Math.min(1,Math.max(0,pct))*100))+'%',background:c}} /></div></div>;

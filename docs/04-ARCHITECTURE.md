@@ -37,6 +37,10 @@ Student context → understand request → retrieve reliable context → evaluat
 
 The Today Timeline toggles inline to a vertical weekly agenda. `GET /api/week?weekOffset=N` derives Monday in the student's timezone using domain time helpers; the existing rolling `from` and omitted-query behavior stay compatible. `domain/today.timelineItems` serializes the same event flags for both API views. The shared client `TimelineEvents` component handles supported completion through the existing authenticated PATCH route; no new agent writing tool or provider call is introduced. Week requests ignore obsolete responses after navigation/unmount. Today refreshes re-read the visible week, preserving a valid selected creation date. Rings retain daily meaning regardless of the selected view.
 
+## Read-only sparks and explicit publisher refresh
+
+`domain/words.ts` selects the daily/practice word deterministically in student-local calendar time. `GET /api/words` has no writes or provider calls. Timeline deletion reuses the existing authenticated, audited DELETE endpoint after UI confirmation. News GET stays read-only; only explicit `POST /api/news/refresh` ingests public RSS/Atom metadata. Fixed feeds in `data/news-feeds.ts` receive no student data. The fetcher pins public DNS, validates same-publisher HTTPS redirects and enforces 10 seconds / 1 MiB. Parsing rejects entities/HTML payloads, unsupported URLs/dates and articles older than 30 days; stores at most 30 entries/feed with source text and stable URL hashes. Existing JobLease rows provide atomic shared cache claims (15 minutes; one-minute failure backoff) across instances. NewsStory stores real entries with isSample=false; demo-only seed entries are hidden in production. Existing real stories survive failure. No schema/Secret/provider SDK is added.
+
 ## LLM layer (provider-agnostic)
 ```
 Buddy agent · insights · schedule scan · coach

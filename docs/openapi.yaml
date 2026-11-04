@@ -11,6 +11,61 @@ components:
     accessCode: { type: apiKey, in: header, name: x-access-code }
     devStudent: { type: apiKey, in: header, name: x-student-id }
   schemas:
+    PracticeWord:
+      type: object
+      required: [date, word, position, total]
+      properties:
+        date: { type: string, format: date, description: Student-local date }
+        word:
+          type: object
+          required: [word, pos, meaning, example]
+          properties:
+            word: { type: string }
+            pos: { type: string }
+            meaning: { type: string }
+            example: { type: string }
+        position: { type: integer, minimum: 1, description: Position in the practice cycle starting at today's word }
+        total: { type: integer, const: 500 }
+    NewsStory:
+      type: object
+      required: [id, topic, headline, summary, source, url, publishedAt]
+      properties:
+        id: { type: string }
+        topic: { type: string }
+        headline: { type: string }
+        summary: { type: string, description: Short publisher-provided excerpt; never AI generated }
+        source: { type: string }
+        url: { type: string, format: uri }
+        publishedAt: { type: string, format: date }
+    NewsResponse:
+      type: object
+      properties:
+        allTopics: { type: array, items: { type: string } }
+        topics: { type: array, items: { type: string } }
+        custom: { type: boolean }
+        personal: { type: boolean }
+        stories: { type: array, items: { $ref: '#/components/schemas/NewsStory' } }
+        top: { oneOf: [{ $ref: '#/components/schemas/NewsStory' }, { type: 'null' }] }
+        emptyTopics: { type: array, items: { type: string } }
+        updatedAt: { type: [string, 'null'], format: date-time }
+        refresh:
+          type: object
+          description: Only present after explicit POST; saved counts upserts, not necessarily new articles
+          properties:
+            status: { enum: [refreshed, partial, cached, unavailable] }
+            succeeded: { type: integer, minimum: 0 }
+            failed: { type: integer, minimum: 0 }
+            skipped: { type: integer, minimum: 0 }
+            saved: { type: integer, minimum: 0 }
+            feeds:
+              type: array
+              items:
+                type: object
+                properties:
+                  feed: { type: string, description: Fixed public feed ID; no profile data }
+                  state: { enum: [refreshed, cached, failed] }
+                  saved: { type: integer, minimum: 0 }
+                  reason: { enum: [null, timeout, source_unavailable, unreadable_or_empty_feed, storage] }
     TimelineEvent:
       type: object
       required: [id, title, type, start, end, source, done, readOnly, recurring, clash]
@@ -562,6 +617,29 @@ paths:
                   date: { type: string, format: date, description: Student-local date }
                   metrics: { $ref: '#/components/schemas/TodayMetrics' }
   /api/today/insight: { post: { summary: AI brief (cached daily), responses: { '200': { description: OK }, '403': { description: AI consent off }, '503': { description: AI unavailable } } } }
+  /api/words:
+    get:
+      summary: Daily word or extra curated vocabulary practice
+      description: Authenticated, read-only and uncached. Student-local daily base; wraps after 500 words. No AI usage or practice tracking.
+      parameters: [{ name: offset, in: query, schema: { type: integer, minimum: 0, maximum: 100000, default: 0 } }]
+      responses:
+        '200': { description: Curated word and cycle position, content: { application/json: { schema: { $ref: '#/components/schemas/PracticeWord' } } } }
+        '401': { description: Student sign-in required }
+        '422': { description: Invalid offset }
+  /api/news:
+    get:
+      summary: Read stored source-backed stories for the student's topics
+      description: Authenticated, uncached, no feed fetch or AI call. Production excludes sample news.
+      responses:
+        '200': { description: Stored news snapshot, content: { application/json: { schema: { $ref: '#/components/schemas/NewsResponse' } } } }
+        '401': { description: Student sign-in required }
+  /api/news/refresh:
+    post:
+      summary: Explicitly refresh public publisher feeds for the student's topics
+      description: No body required. Fixed endpoints receive no student data. Shared durable 15-minute cache and one-minute failure backoff; each source is limited to 10 seconds, 1 MiB and 30 recent dated entries. Failures preserve prior real stories. No AI usage or API key.
+      responses:
+        '200': { description: Snapshot plus refreshed/partial/cached/unavailable outcome and public source diagnostics, content: { application/json: { schema: { $ref: '#/components/schemas/NewsResponse' } } } }
+        '401': { description: Student sign-in required }
   /api/events:
     get: { summary: Occurrences in range, parameters: [{ name: from, in: query, schema: { type: string } }, { name: to, in: query, schema: { type: string } }], responses: { '200': { description: OK } } }
     post: { summary: Add event, responses: { '201': { description: Created }, '409': { description: Conflict warning (resend with force) } } }

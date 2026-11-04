@@ -159,3 +159,28 @@ it('keeps Today usable when a weekly request fails and supports an explicit retr
   fail=false;await click('Try again');expect(text()).toContain('Nothing scheduled.');
   await click('Today');expect(text()).toContain('Your day is open.');
 });
+
+it('confirms the minus-button deletion and removes the event from both views after success',async()=>{
+  vi.stubGlobal('confirm',vi.fn(()=>true));state.day.timeline=[study()];state.weeks[0][1].events=[study()];
+  const original=state.api.getMockImplementation()!;
+  state.api.mockImplementation(async(path:string,options:any)=>{
+    if(path==='/api/events/study'&&options?.method==='DELETE'){
+      state.day={...state.day,timeline:[]};state.weeks[0][1]={...state.weeks[0][1],events:[]};return;
+    }return original(path,options);
+  });
+  await mount();await click('Week');await click('Delete event: Math study');
+  expect(confirm).toHaveBeenCalledWith('Delete “Math study” from Pathway?');
+  expect(state.api).toHaveBeenCalledWith('/api/events/study',{method:'DELETE'});
+  expect(text()).not.toContain('Math study');await click('Today');expect(text()).not.toContain('Math study');
+});
+it('cancels deletion, warns about entire recurring series and hides deletion on read-only entries',async()=>{
+  vi.stubGlobal('confirm',vi.fn(()=>false));state.day.timeline=[study({recurring:true}),study({id:'linked',readOnly:true,title:'Linked event'})];
+  await mount();expect(renderer.root.findAllByProps({'aria-label':'Delete event: Linked event'})).toHaveLength(0);
+  await click('Delete event: Math study');expect(confirm).toHaveBeenCalledWith(expect.stringContaining('entire recurring series'));
+  expect(state.api.mock.calls.some(([,options])=>options?.method==='DELETE')).toBe(false);expect(text()).toContain('Math study');
+});
+it('keeps the event and reports a failed deletion',async()=>{
+  vi.stubGlobal('confirm',vi.fn(()=>true));state.day.timeline=[study()];const original=state.api.getMockImplementation()!;
+  state.api.mockImplementation(async(path:string,options:any)=>{if(options?.method==='DELETE')throw new Error('Could not delete this event');return original(path,options);});
+  await mount();await click('Delete event: Math study');expect(text()).toContain('Could not delete this event');expect(text()).toContain('Math study');
+});

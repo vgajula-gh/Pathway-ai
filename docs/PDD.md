@@ -12,6 +12,14 @@ The rings are **Study planned**, **Free time left**, and **Progress**. Study pla
 
 Timeline opens in **Today**, with an inline **Today | Week** toggle. Week is a vertical Monday–Sunday agenda in the student's timezone, with Previous week / This week / Next week navigation. Show all seven dated groups, highlight today and label empty days Nothing scheduled. Choosing a day sets the default date for Add event; current week initially selects today, other weeks select Monday. Keep Scan schedule and Link calendar available. Both views show the same sources, overlap warnings and completion state. Students can mark non-recurring, writable Study/Reminder/Personal events done or undo completion; recurring and linked events retain their existing restrictions. A failed save never claims completion. Switching views or browsing weeks makes no AI call and changes no events. Rings and Due soon stay about today. Ignore obsolete week responses and allow read failures to retry without blocking Today. Editing/rescheduling is outside this change. No migration or new Secrets.
 
+### Deletion and extra sparks
+
+Writable Timeline rows have a small minus control in Today and Week. Confirm before using the existing DELETE endpoint; recurring rows explicitly confirm deletion of the entire series. Linked-calendar rows remain read-only. After success, reload Today/Week so calendar quantities update; failure leaves the event visible.
+
+Word of the day stays student-local. Next word walks through a curated 500-word practice set (meaning, part of speech, original example, optional Hear it); Today’s word returns to the daily selection. Practice survives minute refreshes, resets on a new local day and repeats after the full set. No AI, account write or new tracking is involved.
+
+News has Next story for browsing and Refresh news for an explicit live publisher check, also available inside the news sheet. Public RSS/Atom endpoints are fixed by topic: NASA, BBC News/BBC Sport and ScienceDaily. Save only recent dated publisher entries with real article links and source-provided summaries; no model writes news. A shared persistent 15-minute feed cache prevents repeated fetches across students/servers; failures back off one minute and preserve previous real stories. GET never starts ingestion. Partial, cached, failed and empty states are explained honestly. Sample news is visible only in demo mode. No new API key, schema migration or quota reset is needed.
+
 ## Explore
 
 Start with the shared SQL catalog, without dummy recommendations. Interested is shown only when applications are saved. Optional You/Explore preferences affect ranking and warnings, not qualification. Only a confirmed past deadline hides a result. Missing/mismatched grade, area, format, cost, source review/freshness and application status stay visible with checks. Unknown deadlines never imply open applications. Verified requires actual source support; unconfirmed links show Needs checking.

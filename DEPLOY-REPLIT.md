@@ -188,3 +188,13 @@ An external scheduler can explicitly POST an empty JSON body to `/internal/jobs/
 ### If research reports HTTP400 or invalid_schema
 
 Use the research compatibility update before changing models or raising limits. The repair schema no longer sends unsupported `format: uri`; full server HTTPS validation is retained. This patch needs no new database migration or Secret. Sync/publish the code, then make one controlled search using the normal allowance. New diagnostics identify `operation` (research or repair), safe rejected `providerParam`/`providerCode`, and specific schema fields. Existing failed rows cannot retroactively gain those details. A new successful local test does not prove a live provider request succeeded.
+
+## Timeline deletion, word practice and live news
+
+After merging/syncing, republish normally. These additions need no new Secrets, database migration or reset.
+
+- In Today or Week, use the small minus on an event you created, review the confirmation and delete it. Recurring events remove the entire series; linked calendars remain read-only.
+- In Today's spark, Next word offers more vocabulary; Today’s word returns to the daily item. The built-in practice set has 500 words and uses no AI allowance.
+- Click Refresh news to load real publisher articles for the selected topics. Next story browses them. The news sheet also offers Refresh news. No news API key is required. The app reads public NASA, BBC News/BBC Sport and ScienceDaily RSS/Atom feeds; your hosting environment must be able to reach their HTTPS endpoints. Repeated refreshes reuse a shared 15-minute cache; a failed source waits one minute before another fetch.
+- Sample news is hidden outside demo mode. If the real library is empty initially, click Refresh news. Unavailable publishers produce a clear message and preserve existing real articles; the app does not generate replacement headlines.
+- For a deployed check, sign in, choose topics, click Refresh news, then inspect the browser Network response for `POST /api/news/refresh`. Its `refresh` object reports public feed IDs, refreshed/cached/failed states and controlled reasons. `saved` counts stored/upserted articles and may include existing ones. `GET /api/news` only reads the library and never starts a refresh. Local fixture tests verify behavior but cannot establish live publisher connectivity on Replit.
