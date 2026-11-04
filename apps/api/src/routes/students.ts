@@ -78,7 +78,10 @@ export default async function routes(app: FastifyInstance) {
     const opportunityFeedback = await prisma.opportunityFeedback.findMany({ where: { studentId: s.id } });
     const pickRefresh=await prisma.pickRefreshState.findUnique({where:{studentId:s.id}});
     const conversations=await prisma.conversation.findMany({where:{studentId:s.id},include:{messages:true}});
-    return { opportunitySearches, pickRefresh, conversations, picks, opportunityFeedback, notifications, nudgeHistory, calendars, exportedAt: new Date().toISOString(), profile: { ...serializeStudent(s), accessCode: s.accessCode }, events, goals, portfolio, saved, proposals, activity: audits };
+    let growthMap:unknown={available:false};
+    try { const [skills,evidence,suggestions,focus,reviews,requests]=await Promise.all([prisma.studentSkill.findMany({where:{studentId:s.id}}),prisma.skillEvidence.findMany({where:{studentId:s.id}}),prisma.skillTagSuggestion.findMany({where:{studentId:s.id}}),prisma.growthFocus.findMany({where:{studentId:s.id}}),prisma.growthReview.findMany({where:{studentId:s.id}}),prisma.skillRequest.findMany({where:{studentId:s.id}})]);growthMap={skills,evidence,suggestions,focus,reviews,requests}; }
+    catch(e){if(!(e instanceof Error&&'code' in e&&['P2021','P2022'].includes(String(e.code))))throw e;}
+    return { growthMap, opportunitySearches, pickRefresh, conversations, picks, opportunityFeedback, notifications, nudgeHistory, calendars, exportedAt: new Date().toISOString(), profile: { ...serializeStudent(s), accessCode: s.accessCode }, events, goals, portfolio, saved, proposals, activity: audits };
   });
 
   app.delete('/api/me', async (req, reply) => { const s = await requireStudent(req); await prisma.$transaction([

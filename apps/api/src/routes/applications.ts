@@ -15,7 +15,7 @@ export default async function routes(app: FastifyInstance) {
     const where = { studentId_opportunityId: { studentId: s.id, opportunityId: id } };
     if (!await prisma.savedOpportunity.findUnique({ where })) throw new HttpError(404, 'Application not found');
     await prisma.savedOpportunity.update({ where, data: { ...b, checklist: b.checklist && JSON.stringify(b.checklist) } });
-    await audit(s.id, 'student', 'Updated application tracker', id);
+    await audit(s.id, 'student', 'Updated application tracker', JSON.stringify({opportunityId:id,status:b.status,occurredOn:dkey(wallNow(s.timezone))}));
     return { ok: true };
   });
   app.post('/api/applications/:id/prep', async req => {
