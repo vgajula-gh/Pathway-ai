@@ -25,7 +25,7 @@ components:
             meaning: { type: string }
             example: { type: string }
         position: { type: integer, minimum: 1, description: Position in the practice cycle starting at today's word }
-        total: { type: integer, const: 36 }
+        total: { type: integer, const: 500 }
     NewsStory:
       type: object
       required: [id, topic, headline, summary, source, url, publishedAt]
@@ -620,7 +620,7 @@ paths:
   /api/words:
     get:
       summary: Daily word or extra curated vocabulary practice
-      description: Authenticated, read-only and uncached. Student-local daily base; wraps after 36 words. No AI usage or practice tracking.
+      description: Authenticated, read-only and uncached. Student-local daily base; wraps after 500 words. No AI usage or practice tracking.
       parameters: [{ name: offset, in: query, schema: { type: integer, minimum: 0, maximum: 100000, default: 0 } }]
       responses:
         '200': { description: Curated word and cycle position, content: { application/json: { schema: { $ref: '#/components/schemas/PracticeWord' } } } }

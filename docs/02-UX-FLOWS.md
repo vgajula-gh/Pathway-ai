@@ -81,7 +81,7 @@ Today card → "More for you" → topic chips (defaults from interests; student 
 
 Next story cycles available topic-matching articles. Refresh news explicitly checks fixed public publisher feeds from both the card and sheet; it does not ask a model to generate news. Show loading, cached, partial, failed and empty messages; retain prior real stories on failure. Feed refresh is shared/cached for 15 minutes, failed checks back off one minute. No newer article is promised when a publisher has nothing new. Production hides sample news.
 
-Next word loads another item from the 36-word curated set, with meaning/example and Hear it where supported. Label extra items Word practice and explain the set repeats after all words. Today’s word restores the daily selection. A background Timeline refresh does not reset practice; a new student-local day does. Both features work with AI disabled.
+Next word loads another item from the 500-word curated set, with meaning/example and Hear it where supported. Label extra items Word practice and explain the set repeats after all words. Today’s word restores the daily selection. A background Timeline refresh does not reset practice; a new student-local day does. Both features work with AI disabled.
 
 Writable Timeline rows end with a small minus button inside a 44px target. Tap → confirm named event (or entire recurring series) → delete → refresh both views/rings. Cancel writes nothing; failed deletion leaves the event shown with an error. Linked-calendar events have no delete button and retain the read-only source label.
 

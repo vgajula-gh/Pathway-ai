@@ -14,7 +14,7 @@ const click=async(name:string)=>act(async()=>{renderer.root.findAllByType('butto
 const story=(id:string)=>({id,topic:'Space',headline:'Publisher story '+id,summary:'A sourced summary',source:'NASA',url:'https://www.nasa.gov/article/'+id,publishedAt:'2030-01-07'});
 beforeEach(()=>{
   state.news={topics:['Space'],allTopics:['Space','Science'],custom:true,personal:true,stories:[story('one'),story('two')],top:story('one'),emptyTopics:[],updatedAt:'2030-01-07T12:00:00Z'};
-  state.api.mockReset().mockImplementation(async(path:string)=>path==='/api/news'?state.news:path.startsWith('/api/words')?{date:'2030-01-07',word:{word:'tenacious',pos:'adjective',meaning:'persistent',example:'A tenacious team.'},position:2,total:36}:{...state.news,refresh:{status:'refreshed'}});
+  state.api.mockReset().mockImplementation(async(path:string)=>path==='/api/news'?state.news:path.startsWith('/api/words')?{date:'2030-01-07',word:{word:'tenacious',pos:'adjective',meaning:'persistent',example:'A tenacious team.'},position:2,total:500}:{...state.news,refresh:{status:'refreshed'}});
 });
 afterEach(()=>{if(renderer)act(()=>renderer.unmount());vi.unstubAllGlobals();});
 it('lets students practice extra words, retain them during background updates and return to the daily word',async()=>{

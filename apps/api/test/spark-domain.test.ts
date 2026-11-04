@@ -30,15 +30,21 @@ describe('source-backed news feed metadata',()=>{
 });
 describe('vocabulary practice',()=>{
   it('offers a distinct word on every step before repeating the full curated set',()=>{
-    expect(WORDS).toHaveLength(36);expect(new Set(WORDS.map(w=>w[0])).size).toBe(WORDS.length);
+    expect(WORDS).toHaveLength(500);expect(new Set(WORDS.map(w=>w[0])).size).toBe(WORDS.length);
     const seen=Array.from({length:WORDS.length},(_,i)=>practiceWord(now,i).word.word);
     expect(new Set(seen).size).toBe(WORDS.length);expect(practiceWord(now,WORDS.length).word.word).toBe(seen[0]);
-    expect(practiceWord(now,1)).toMatchObject({position:2,total:36});
+    expect(practiceWord(now,1)).toMatchObject({position:2,total:500});
   });
   it('anchors the daily word to the supplied student-local calendar date',()=>{
     const local=wallNow('America/New_York',now);
     expect(practiceWord(local).date).toBe('2030-01-07');
     expect(practiceWord(local).word.word).not.toBe(practiceWord(now).word.word);
-    for(const word of WORDS)expect(word.every(s=>s.length>0)).toBe(true);
+    for(const [word,pos,meaning,example] of WORDS){
+      expect(word).toMatch(/^[a-z]+$/);
+      expect(['noun','verb','adjective','adverb','conjunction']).toContain(pos);
+      expect(meaning.length).toBeGreaterThanOrEqual(10);
+      expect(example.length).toBeGreaterThanOrEqual(20);
+      expect(example.toLowerCase()).toContain(word);
+    }
   });
 });

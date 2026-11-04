@@ -222,7 +222,11 @@ it('serves validated word practice without AI calls or writes',async()=>{
     const before=await db.aIUsage.count(),audit=await db.auditEvent.count();
     const daily=await app.inject({url:'/api/words',headers:headers()});expect(daily.statusCode).toBe(200);expect(daily.headers['cache-control']).toBe('no-store');
     const next=(await app.inject({url:'/api/words?offset=1',headers:headers()})).json();
-    expect(next.word.word).not.toBe(daily.json().word.word);expect(next.total).toBe(36);
+    expect(next.word.word).not.toBe(daily.json().word.word);expect(next.total).toBe(500);
+    const last=(await app.inject({url:'/api/words?offset=499',headers:headers()})).json();
+    expect(last.position).toBe(500);expect(last.word.word).not.toBe(daily.json().word.word);
+    const repeat=(await app.inject({url:'/api/words?offset=500',headers:headers()})).json();
+    expect(repeat.position).toBe(1);expect(repeat.word).toEqual(daily.json().word);
     expect((await app.inject({url:'/api/today',headers:headers()})).json().word).toEqual(daily.json().word);
     for(const offset of ['-1','1.5','no','100001'])expect((await app.inject({url:'/api/words?offset='+offset,headers:headers()})).statusCode).toBe(422);
     expect((await app.inject({url:'/api/words'})).statusCode).toBe(401);
