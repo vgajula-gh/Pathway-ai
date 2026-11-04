@@ -8,3 +8,9 @@ In this workspace, `REPLIT_ENVIRONMENT` reported `production` while the Prisma c
 **Why:** The label caused a safe development-schema sync to be blocked, while explicit development-database introspection confirmed the connection target.
 
 **How to apply:** Prefer database operations with an explicit `environment: "development"` target when using Replit's database tools. Before using a shell command that relies on `DATABASE_URL`, verify it is the intended development connection without displaying the URL.
+
+The shell's `DATABASE_URL` and individual `PG*` connection settings can disagree; a PostgreSQL-looking URL is not proof that its database exists or is the managed development target.
+
+**Why:** The URL once referenced a nonexistent database while the existing `PG*` settings matched independently queried development data.
+
+**How to apply:** Confirm the connection against an explicit development query before migrations. If settings disagree, do not change persistent Secrets or select production to work around it.
