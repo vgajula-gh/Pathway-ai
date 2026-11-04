@@ -92,3 +92,7 @@ Buddy tab → orb home (starters, last conversation, earlier chats) → a starte
 Second person, warm, short. "I'll always check with you." Avoid pressure, rankings, guilt, streaks, admissions talk.
 
 You and Explore open the same optional preference editor. Saving reranks local catalog choices; a separate search action authorizes web work. Source excerpts and explicit checks accompany active partial candidates. Coming soon shows announced future openings outside active picks. The owner-only report and test job have no student navigation or exposed owner Secret. See [Scout](14-OPPORTUNITY-SCOUT.md).
+
+## Flow — Growth Map Drop 1
+
+You → Your Growth Map → Map/List → skill → supported stages/evidence → actual source and tags. Capture, completed milestone, completed Study or Interested/Applied actions open a confirmable skill review; up to three suggestions begin unselected, existing decisions remain editable. Manual catalog search and historical review batches work with AI off. Focus changes apply to the local month; hiding is reversible. Starting interests are explicitly not evidence. All-hidden and migration-unavailable states stay usable. See [full flow and test checklist](16-GROWTH-MAP.md).

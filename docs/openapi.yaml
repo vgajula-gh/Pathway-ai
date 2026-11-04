@@ -11,6 +11,75 @@ components:
     accessCode: { type: apiKey, in: header, name: x-access-code }
     devStudent: { type: apiKey, in: header, name: x-student-id }
   schemas:
+    GrowthCatalogSkill:
+      type: object
+      required: [id, name, area, synonyms]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        area: { type: string }
+        synonyms: { type: array, items: { type: string } }
+    GrowthSkillSignal:
+      allOf:
+        - { $ref: '#/components/schemas/GrowthCatalogSkill' }
+        - type: object
+          properties:
+            hidden: { type: boolean }
+            focus: { type: boolean }
+            count: { type: integer, minimum: 0, description: Grouped self-reported evidence; never an ability score }
+            recent: { type: integer, minimum: 0 }
+            lastActivity: { type: [string, 'null'], format: date }
+            reached: { type: array, items: { enum: [Learn, Build, Apply, Present, Compete] } }
+            highest: { enum: [null, Learn, Build, Apply, Present, Compete] }
+            next: { enum: [null, Learn, Build, Apply, Present, Compete] }
+            thisMonth: { type: integer, minimum: 0 }
+            previousAverage: { type: number, minimum: 0 }
+            growing: { type: boolean }
+    GrowthTag:
+      type: object
+      required: [skillId]
+      properties:
+        skillId: { type: string, maxLength: 80 }
+        stage: { enum: [null, Learn, Build, Apply, Present, Compete], description: Null for interest-only items; omitted uses the supported source default }
+    GrowthActivity:
+      type: object
+      properties:
+        key: { type: string }
+        type: { enum: [portfolio, milestone, study, application] }
+        id: { type: string }
+        title: { type: string }
+        date: { type: [string, 'null'], format: date }
+        kind: { type: string }
+        note: { type: string }
+        eligible: { type: boolean, description: Whether the current source can support completed evidence }
+        defaultStage: { enum: [null, Learn, Build, Apply, Present, Compete] }
+        allowedStages: { type: array, items: { enum: [Learn, Build, Apply, Present, Compete] } }
+        reviewed: { type: boolean }
+        tags: { type: array, items: { $ref: '#/components/schemas/GrowthTag' } }
+        suggestions: { type: array, maxItems: 3, items: { type: string } }
+        reflection: { type: string, description: Owned source detail only; never passed to AI in Drop 1 }
+        original: { type: object, description: Selected owned source facts in the detail endpoint }
+    GrowthMap:
+      type: object
+      properties:
+        date: { type: string, format: date }
+        month: { type: string, pattern: '^\d{4}-\d{2}$' }
+        skills: { type: array, items: { $ref: '#/components/schemas/GrowthSkillSignal' } }
+        hidden: { type: array, items: { $ref: '#/components/schemas/GrowthSkillSignal' } }
+        connections:
+          type: array
+          items:
+            type: object
+            properties:
+              a: { type: string }
+              b: { type: string }
+              count: { type: integer, minimum: 1 }
+        activityCount: { type: integer, minimum: 0 }
+        reviewCount: { type: integer, minimum: 0 }
+        suggestedCount: { type: integer, minimum: 0 }
+        focusSkillId: { type: [string, 'null'] }
+        interests: { type: array, items: { type: string } }
+
     PracticeWord:
       type: object
       required: [date, word, position, total]
@@ -418,6 +487,132 @@ components:
             factors: { type: array, items: { $ref: '#/components/schemas/Factor' } }
 security: [{ accountSession: [] }, { devStudent: [], accessCode: [] }]
 paths:
+  /api/growth-map:
+    get:
+      summary: Private deterministic Growth Map snapshot (Drop 1)
+      description: Authenticated, no-store, read-only and AI-free. Missing feature tables return a contained 503.
+      responses:
+        '200': { description: Student-local snapshot, content: { application/json: { schema: { $ref: '#/components/schemas/GrowthMap' } } } }
+        '401': { description: Student sign-in required }
+        '503': { description: Growth Map schema not ready; existing features remain available }
+  /api/growth-map/catalog:
+    get:
+      summary: Versioned public skill catalog for an authenticated student
+      responses:
+        '200':
+          description: Seventy skills, six areas and catalog version
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  version: { type: integer }
+                  areas: { type: array, items: { type: string } }
+                  skills: { type: array, items: { $ref: '#/components/schemas/GrowthCatalogSkill' } }
+  /api/growth-map/activities:
+    get:
+      summary: Review owned existing activities in bounded batches
+      parameters:
+        - { name: offset, in: query, schema: { type: integer, minimum: 0, default: 0 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 20, default: 10 } }
+        - { name: all, in: query, schema: { enum: ['true', 'false'], default: 'false' } }
+      responses:
+        '200':
+          description: Source previews plus total, offset, limit and all
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/GrowthActivity' } }
+                  total: { type: integer }
+                  offset: { type: integer }
+                  limit: { type: integer }
+                  all: { type: boolean }
+        '422': { description: Invalid pagination }
+  /api/growth-map/activities/{type}/{id}:
+    parameters:
+      - { name: type, in: path, required: true, schema: { enum: [portfolio, milestone, study, application] } }
+      - { name: id, in: path, required: true, schema: { type: string, maxLength: 200 } }
+    get:
+      summary: Open an actual owned source and its tag decisions
+      responses:
+        '200': { description: Live source detail, content: { application/json: { schema: { $ref: '#/components/schemas/GrowthActivity' } } } }
+        '404': { description: Missing, unavailable or non-owned activity }
+    post:
+      summary: Explicitly confirm or remove this source's skill tags
+      description: Atomic, audited and idempotent. Rejected suggestions stay rejected unless explicitly reselected. No AI call. Empty tags marks reviewed/removes prior tags. Applied history requires an actual nonfuture date when unknown.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tags]
+              properties:
+                tags: { type: array, maxItems: 10, items: { $ref: '#/components/schemas/GrowthTag' } }
+                occurredOn: { type: string, format: date }
+                linkedMilestoneId: { type: [string, 'null'], description: Own completed milestone for a portfolio capture; null removes the explicit same-activity link }
+      responses:
+        '200': { description: Confirmed and audited; reload map to see live computed quantities }
+        '404': { description: Missing or non-owned activity }
+        '422': { description: Invalid tags, stage, catalog skill, date or milestone link }
+  /api/growth-map/skills/{id}:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string, maxLength: 80 } }]
+    get:
+      summary: Personal skill signal, supported ladder, grouped evidence and interest-source links
+      responses:
+        '200': { description: Skill, ladder, live evidence sources, interestSources and connections }
+        '404': { description: Skill does not belong to this student }
+    patch:
+      summary: Correct personal skill assignment/area or hide and restore it
+      description: Never edits the global catalog. Merges duplicate source evidence on reassignment. Hiding clears current focus.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              minProperties: 1
+              properties:
+                hidden: { type: boolean }
+                area: { enum: [STEM, Engineering & tech, Business, Creative, Leadership & service, Communication] }
+                replacementSkillId: { type: string, maxLength: 80 }
+      responses:
+        '200': { description: Personal association changed and audited }
+        '404': { description: Skill does not belong to this student }
+        '422': { description: Invalid correction }
+  /api/growth-map/focus:
+    post:
+      summary: Choose or clear one visible confirmed skill for this local month
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [skillId]
+              properties:
+                skillId: { type: [string, 'null'], maxLength: 80 }
+      responses:
+        '200': { description: Single monthly focus updated atomically and audited }
+        '422': { description: Skill is missing, hidden or not confirmed }
+  /api/growth-map/skill-requests:
+    post:
+      summary: Store a missing skill request for owner review
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, minLength: 2, maxLength: 80 }
+      responses:
+        '200': { description: Request ID/status; no catalog change or external message }
+        '422': { description: Invalid name or already-known skill/synonym }
+
   /api/notifications:
     get:
       responses:

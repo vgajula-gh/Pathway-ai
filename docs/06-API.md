@@ -172,3 +172,21 @@ The default is two funded research batches with up to five web tools per request
 Discovery responses may include `retry:{available,nextAvailableAt}` for failed/empty groups. Explicit retry waits one hour with three unsuccessful group attempts per UTC day. Neither failed nor empty results debit the student's successful-search slot. Earlier current-cycle empty charges restore once with an audit event; paid counters remain intact. Library reuse bypasses paid-work cooldowns/caps.
 
 Student diagnostics add nullable `webSearches`, `inputTokens`, `outputTokens`, `estimatedCostUsd` and `verifiedCandidates`. These report observed metadata; absent historical values remain null. Owner diagnostics add per-call observed tools/tokens, stored estimates, mode, source outcomes and monthly spending including pending reservations. The owner live test queues one public candidate and reports `maxProviderRequests:1` in evidence-first mode (up to five tool calls within that request), or 2 with optional extraction; configuration/fixture modes remain free, and reads never start provider work. See [sourcing](08-OPPORTUNITY-AND-NEWS-SOURCING.md) for estimate caveats and unchanged source/privacy/approval rules.
+
+## Growth Map Drop 1
+
+All paths require the current student identity and return `Cache-Control: no-store`. No GET writes, provider requests or vector operations. Feature-local missing-table/column failures return 503 without affecting session/Today. Catalog bootstrap is public data only and tolerates pending feature tables.
+
+| Method | Path | Contract |
+|---|---|---|
+| GET | `/api/growth-map/catalog` | Version, six areas and 70 stable catalog skills/synonyms |
+| GET | `/api/growth-map` | Student-local date/month, visible/hidden skill signals, shared-activity connections, distinct activity count, review/suggestion counts, focus and starting interests |
+| GET | `/api/growth-map/activities?offset=0&limit=10&all=false` | Paged source previews; limit 1–20; all=true includes reviewed items |
+| GET | `/api/growth-map/activities/:type/:id` | Owned live source, default/supported stages, decisions/suggestions, actual date and selected original source details |
+| POST | `/api/growth-map/activities/:type/:id` | `{tags:[{skillId,stage?}],occurredOn?,linkedMilestoneId?:string|null}`; tags max 10, distinct catalog IDs, null stage only for interest-only sources. Empty selection explicitly reviews/removes that source's tags. Application history without a known date requires a real nonfuture occurredOn. Optional link is only a student's own completed milestone and a portfolio source; null unlinks. Atomic confirmation, deduplication and audit |
+| GET | `/api/growth-map/skills/:id` | Personal signal, reached/next ladder, grouped live evidence with source links and interest-only source links |
+| PATCH | `/api/growth-map/skills/:id` | `{hidden?,area?,replacementSkillId?}`; personal correction/merge only, never global catalog edits |
+| POST | `/api/growth-map/focus` | `{skillId:string|null}`; one visible confirmed focus per local month; null clears |
+| POST | `/api/growth-map/skill-requests` | `{name}` 2–80 chars; stores an idempotent pending owner-review request; known names/synonyms return 422 |
+
+Source types: portfolio, milestone, study, application. Experience stages: Learn, Build, Apply, Present, Compete. Validation failures return 422; missing/non-owned sources or skills return 404; missing identity returns 401. Counts do not imply measured ability. Rules, dates, source lifecycle, weekly grouping, explicit same-activity links and hidden behavior are defined in [16-GROWTH-MAP.md](16-GROWTH-MAP.md). Export adds the student's growth records; account deletion cascades private rows while retaining the shared catalog. Existing application tracker audits now include the status/local date for future factual application evidence; no historical date is invented.

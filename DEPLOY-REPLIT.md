@@ -198,3 +198,16 @@ After merging/syncing, republish normally. These additions need no new Secrets, 
 - Click Refresh news to load real publisher articles for the selected topics. Next story browses them. The news sheet also offers Refresh news. No news API key is required. The app reads public NASA, BBC News/BBC Sport and ScienceDaily RSS/Atom feeds; your hosting environment must be able to reach their HTTPS endpoints. Repeated refreshes reuse a shared 15-minute cache; a failed source waits one minute before another fetch.
 - Sample news is hidden outside demo mode. If the real library is empty initially, click Refresh news. Unavailable publishers produce a clear message and preserve existing real articles; the app does not generate replacement headlines.
 - For a deployed check, sign in, choose topics, click Refresh news, then inspect the browser Network response for `POST /api/news/refresh`. Its `refresh` object reports public feed IDs, refreshed/cached/failed states and controlled reasons. `saved` counts stored/upserted articles and may include existing ones. `GET /api/news` only reads the library and never starts a refresh. Local fixture tests verify behavior but cannot establish live publisher connectivity on Replit.
+
+## Growth Map Drop 1: publish additions before testing
+
+This drop adds **seven new tables** and a public 70-skill catalog. It does not add new Secrets or replace existing profiles. Review the Publish database additions and keep existing production data. Do not select an overwrite/reset option.
+
+1. Merge the Growth Map Drop 1 PR and sync main into Replit.
+2. If development PostgreSQL needs the additions, run `npm run db:sync:replit` in the development workspace. That command must not target production.
+3. Publish and review/apply the production schema additions. Migration histories exist for SQLite and PostgreSQL; Replit's schema-only Publish path also gets the public skill rows from the normal startup seed. No student activity is automatically confirmed.
+4. Sign in and verify Today/Explore still load. Go to You → Your Growth Map. Capture an experience, review the suggested skills and explicitly confirm them. Test List, skill evidence, focus, hide/restore and source links.
+5. If Growth Map says setup is not ready, check Publishing logs/schema for its new tables. The module contains that error so existing session/Today routes remain usable; finish the schema update rather than clearing student data.
+6. Follow the full [Drop 1 owner checklist](docs/16-GROWTH-MAP.md). Insights, matching opportunities, monthly letters and charts arrive in separate drops. No AI budget is used here.
+
+To review requested catalog additions, the owner can inspect the new SkillRequest table in their database tooling. Requests remain pending until an owner makes a reviewed catalog/version update; submitting a request never changes another student's catalog.
