@@ -138,3 +138,8 @@ Acceptance and owner checks live in [16-GROWTH-MAP.md](16-GROWTH-MAP.md). Requir
 ## Growth Map Drop 2
 
 GM-15–19: validate grounded insight types/citations, persistent dismissals, hidden/changed sources, invalid provider output, weekly/manual limits, concurrent claims, quota/provider fallback, consent revocation, stage-specific non-expired library matches, proposal approval and export/cascade. Release verification must include PostgreSQL upgrade, read-only readiness before/after additions and signed-in phone/desktop smoke tests; build or /api/health alone is insufficient.
+
+
+## Growth Map Drop 3
+
+GM-20–23 acceptance covers local month/year boundaries, honest source counts, three-activity threshold, growing/next-stage evidence, exact story/citation validation, quiet/AI-off/capped/error fallback, concurrent monthly claims, idempotent verified portfolio saves without recursive evidence, deletion/export, proposal approval, archive isolation and six-month zero-filled history. Replit checks must validate the one-table upgrade and drop1Ready/drop2Ready/drop3Ready in development and production; test phone/desktop signed-in flows before launch.

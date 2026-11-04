@@ -11,6 +11,42 @@ components:
     accessCode: { type: apiKey, in: header, name: x-access-code }
     devStudent: { type: apiKey, in: header, name: x-student-id }
   schemas:
+    GrowthLetter:
+      type: object
+      properties:
+        month: { type: string, pattern: '^\d{4}-(0[1-9]|1[0-2])$' }
+        label: { type: string }
+        quiet: { type: boolean }
+        activityCount: { type: integer, minimum: 0 }
+        counts:
+          type: object
+          properties:
+            stepsFinished: { type: integer, minimum: 0 }
+            experiencesCaptured: { type: integer, minimum: 0 }
+            opportunitiesSaved: { type: integer, minimum: 0 }
+            opportunitiesApplied: { type: integer, minimum: 0 }
+        skillsGrown:
+          type: array
+          items: { type: object, properties: { id: { type: string }, name: { type: string }, count: { type: integer } } }
+        idea:
+          type: object
+          properties:
+            title: { type: string }
+            skillId: { type: [string, 'null'] }
+            stage: { enum: [null, Learn, Build, Apply, Present, Compete] }
+        text: { type: string, description: Grounded story under 120 words, or a quiet-month note }
+        mode: { enum: [quiet, ai, summary] }
+        status: { enum: [empty, quiet, summary, ready, generating, limited, failed, invalid, updated] }
+        message: { type: string }
+        generatedAt: { type: [string, 'null'], format: date-time }
+        needsPrepare: { type: boolean }
+        retryAt: { type: [string, 'null'], format: date-time }
+        portfolioId: { type: [string, 'null'] }
+        savedCopyChanged: { type: boolean }
+        basedOn:
+          type: array
+          maxItems: 6
+          items: { type: object, properties: { type: { enum: [portfolio, milestone, study, application] }, id: { type: string }, title: { type: string }, date: { type: string, format: date } } }
     GrowthInsightCard:
       type: object
       properties:
@@ -538,13 +574,109 @@ components:
             factors: { type: array, items: { $ref: '#/components/schemas/Factor' } }
 security: [{ accountSession: [] }, { devStudent: [], accessCode: [] }]
 paths:
+  /api/growth-map/letters:
+    get:
+      summary: Read the latest completed student-local month and owned archive months; no provider calls or writes
+      responses:
+        '200':
+          description: Latest revalidated report and descending archive months
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  latest: { $ref: '#/components/schemas/GrowthLetter' }
+                  months: { type: array, items: { type: string } }
+                  archive: { type: array, items: { type: object } }
+        '503': { description: Letter setup pending; other Growth Map features remain available }
+  /api/growth-map/letters/{month}:
+    get:
+      summary: Read an owned archived or latest completed monthly letter with live facts
+      parameters:
+        - { name: month, in: path, required: true, schema: { type: string, maxLength: 7 } }
+      responses:
+        '200': { description: Private current letter/summary, content: { application/json: { schema: { $ref: '#/components/schemas/GrowthLetter' } } } }
+        '404': { description: No owned archive for that older month }
+        '422': { description: Invalid or not-yet-completed student-local month }
+  /api/growth-map/letters/{month}/prepare:
+    post:
+      summary: Prepare a quiet/AI-off summary or one accepted metered AI attempt per student/report month
+      parameters:
+        - { name: month, in: path, required: true, schema: { type: string, maxLength: 7 } }
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: false }
+      responses:
+        '200': { description: Current summary/letter with contained quota/provider status, content: { application/json: { schema: { $ref: '#/components/schemas/GrowthLetter' } } } }
+        '404': { description: No owned archive for that older month }
+        '422': { description: Invalid month or input }
+        '503': { description: Letter schema unavailable }
+  /api/growth-map/letters/{month}/save:
+    post:
+      summary: Explicit idempotent verified save as one private portfolio reflection; creates no skill evidence
+      parameters:
+        - { name: month, in: path, required: true, schema: { type: string, maxLength: 7 } }
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: false }
+      responses:
+        '200':
+          description: Saved or already saved; portfolio copy may be deleted separately
+          content:
+            application/json:
+              schema: { type: object, properties: { ok: { type: boolean }, portfolioId: { type: string }, alreadySaved: { type: boolean } } }
+        '404': { description: No owned archive for that older month }
+        '422': { description: Invalid month or input }
+  /api/growth-map/letters/{month}/plan:
+    post:
+      summary: Propose the monthly idea as one goal and step; requires the existing approval flow
+      parameters:
+        - { name: month, in: path, required: true, schema: { type: string, maxLength: 7 } }
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: false }
+      responses:
+        '200': { description: Ordinary reviewable proposal; no goal or event saved yet, content: { application/json: { schema: { $ref: '#/components/schemas/Proposal' } } } }
+        '404': { description: No owned archive for that older month }
+        '422': { description: Invalid month or input }
+  /api/growth-map/skills/{id}/history:
+    get:
+      summary: Read six student-local months of live qualified evidence, including current partial month and zero months
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, maxLength: 80 } }
+      responses:
+        '200':
+          description: No AI or new history table used
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  skillId: { type: string }
+                  months:
+                    type: array
+                    minItems: 6
+                    maxItems: 6
+                    items: { type: object, properties: { month: { type: string }, label: { type: string }, count: { type: integer, minimum: 0 }, current: { type: boolean } } }
+        '404': { description: Skill hidden or not owned }
+  /internal/growth-map/letters/run:
+    post:
+      summary: Owner-only bounded maintenance-aware monthly preparation, at most five due profiles per invocation
+      security: [{ jobsSecret: [] }]
+      responses:
+        '200': { description: Skipped lock/maintenance or bounded preparation count; AI caps and consent apply }
+        '401': { description: Invalid owner credentials }
+        '503': { description: Owner configuration or feature setup unavailable }
   /internal/growth-map/readiness:
     get:
       summary: Owner-only read-only validation of every Growth Map scalar column; no student records returned
       security: [{ jobsSecret: [] }]
       responses:
         '200':
-          description: All nine Growth Map tables/columns are queryable
+          description: All ten Growth Map tables/columns are queryable
           content:
             application/json:
               schema:
@@ -553,6 +685,7 @@ paths:
                   ready: { type: boolean }
                   drop1Ready: { type: boolean }
                   drop2Ready: { type: boolean }
+                  drop3Ready: { type: boolean }
                   checks: { type: array, items: { type: object, properties: { table: { type: string }, ready: { type: boolean }, issue: { type: [string, 'null'] } } } }
                   action: { type: string }
                   checkedAt: { type: string, format: date-time }

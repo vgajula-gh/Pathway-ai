@@ -63,3 +63,6 @@ These checks catch missing feature setup; they do not automatically promote a Re
 - Chromium against the production-mode API/PostgreSQL verifies 320/390/1024px layouts across all three themes, 44px insight controls, source links, exact program opening in Explore, goal approval to VERIFIED, dismissal/manual refresh and student isolation without page errors.
 - API checks exercise provider failure, exhausted quota, consent off and existing core routes. Recovery checks cover a raised cap after cooldown and an abandoned refresh lease.
 - Provider behavior is tested with mocks and a local HTTP fixture through the real Ollama/OpenAI-compatible adapter. This establishes the workflow/contracts, not availability or quality of a live paid model. No paid provider calls or production/student records were used.
+
+
+With Drop 3 installed, readiness additionally checks GrowthLetter (ten tables total) and reports drop3Ready. See [monthly letters and history](18-GROWTH-LETTERS.md); the nine-table counts above describe Drop 2 validation.

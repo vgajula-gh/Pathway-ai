@@ -84,3 +84,8 @@ No new agent tool or AI call is added. Skill suggestions are deterministic catal
 ## Growth Map Drop 2
 
 Growth insights use the provider-neutral JSON interface for bounded factual phrasing/selection only. Every displayed formulation, cited ID and action is validated against deterministic candidates. No new data-writing agent tool is introduced. Goal actions call the existing proposal service; no goals, bookings, applications or messages are executed by insight generation. Hidden/dismissed data and raw reflections never enter prompts.
+
+
+## Growth Map Drop 3
+
+The monthly provider receives aggregate counts, visible grown skills, a deterministic idea and permitted factual stories/opaque citations, not identity/raw activity titles/full reflections. Only an exact grounded formulation under 120 words can be shown. AI generation cannot save portfolio entries or goals: Save is a separate explicit student action; Plan it uses the existing proposal/approval service. Saved summaries cannot be retagged into new achievements.

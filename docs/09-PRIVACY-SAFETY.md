@@ -34,3 +34,8 @@ Scout optional goals/project/time/max-cost preferences are private local ranking
 ## Growth Map Drop 2
 
 Drop 2 sends only a compact visible-skills summary, public program metadata, opaque evidence IDs and approved factual options. Student identity, raw activity titles, location/school and full reflections are excluded. Cache/dismissals are private, exported and cascade-deleted. Revoked consent removes AI cards and blocks new generation; cached facts are revalidated on reads. No vector or hosted-tracing export is added.
+
+
+## Growth Map Drop 3
+
+Monthly letters, attempt state and portfolio pointers are student-owned, exported and cascade-deleted. Source changes/hiding invalidate live cached prose; consent revocation blocks in-flight AI storage and uses deterministic summaries. Explicit portfolio copies are private initially and remain student-owned snapshots until deleted. No private data is written to Pinecone/hosted tracing, and no sharing, email or push delivery is added.

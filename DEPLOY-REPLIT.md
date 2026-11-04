@@ -1,8 +1,11 @@
 # Publish Pathway AI on Replit
 
+**Current Growth Map Drop 3 update:** apply migration `20261108010000_growth_letters` to development, then review/apply the **new GrowthLetter table** during Publish while preserving records. Run the read-only `npm run check:growth` in each environment: ten tables and drop1Ready/drop2Ready/drop3Ready should all be ready. [Drop 3 checklist](docs/18-GROWTH-LETTERS.md). No new required Secret is needed.
+
+
 For the expiration-only Explore follow-up, there are **no new schema changes, Secrets or resets**. Merge/sync main, run `npm ci --include=dev`, build and publish. Earlier Scout schema additions must already be applied. Open Explore after publish: existing stored rejected links may recover without a new paid search. Only run another search if needed; unconfirmed links should remain visible even if extraction fails. See [the behavior and test checklist](docs/15-EXPLORE-SIMPLIFICATION.md).
 
-These steps work for a new invitation-only pilot or an update to an existing app. Keep your existing database, sign-in secret and calendar secret. The earlier Scout migrations must already be applied. This follow-up adds no database fields/tables and does not reset profiles, applications or paid usage.
+These steps work for a new invitation-only pilot or an update to an existing app. Keep your existing database, sign-in secret and calendar secret. The earlier Scout migrations must already be applied. Apply the schema additions required by the specific release you are publishing. Growth Map releases have their own checklists below; do not reset profiles, applications or paid usage.
 
 ## 1. Get the code from GitHub
 
@@ -224,3 +227,12 @@ Drop 2 adds **GrowthInsightState** and **GrowthInsightDismissal** through migrat
 5. Verify Today/Explore/You, the map, evidence links, next steps, insight refresh/dismissal and a disposable goal proposal. Full [Drop 2 checklist](docs/17-GROWTH-INSIGHTS.md).
 
 AI insights need three confirmed activities. Map and next steps remain available with AI off; valid dated cached insights remain available during provider failures or exhausted caps. Insights refresh on the first due visit each week and at most once manually per student-local day. Matching existing programs does not trigger a paid web search.
+
+
+## Growth Map Drop 3: monthly letters and history
+
+This release adds one **GrowthLetter** table. It preserves all existing records. After development migration and build, `npm run check:growth` must report ten ready tables. During Publish, apply the new production table; verify production separately through owner tooling and `/internal/growth-map/readiness`.
+
+Optional `AI_MODEL_LETTER` selects a letter model; blank inherits `AI_MODEL_INSIGHTS` and the existing provider task default. Existing AI consent, AI_DAILY_LIMIT and AI_MONTHLY_LIMIT apply. A qualifying month uses at most one accepted AI attempt. Quiet months, charts and deterministic summaries need no AI call. No new mandatory Secret is added.
+
+Letters become available after each student-local month closes. The server processes bounded batches hourly while awake; Growth Map also catches up on visits. Replit Autoscale may sleep, so exact first-of-month scheduling without visits requires owner scheduler calls to POST `/internal/growth-map/letters/run` with the existing JOBS_SECRET Bearer header. Nothing sends email/push or configures an external scheduler automatically. See [Drop 3 rollout and test steps](docs/18-GROWTH-LETTERS.md).
