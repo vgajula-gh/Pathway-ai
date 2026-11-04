@@ -195,3 +195,8 @@ Source types: portfolio, milestone, study, application. Experience stages: Learn
 ## Growth Map Drop 2
 
 Authenticated no-store endpoints: GET /api/growth-map/insights; POST /api/growth-map/insights/refresh {mode:automatic|manual}; POST /api/growth-map/insights/:id/dismiss; GET /api/growth-map/skills/:id/next; POST /api/growth-map/skills/:id/goal {insightId?}. Goal returns a standard proposal, with existing approval endpoints authoritative. Owner-only GET /internal/growth-map/readiness uses JOBS_SECRET Bearer auth and reports zero-row column readiness (200/503). Export adds growthInsights; pending Drop 2 setup does not remove Drop 1 export. Exact contracts in OpenAPI and [Drop 2](17-GROWTH-INSIGHTS.md).
+
+
+## Growth Map Drop 3
+
+Drop 3 adds GET /api/growth-map/letters, GET /api/growth-map/letters/:month, POST suffixes /prepare, /save and /plan (strict empty body), and GET /api/growth-map/skills/:id/history. Student auth/no-store applies. Only owned existing archives or the previous local month are exposed; invalid/current/future months return 422. /plan returns an ordinary proposal, /save is explicit/idempotent/verified, /prepare contains AI failure/cap statuses. Owner POST /internal/growth-map/letters/run is bounded to five profiles; the read-only readiness endpoint/CLI now checks ten tables and reports drop3Ready separately. See OpenAPI and [Drop 3](18-GROWTH-LETTERS.md).

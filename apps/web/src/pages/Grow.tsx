@@ -1,3 +1,4 @@
+import SavedGrowthLetter from '../components/growth-map/SavedGrowthLetter';
 import SkillTagReview from '../components/growth-map/SkillTagReview';
 import ReviewSheet from '../components/growth-map/ReviewSheet';
 import { useEffect,useState } from 'react';
@@ -11,12 +12,13 @@ const SKILLS = ['Teamwork', 'Communication', 'Leadership', 'Problem solving', 'C
 export default function Grow({ me, ask, go, startCapture=false, onCaptureOpened }: { me: Student; ask: (t: string) => void; go: (t: Tab) => void;startCapture?:boolean;onCaptureOpened?:()=>void }) {
   const goals = useLoad(() => api<Goal[]>('/api/goals'), []), pf = useLoad(() => api<PortfolioEntry[]>('/api/portfolio'), []);
   const [goalId, setGoalId] = useState<string | null>(null), [newGoal, setNewGoal] = useState(false), [capture, setCapture] = useState<null | { title?: string; linkedMilestoneId?:string }>(null), [captured, setCaptured] = useState<(PortfolioEntry & {linkedMilestoneId?:string}) | null>(null);
+  const [savedLetter,setSavedLetter]=useState<PortfolioEntry|null>(null);
   const [tagReview,setTagReview]=useState<{type:'milestone';id:string}|null>(null);
   useEffect(()=>{if(startCapture){setCapture({});onCaptureOpened?.();}},[startCapture]);
   const [q, setQ] = useState(''), [answer, setAnswer] = useState(''), [coaching, setCoaching] = useState(false);
   if (!goals.data || !pf.data) return <div className="splash"><Typing /></div>;
   const active = goals.data.filter(g => g.status !== 'done'), monthAgo = Date.now() - 30 * 864e5;
-  const steps = goals.data.flatMap(g => g.milestones).filter(m => m.status === 'done').length, logged = pf.data.filter(p => +new Date(p.date) > monthAgo).length;
+  const steps = goals.data.flatMap(g => g.milestones).filter(m => m.status === 'done').length, logged = pf.data.filter(p => p.type!=='growth_letter'&&+new Date(p.date) > monthAgo).length;
   const story = steps || logged ? `So far you’ve finished ${steps} step${steps === 1 ? '' : 's'}${logged ? ` and captured ${logged} experience${logged === 1 ? '' : 's'} this month` : ''}.` : 'Your story starts with one small step. Pick a goal, or capture something you’ve already done.';
   const goal = goals.data.find(g => g.id === goalId);
   const pct = (g: Goal) => g.status === 'done' ? 1 : g.milestones.length ? g.milestones.filter(m => m.status === 'done').length / g.milestones.length : 0;
@@ -34,11 +36,12 @@ export default function Grow({ me, ask, go, startCapture=false, onCaptureOpened 
         <textarea className="field" style={{ marginTop: 12 }} value={q} onChange={e => setQ(e.target.value)} placeholder="e.g. How do Python loops work?" aria-label="Question" />
         <div className="acts"><button className="btn fill" disabled={coaching || !me.aiConsent} onClick={coach}>{coaching ? 'Explaining…' : 'Explain'}</button></div>{answer && <div className="answer">{answer}</div>}</div></div>
       <div className="sec"><div className="sec-h"><h2>Portfolio</h2><button className="link" onClick={() => setCapture({})}>Capture</button></div>
-        {pf.data.length ? <><div className="rows">{pf.data.map(x => <div className="r" key={x.id}><span className="emo">🏅</span><span className="b"><span className="t">{x.title}</span><span className="s" style={{ display: 'block' }}>{x.type} · {fmtDay(x.date)} · {x.visibility === 'shared' ? 'Shared with family' : 'Private'}</span></span>
+        {pf.data.length ? <><div className="rows">{pf.data.map(x => <div className="r" key={x.id}><span className="emo">{x.type==='growth_letter'?'📝':'🏅'}</span><span className="b">{x.type==='growth_letter'?<button className="link" onClick={()=>setSavedLetter(x)}>{x.title}</button>:<span className="t">{x.title}</span>}<span className="s" style={{ display: 'block' }}>{x.type==='growth_letter'?'Reflection':x.type} · {fmtDay(x.date)} · {x.visibility === 'shared' ? 'Shared with family' : 'Private'}</span></span>
           <button className="link" onClick={async () => { await api(`/api/portfolio/${x.id}`, { method: 'PATCH', body: { visibility: x.visibility === 'shared' ? 'private' : 'shared' } }); pf.reload(); }}>{x.visibility === 'shared' ? 'Make private' : 'Share'}</button></div>)}</div>
           <button className="link" style={{ marginTop: 12 }} onClick={() => download('/api/me/export', 'pathway-data.json')}>Export</button></>
           : <button className="card tap" onClick={() => setCapture({})}><b>Capture an experience</b><p className="muted small">Volunteered, built something, competed? Reflect on it and see the skills you showed.</p></button>}</div>
 
+      {savedLetter&&<SavedGrowthLetter entry={savedLetter} onClose={()=>setSavedLetter(null)} onDeleted={()=>{setSavedLetter(null);pf.reload();}}/>}
       {goal && !tagReview && <Sheet onClose={() => setGoalId(null)}>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '4px 0 14px' }}><Ring pct={pct(goal)} color="var(--peach)" size={120} width={8}>{Math.round(pct(goal) * 100)}%</Ring><h2 className="serif" style={{ fontSize: 26, marginTop: 12, textAlign: 'center' }}>{goal.title}</h2></div>
         {goal.milestones.length > 0 && <div className="card" style={{ padding: '4px 12px' }}>{goal.milestones.map(m => <div key={m.id} className={`tl-i ${m.status === 'done' ? 'done' : ''}`} style={{ gridTemplateColumns: '30px 1fr auto' }}>

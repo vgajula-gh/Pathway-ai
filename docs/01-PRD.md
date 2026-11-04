@@ -82,3 +82,8 @@ Growth Map is a separate private screen in You, connecting student-confirmed act
 ## Growth Map Drop 2
 
 GM-15–19: up to three grounded insight types with tappable Based on evidence, persistent dismissal, one weekly automatic plus one manual refresh per local day, next-stage library matches and approval-only goal creation. Valid cache and the deterministic map/next steps remain available when AI is unavailable. See [Drop 2](17-GROWTH-INSIGHTS.md).
+
+
+## Growth Map Drop 3
+
+Monthly growth letters summarize the previous completed student-local month, with under-120-word grounded text, factual counts, skills with growing recorded activity and one optional approval-only plan. Under-three months receive a gentle note without AI. Explicit portfolio saves are private reflections, never new achievements. Six-month skill charts include zeros/current partial month. See [Drop 3](18-GROWTH-LETTERS.md).

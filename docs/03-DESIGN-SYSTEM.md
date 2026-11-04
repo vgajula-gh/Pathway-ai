@@ -48,3 +48,8 @@ Separate page with existing tokens, a 12-star constellation, area colors, Growin
 ## Growth Map Drop 2
 
 Insight cards use existing card/text/accent tokens, evidence links, a dated cache/status line and one main action. Not me has a distinct accessible name per insight type. Next-rung program cards label unconfirmed facts. New controls have 44px targets; no extra animation is introduced. Map/List remain available independently of insights.
+
+
+## Growth Map Drop 3
+
+Monthly reflections use existing card, serif/story and text tokens, a two-column recorded-count grid, explicit save/plan states and 44px controls. Six-month bars have numeric labels and a visible accessible month/evidence table including zeros and the partial current month. No animation is introduced; information is never color-only.

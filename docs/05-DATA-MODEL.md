@@ -82,3 +82,8 @@ Add shared Skill (70 versioned catalog IDs) and private StudentSkill, SkillEvide
 ## Growth Map Drop 2
 
 GrowthInsightState (one per student): JSON-string cache, generatedAt, automaticAt, manualDay, leaseToken/leaseUntil, retryAt and fixed status. GrowthInsightDismissal: studentId/signature composite key, type, createdAt. Both cascade with Student and export under growthInsights. No new Student scalar fields; migration 20261107010000_growth_insights adds two tables only. Cache stores grounded text/signatures, not reflection copies.
+
+
+## Growth Map Drop 3
+
+GrowthLetter has composite studentId/month key, JSON-string content/fingerprint, controlled status, attempt/generation/lease/cooldown timestamps, and unique nullable portfolioId with ON DELETE SET NULL plus savedFingerprint. It cascades on Student deletion and exports under growthLetters. Migration 20261108010000_growth_letters creates one table and its own indexes/foreign keys only. Existing Student/PortfolioEntry gain relations, no scalar columns. Saved entries use type growth_letter and are excluded from achievement/evidence counts.

@@ -46,3 +46,8 @@ A separate private module in You implements GM-1–14 from the Growth Map requir
 ## Growth Map Drop 2
 
 Growth Map Drop 2 adds evidence-linked private insight cards, persistent Not me feedback, cached metered weekly/manual refresh, deterministic next-stage program matches and approval-only goal proposals (GM-15–19). Letters/charts remain Drop 3. See [Drop 2](17-GROWTH-INSIGHTS.md).
+
+
+## Growth Map Drop 3
+
+GM-20–23 add monthly private letters/counts/ideas, quiet-month summaries, explicit portfolio reflection saves and six-month skill activity charts. First-of-month work is bounded while awake, with on-visit catch-up on Autoscale. See [Drop 3](18-GROWTH-LETTERS.md).

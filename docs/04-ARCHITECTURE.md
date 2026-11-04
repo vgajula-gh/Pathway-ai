@@ -162,3 +162,8 @@ Estimated-dollar reservations use anonymous month keys in existing AIUsage and r
 ## Growth Map Drop 2
 
 `domain/growth-insights.ts` owns signals, candidate qualification, exact-language/evidence validation and skill/stage matching. `growth-map/insights.ts` owns private cache, token leases, budget reservation, dismissal and ordinary proposal creation; vendor SDKs remain in `agent/llm`. GET is read-only; POST automatic/manual requests are atomically claimed. Two isolated tables avoid core Student scalar dependencies. A zero-row owner/CLI readiness probe checks all Growth Map columns without schema writes. See [Drop 2](17-GROWTH-INSIGHTS.md).
+
+
+## Growth Map Drop 3
+
+`domain/growth-letters.ts` owns student-local month math, factual counts, growth/next-stage rules, story validation and six-month history. `growth-map/letters.ts` owns private monthly claims/cache, quota reservation, explicit verified portfolio saves and ordinary goal proposals. One new table is isolated from core scalar reads. Monthly work runs in a bounded hourly maintenance-aware job while awake, with on-visit POST catch-up and a protected owner scheduler endpoint. No automatic DDL, external delivery, tracing or private vector write is added. See [Drop 3](18-GROWTH-LETTERS.md).

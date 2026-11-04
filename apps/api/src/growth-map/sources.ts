@@ -5,7 +5,7 @@ import {dkey,wallNow} from '../domain/time.js';
 import {validDate,sourceKey,STAGES,pastActivityDate,endedStudy,portfolioStage,milestoneStage,applicationStages,type GrowthSource} from '../domain/growth-map.js';
 export async function growthSources(db:Prisma.TransactionClient,student:{id:string;timezone:string},now=wallNow(student.timezone)):Promise<GrowthSource[]> {
   const [portfolio,goals,study,saved,audits]=await Promise.all([
-    db.portfolioEntry.findMany({where:{studentId:student.id}}),db.goal.findMany({where:{studentId:student.id},include:{milestones:true}}),
+    db.portfolioEntry.findMany({where:{studentId:student.id,type:{not:'growth_letter'}}}),db.goal.findMany({where:{studentId:student.id},include:{milestones:true}}),
     db.event.findMany({where:{studentId:student.id,type:'study',done:true,...(env.demoMode?{}:{source:{not:'sample'}})}}),
     db.savedOpportunity.findMany({where:{studentId:student.id,status:{not:'dismissed'}}}),
     db.auditEvent.findMany({where:{studentId:student.id,event:'Updated application tracker'},orderBy:{at:'asc'}})

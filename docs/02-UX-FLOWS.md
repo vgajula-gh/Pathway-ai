@@ -101,3 +101,8 @@ You → Your Growth Map → Map/List → skill → supported stages/evidence →
 ## Growth Map Drop 2
 
 You → Growth Map → What I’m noticing → Based on opens actual source, Not me persists dismissal, Make this a goal opens Review without saving a goal. Map/skill next-rung entries show up to two existing library programs and View in Explore opens the selected program. Automatic refresh occurs on a due visit; manual refresh is limited per student-local day. Failures remain in the insight area. See [Drop 2](17-GROWTH-INSIGHTS.md).
+
+
+## Growth Map Drop 3
+
+You → Growth Map → Read your growth letter → source links/counts → Plan it opens Review, or Save to portfolio verifies one private reflection. Past letters lists owned prepared months. Grow → Portfolio opens/deletes a saved copy with confirmation; the letter archive remains. Skill detail has a six-month chart and visible text table. AI errors/caps retain factual summaries. See [Drop 3](18-GROWTH-LETTERS.md).
