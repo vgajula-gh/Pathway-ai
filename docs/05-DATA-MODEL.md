@@ -77,3 +77,8 @@ Migration `20261105010000_opportunity_scout` adds only columns/tables/indexes in
 ## Growth Map Drop 1
 
 Add shared Skill (70 versioned catalog IDs) and private StudentSkill, SkillEvidence, SkillTagSuggestion, GrowthFocus, GrowthReview and SkillRequest. Composite keys prevent duplicate source/skill evidence and enforce one focus/month. Every private model cascades with Student; shared Skill remains. Source facts are read live through student-owned records; no reflection/title copy is stored in GrowthReview (only source-state hash, optional confirmed application date/milestone link). This avoids session scalar changes and stale evidence after source removal. JSON synonyms remain strings for SQLite/PostgreSQL portability. [Contract](16-GROWTH-MAP.md).
+
+
+## Growth Map Drop 2
+
+GrowthInsightState (one per student): JSON-string cache, generatedAt, automaticAt, manualDay, leaseToken/leaseUntil, retryAt and fixed status. GrowthInsightDismissal: studentId/signature composite key, type, createdAt. Both cascade with Student and export under growthInsights. No new Student scalar fields; migration 20261107010000_growth_insights adds two tables only. Cache stores grounded text/signatures, not reflection copies.

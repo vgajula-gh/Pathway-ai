@@ -28,4 +28,3 @@ ALTER TABLE "GrowthInsightState" ADD CONSTRAINT "GrowthInsightState_studentId_fk
 
 -- AddForeignKey
 ALTER TABLE "GrowthInsightDismissal" ADD CONSTRAINT "GrowthInsightDismissal_studentId_fkey" FOREIGN KEY ("studentId") REFERENCES "Student"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-

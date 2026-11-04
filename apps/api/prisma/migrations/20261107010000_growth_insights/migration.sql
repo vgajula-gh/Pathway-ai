@@ -22,4 +22,3 @@ CREATE TABLE "GrowthInsightDismissal" (
     PRIMARY KEY ("studentId", "signature"),
     CONSTRAINT "GrowthInsightDismissal_studentId_fkey" FOREIGN KEY ("studentId") REFERENCES "Student" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
-

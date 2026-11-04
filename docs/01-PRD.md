@@ -77,3 +77,8 @@ Opportunity Scout: optional private selection preferences, bounded catalog-first
 ## Growth Map Drop 1
 
 Growth Map is a separate private screen in You, connecting student-confirmed activities to skills and experience stages. Its first drop includes suggestions/manual tags, source-linked evidence, constellation/List, monthly focus, correction/hiding and starting states. Activity counts never imply measured ability. Existing Grow remains goals/captures. AI insights and monthly letters follow in separate drops. See [Growth Map](16-GROWTH-MAP.md).
+
+
+## Growth Map Drop 2
+
+GM-15–19: up to three grounded insight types with tappable Based on evidence, persistent dismissal, one weekly automatic plus one manual refresh per local day, next-stage library matches and approval-only goal creation. Valid cache and the deterministic map/next steps remain available when AI is unavailable. See [Drop 2](17-GROWTH-INSIGHTS.md).

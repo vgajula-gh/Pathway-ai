@@ -211,3 +211,16 @@ This drop adds **seven new tables** and a public 70-skill catalog. It does not a
 6. Follow the full [Drop 1 owner checklist](docs/16-GROWTH-MAP.md). Insights, matching opportunities, monthly letters and charts arrive in separate drops. No AI budget is used here.
 
 To review requested catalog additions, the owner can inspect the new SkillRequest table in their database tooling. Requests remain pending until an owner makes a reviewed catalog/version update; submitting a request never changes another student's catalog.
+
+
+## Growth Map Drop 2: check both databases
+
+Drop 2 adds **GrowthInsightState** and **GrowthInsightDismissal** through migration `20261107010000_growth_insights`. No existing records are reset and no required Secret is added. Optional `AI_MODEL_INSIGHTS` chooses a task-specific model; OpenAI defaults to `gpt-4.1-mini`, using the existing key, consent and AI caps.
+
+1. Sync main; apply development migrations with `npm run db:sync:replit`.
+2. Build, then run `npm run check:growth` against development PostgreSQL. This read-only check must report all nine Growth Map tables/columns ready. It does not fix a missing schema.
+3. Publish and review/apply **both new production tables**, keeping existing data. Development readiness does not mean production is ready.
+4. Check the running production database using the owner-protected `/internal/growth-map/readiness` endpoint (existing JOBS_SECRET as an Authorization Bearer header in owner tooling), or the read-only command in owner tooling configured for production. Never share the secret or put it in a URL.
+5. Verify Today/Explore/You, the map, evidence links, next steps, insight refresh/dismissal and a disposable goal proposal. Full [Drop 2 checklist](docs/17-GROWTH-INSIGHTS.md).
+
+AI insights need three confirmed activities. Map and next steps remain available with AI off; valid dated cached insights remain available during provider failures or exhausted caps. Insights refresh on the first due visit each week and at most once manually per student-local day. Matching existing programs does not trigger a paid web search.

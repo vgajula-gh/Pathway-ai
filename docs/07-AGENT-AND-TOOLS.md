@@ -79,3 +79,8 @@ Estimated discovery funds are reserved with shared request counters before paid 
 ## Growth Map Drop 1 boundary
 
 No new agent tool or AI call is added. Skill suggestions are deterministic catalog matches; confirmation, focus, hiding/correction and requests are explicit student UI actions, ownership-validated and audited. Future Make this a goal must reuse the existing propose → approve → revalidate → execute → verify flow. Private Growth Map records are never sent to the shared program vector index.
+
+
+## Growth Map Drop 2
+
+Growth insights use the provider-neutral JSON interface for bounded factual phrasing/selection only. Every displayed formulation, cited ID and action is validated against deterministic candidates. No new data-writing agent tool is introduced. Goal actions call the existing proposal service; no goals, bookings, applications or messages are executed by insight generation. Hidden/dismissed data and raw reflections never enter prompts.

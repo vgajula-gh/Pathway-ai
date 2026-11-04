@@ -157,3 +157,8 @@ Estimated-dollar reservations use anonymous month keys in existing AIUsage and r
 ## Growth Map Drop 1
 
 `domain/growth-map.ts` and `growth-map/catalog.ts`, `sources.ts`, `service.ts` keep tagging and all counts/dates/stages deterministic. Confirmations are student-scoped, atomic and idempotent; live sources revalidate stored associations on reads. The separate `GrowthMap` page opens from You without replacing Grow. Seven additive tables support catalog, private evidence/decisions/focus/review/requests; existing session scalars remain unchanged. Read failures from pending Growth Map migrations are contained, and export tolerates unavailable new tables. No provider or Pinecone request is added. See [contract](16-GROWTH-MAP.md).
+
+
+## Growth Map Drop 2
+
+`domain/growth-insights.ts` owns signals, candidate qualification, exact-language/evidence validation and skill/stage matching. `growth-map/insights.ts` owns private cache, token leases, budget reservation, dismissal and ordinary proposal creation; vendor SDKs remain in `agent/llm`. GET is read-only; POST automatic/manual requests are atomically claimed. Two isolated tables avoid core Student scalar dependencies. A zero-row owner/CLI readiness probe checks all Growth Map columns without schema writes. See [Drop 2](17-GROWTH-INSIGHTS.md).

@@ -96,3 +96,8 @@ You and Explore open the same optional preference editor. Saving reranks local c
 ## Flow — Growth Map Drop 1
 
 You → Your Growth Map → Map/List → skill → supported stages/evidence → actual source and tags. Capture, completed milestone, completed Study or Interested/Applied actions open a confirmable skill review; up to three suggestions begin unselected, existing decisions remain editable. Manual catalog search and historical review batches work with AI off. Focus changes apply to the local month; hiding is reversible. Starting interests are explicitly not evidence. All-hidden and migration-unavailable states stay usable. See [full flow and test checklist](16-GROWTH-MAP.md).
+
+
+## Growth Map Drop 2
+
+You → Growth Map → What I’m noticing → Based on opens actual source, Not me persists dismissal, Make this a goal opens Review without saving a goal. Map/skill next-rung entries show up to two existing library programs and View in Explore opens the selected program. Automatic refresh occurs on a due visit; manual refresh is limited per student-local day. Failures remain in the insight area. See [Drop 2](17-GROWTH-INSIGHTS.md).

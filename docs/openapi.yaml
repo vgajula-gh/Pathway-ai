@@ -11,6 +11,57 @@ components:
     accessCode: { type: apiKey, in: header, name: x-access-code }
     devStudent: { type: apiKey, in: header, name: x-student-id }
   schemas:
+    GrowthInsightCard:
+      type: object
+      properties:
+        id: { type: string, pattern: '^[a-f0-9]{64}$' }
+        type: { enum: [growing, strength, connection, next] }
+        text: { type: string, description: Under 35 words; approved factual formulation only }
+        skillIds: { type: array, items: { type: string } }
+        action: { enum: [evidence, goal, explore] }
+        basedOn:
+          type: array
+          maxItems: 6
+          items:
+            type: object
+            properties:
+              type: { enum: [portfolio, milestone, study, application] }
+              id: { type: string }
+              title: { type: string }
+              date: { type: string, format: date }
+              evidenceId: { type: string }
+    GrowthInsights:
+      type: object
+      properties:
+        cards: { type: array, maxItems: 3, items: { $ref: '#/components/schemas/GrowthInsightCard' } }
+        generatedAt: { type: [string, 'null'], format: date-time }
+        status: { enum: [disabled, empty, limited, failed, invalid, refreshing, ready] }
+        message: { type: string }
+        automaticDue: { type: boolean }
+        canRefresh: { type: boolean }
+        manualAvailableOn: { enum: [null, tomorrow] }
+        retryAt: { type: [string, 'null'], format: date-time, description: Short retry cooldown; client rechecks readiness afterward }
+    GrowthNextStep:
+      type: object
+      properties:
+        skillId: { type: string }
+        stage: { enum: [null, Learn, Build, Apply, Present, Compete] }
+        title: { type: [string, 'null'] }
+        message: { type: string }
+        opportunities:
+          type: array
+          maxItems: 2
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              name: { type: string }
+              url: { type: string, format: uri }
+              cost: { type: string }
+              format: { type: string }
+              deadline: { type: [string, 'null'], format: date }
+              verified: { type: boolean }
+              reason: { type: string }
     GrowthCatalogSkill:
       type: object
       required: [id, name, area, synonyms]
@@ -487,6 +538,82 @@ components:
             factors: { type: array, items: { $ref: '#/components/schemas/Factor' } }
 security: [{ accountSession: [] }, { devStudent: [], accessCode: [] }]
 paths:
+  /internal/growth-map/readiness:
+    get:
+      summary: Owner-only read-only validation of every Growth Map scalar column; no student records returned
+      security: [{ jobsSecret: [] }]
+      responses:
+        '200':
+          description: All nine Growth Map tables/columns are queryable
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ready: { type: boolean }
+                  drop1Ready: { type: boolean }
+                  drop2Ready: { type: boolean }
+                  checks: { type: array, items: { type: object, properties: { table: { type: string }, ready: { type: boolean }, issue: { type: [string, 'null'] } } } }
+                  action: { type: string }
+                  checkedAt: { type: string, format: date-time }
+        '401': { description: Owner credential missing or invalid }
+        '503': { description: Owner credential not configured or required table/columns unavailable; includes per-table checks for unavailable setup }
+  /api/growth-map/insights:
+    get:
+      summary: Read dated revalidated insight cache; never calls AI
+      responses:
+        '200': { description: Current private cache, consent/availability and refresh state, content: { application/json: { schema: { $ref: '#/components/schemas/GrowthInsights' } } } }
+        '503': { description: Feature setup pending; Drop 1 map and core routes remain available }
+  /api/growth-map/insights/refresh:
+    post:
+      summary: Claim an automatic weekly or manual daily refresh using existing AI allowances; retains valid cache on failure
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                mode: { enum: [automatic, manual], default: manual }
+      responses:
+        '200': { description: Current insight state; disabled/empty/limited/failed/invalid/refreshing are contained statuses, content: { application/json: { schema: { $ref: '#/components/schemas/GrowthInsights' } } } }
+        '422': { description: Invalid refresh mode }
+        '503': { description: Feature schema unavailable }
+  /api/growth-map/insights/{id}/dismiss:
+    post:
+      summary: Persist a private Not me dismissal for an owned cached insight signature
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, pattern: '^[a-f0-9]{64}$' } }
+      responses:
+        '200': { description: Dismissed; idempotent for this student }
+        '404': { description: No owned cached insight with that signature }
+        '422': { description: Invalid signature }
+  /api/growth-map/skills/{id}/next:
+    get:
+      summary: Deterministic next experience and up to two skill/stage program matches; no paid search or provider call
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, maxLength: 80 } }
+      responses:
+        '200': { description: Current next step and library matches, content: { application/json: { schema: { $ref: '#/components/schemas/GrowthNextStep' } } } }
+        '404': { description: Skill is not visible in this student's map }
+  /api/growth-map/skills/{id}/goal:
+    post:
+      summary: Create an ordinary goal-and-step proposal; changes require student approval
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, maxLength: 80 } }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                insightId: { type: string, pattern: '^[a-f0-9]{64}$' }
+      responses:
+        '200': { description: Reviewable AWAITING_APPROVAL proposal; no goal saved yet, content: { application/json: { schema: { $ref: '#/components/schemas/Proposal' } } } }
+        '404': { description: Skill is hidden or not owned }
+        '409': { description: Supplied insight was dismissed or changed }
+        '422': { description: No supported next stage or invalid input }
   /api/growth-map:
     get:
       summary: Private deterministic Growth Map snapshot (Drop 1)
