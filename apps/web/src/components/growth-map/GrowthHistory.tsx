@@ -1,0 +1,8 @@
+import {api} from '../../lib/api';
+import {useLoad} from '../ui';
+interface History {skillId:string;months:{month:string;label:string;count:number;current:boolean}[]}
+export default function GrowthHistory({id}:{id:string}) {
+  const {data:response,error,reload}=useLoad(()=>api<History>(`/api/growth-map/skills/${id}/history`),[id]);
+  const data=response&&Array.isArray(response.months)&&response.months.length===6?response:null,max=Math.max(1,...(data?.months.map(m=>m.count)??[]));
+  return <section className="sec growth-history" aria-label="Activity over time"><h3>Activity over time</h3><p className="note">Confirmed evidence per month. The current month is still in progress; counts describe recorded activity, not ability.</p>{(error||response&&!data)&&<p role="alert">Activity history is unavailable. <button className="link" onClick={reload}>Try again</button></p>}{!data&&!error&&!response&&<p role="status">Loading activity history…</p>}{data&&<><div className="growth-history-bars" aria-hidden="true">{data.months.map(m=><div className="growth-history-column" key={m.month}><span>{m.count}</span><div className="growth-history-track"><i style={{height:m.count?`${m.count/max*100}%`:'3px'}}/></div><span>{new Intl.DateTimeFormat('en-US',{month:'short'}).format(new Date(m.month+'-01T12:00:00'))}</span></div>)}</div><table className="growth-history-table"><caption className="sr-only">Recorded evidence over the last six months</caption><thead><tr><th scope="col">Month</th><th scope="col">Evidence</th></tr></thead><tbody>{data.months.map(m=><tr key={m.month}><th scope="row">{m.label}{m.current?' (so far)':''}</th><td>{m.count}</td></tr>)}</tbody></table></>}</section>;
+}
