@@ -1,8 +1,9 @@
 # 07 · Agent & Tool Contracts
 
+> Current execution paths, framework roles, permissions, data flows and limitations are consolidated in [End-to-end agentic architecture](04-ARCHITECTURE.md). This file retains tool contracts and implementation history; agent proposal-only writes are distinct from explicit student CRUD.
 Current Explore policy: [Explore simplification](15-EXPLORE-SIMPLIFICATION.md) supersedes older active-only/eligible/source-fresh admission, separate watchlist, cost-hint quotas and six-card visibility rules below. Only a confirmed past deadline hides a result. Other details remain warnings/ranking factors. SQL stores search links before enrichment; unreadable details produce visible unconfirmed results. Source evidence, privacy, proposals, knowledge scope and AI limits remain enforced. This simplification adds no schema migration.
 
-**One orchestrating agent ("Buddy")** with tool use on **Claude or OpenAI** (`LLM_PROVIDER`). The loop lives in each adapter (`apps/api/src/agent/llm/anthropic.ts`, `openai.ts`); `buddy.ts` supplies the prompt, history and tool executor. Max 6 tool rounds per turn. System prompt: `agent/prompts.ts`.
+**General Buddy** uses the configured **Anthropic, OpenAI or Ollama** adapter (`LLM_PROVIDER`). The adapters implement the provider tool loop; `buddy.ts` supplies its round bound, prompt, history and authenticated tool executor. Max 6 tool rounds per turn. System prompt: `agent/prompts.ts`. Separate Scout and program-question workflows are described in the architecture document.
 
 ## Tools (all deterministic code)
 | Tool | Input | Output | Notes |
@@ -10,10 +11,10 @@ Current Explore policy: [Explore simplification](15-EXPLORE-SIMPLIFICATION.md) s
 | get_schedule | from, to (≤21 days) | events, conflicts, per-day capacity, rules | recurrence expanded |
 | find_free_slots | from, to, minutes, count? | slots[] | inside study window; avoids commitments & downtime; ≤2/day; daily limit |
 | check_plan | sessions[] | {ok[], problems[]} | must be used before proposing calendar blocks |
-| search_opportunities | query? | results with factors + verified flag; excluded with reasons | hard exclusions first |
+| search_opportunities | query? | results with factors + verified flag; excluded with reasons | only confirmed past deadlines exclude; other mismatches remain checks |
 | get_learning_resources | topics[] | curated resources | only these URLs may be recommended |
 | search_knowledge | query (≤1000 chars), either opportunityId or scope=my_opportunities | grouped program facts from SQL + up to five official passages with citations | server-owned picks + Interested scope; reject client ID lists; max three searches/turn |
-| propose_actions | summary, rationale, actions[] | proposalId, status | **only write path**; zod-validated; calendar revalidated |
+| propose_actions | summary, rationale, actions[] | proposalId, status | **only agent mutation-request path**; zod-validated; calendar revalidated |
 
 ## Action types
 `add_event` · `move_event` (non-recurring) · `remove_event` · `add_goal {ref}` · `add_milestone {goalRef}` · `save_opportunity` · `add_portfolio_entry` · `add_application_requirements {opportunityId, checklist, deadline?, referenceHash}`. Reminders = `add_event` with `eventType:"reminder"`, 15 minutes.
@@ -25,10 +26,10 @@ Use tools for facts · never claim a change happened · protect downtime and lea
 Tool errors return `is_error: true` with a readable message (e.g., zod issues or calendar conflicts) so the model can correct and retry. If AI is disabled or consent is off, endpoints return 503/403 and the UI shows a clear state; deterministic features keep working.
 
 ## Provider parity
-Run the same golden conversations on both providers. Differences to watch: parallel tool calls, how tool errors are retried, JSON strictness, and image reading quality.
+Run the same golden conversations on every configured provider/model. Differences to watch: parallel tool calls, how tool errors are retried, JSON strictness, and image reading quality.
 
 ## Evals to add *(backlog)*
-Golden conversations for: exam + practice overlap (must not schedule over practice), ineligible grade (must not recommend), unknown deadline (must say confirm), homework request (must coach), "add it" without approval (must propose, not claim).
+Golden conversations for: exam + practice overlap (must not schedule over practice), grade mismatch (must prominently flag the check under the current expiration-only policy), unknown deadline (must say confirm), homework request (must coach), "add it" without approval (must propose, not claim).
 
 ## Ollama testing
 

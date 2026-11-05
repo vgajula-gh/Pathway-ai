@@ -4,7 +4,9 @@
 
 Pathway AI is an AI companion that helps high school students (grades 9–12) get more value from their high school years. It helps them **Discover** opportunities that fit, **Simplify** everyday logistics, **Grow** skills and reflection, and **Prepare** for what comes next. It is *not* a planner; simplification is an enabling capability.
 
-This repository is a working starter kit: a TypeScript API (Fastify + Prisma + an LLM agent on Claude or OpenAI), a React web app with an Oura-inspired calm UI, and the product/architecture documents needed to keep building with Codex.
+This repository contains the current pilot implementation: a TypeScript API (Fastify + Prisma with Anthropic, OpenAI or Ollama adapters), a React website, public opportunity research/knowledge workflows and all three private Growth Map drops.
+
+**Current documentation:** [Released product specification](docs/PDD.md) · [End-to-end agentic architecture](docs/04-ARCHITECTURE.md) · [API contract](docs/openapi.yaml) · [Replit deployment](DEPLOY-REPLIT.md). The product/architecture documents identify the audited main-branch baseline and distinguish implemented features from optional setup and future capabilities.
 
 ## Quick start
 
@@ -16,7 +18,7 @@ npm test                      # deterministic engine tests
 npm run typecheck
 ```
 
-Open http://localhost:5173, complete onboarding (turn on "sample week" to explore), then try the core journey:
+Open http://localhost:5173, complete onboarding (sample data requires explicit demo-mode setup), then try the core journey:
 **Explore → open an opportunity → Set a prep reminder → Approve → see it on Today → check off a step in Grow.**
 
 For **GitHub Codespaces**, choose **Code → Codespaces → Create codespace**.
