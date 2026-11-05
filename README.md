@@ -6,7 +6,7 @@ Pathway AI is an AI companion that helps high school students (grades 9–12) ge
 
 This repository contains the current pilot implementation: a TypeScript API (Fastify + Prisma with Anthropic, OpenAI or Ollama adapters), a React website, public opportunity research/knowledge workflows and all three private Growth Map drops.
 
-**Current documentation:** [Released product specification](docs/PDD.md) · [End-to-end agentic architecture](docs/04-ARCHITECTURE.md) · [API contract](docs/openapi.yaml) · [Replit deployment](DEPLOY-REPLIT.md). The product/architecture documents identify the audited main-branch baseline and distinguish implemented features from optional setup and future capabilities.
+**Current documentation:** [Released product specification](docs/PDD.md) · [End-to-end agentic architecture](docs/04-ARCHITECTURE.md) · [Architecture diagrams and data flows](docs/19-ARCHITECTURE-DATA-FLOWS.md) · [API contract](docs/openapi.yaml) · [Replit deployment](DEPLOY-REPLIT.md). The product/architecture documents identify the audited main-branch baseline and distinguish implemented features from optional setup and future capabilities.
 
 ## Quick start
 

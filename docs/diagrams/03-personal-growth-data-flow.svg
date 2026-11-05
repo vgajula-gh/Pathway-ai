@@ -1,0 +1,123 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1440" viewBox="0 0 1920 1440" role="img" aria-labelledby="title desc"><title id="title">03  Personal actions, Growth Map &amp; integrations</title><desc id="desc">Private account scope is server-bound. Models suggest language/actions; code and explicit student decisions govern saved state.</desc><defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#97A8BE"/></marker></defs><rect width="1920" height="1440" fill="#F6F8FC"/>
+<text x="60" y="65" font-family="Arial, Helvetica, sans-serif" font-size="38" font-weight="700" fill="#18334D">03  Personal actions, Growth Map &amp; integrations</text>
+<text x="60" y="103" font-family="Arial, Helvetica, sans-serif" font-size="19" font-weight="400" fill="#53677E">Private account scope is server-bound. Models suggest language/actions; code and explicit student decisions govern saved state.</text>
+<text x="60" y="1400" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="400" fill="#53677E">PATHWAY AI  |  Implemented baseline: main 1878d9e, Growth Map Drops 1–3  |  Deployment readiness is checked separately</text>
+<text x="1810" y="1400" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="400" fill="#53677E">3 / 3</text>
+<rect x="50" y="160" width="880" height="590" rx="22" fill="#EDF2F9" stroke="#D5DFEB" stroke-width="2"/>
+<text x="74" y="196" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="700" fill="#315EEA">B  BUDDY → APPROVAL → OBSERVED RESULT</text>
+<text x="74" y="226" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Private task context may reach the selected inference provider.</text>
+<rect x="80" y="270" width="360" height="145" rx="16" fill="white" stroke="#D5DFEB" stroke-width="2"/>
+<rect x="80" y="288" width="5" height="109" rx="2" fill="#087F82"/>
+<text x="102" y="295" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700" fill="#18334D">B1  Student request</text>
+<text x="102" y="330.6" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Session + consent + quota</text>
+<text x="102" y="353.64000000000004" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Own request, profile and goals</text>
+<text x="102" y="376.68000000000006" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Up to 12 recent messages</text>
+<rect x="520" y="270" width="360" height="145" rx="16" fill="white" stroke="#D5DFEB" stroke-width="2"/>
+<rect x="520" y="288" width="5" height="109" rx="2" fill="#315EEA"/>
+<text x="542" y="295" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700" fill="#18334D">B2  Model + tools</text>
+<text x="542" y="330.6" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Allowed tools; up to 6 rounds</text>
+<text x="542" y="353.64000000000004" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Server-bound student scope</text>
+<text x="542" y="376.68000000000006" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Read results; no arbitrary writes</text>
+<rect x="520" y="475" width="360" height="145" rx="16" fill="white" stroke="#D5DFEB" stroke-width="2"/>
+<rect x="520" y="493" width="5" height="109" rx="2" fill="#7454B5"/>
+<text x="542" y="500" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700" fill="#18334D">B3  Student review</text>
+<text x="542" y="535.6" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Typed actions, reasons, effects</text>
+<text x="542" y="558.64" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Student approves or rejects</text>
+<text x="542" y="581.68" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Model cannot approve itself</text>
+<rect x="80" y="475" width="360" height="145" rx="16" fill="white" stroke="#D5DFEB" stroke-width="2"/>
+<rect x="80" y="493" width="5" height="109" rx="2" fill="#7454B5"/>
+<text x="102" y="500" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700" fill="#18334D">B4  Execute &amp; verify</text>
+<text x="102" y="535.6" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Revalidate; action transaction</text>
+<text x="102" y="558.64" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Read back saved records</text>
+<text x="102" y="581.68" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">VERIFIED / FAILED + SQL audit</text>
+<polyline points="440,343 520,343" fill="none" stroke="#97A8BE" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="700,415 700,475" fill="none" stroke="#97A8BE" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="520,548 440,548" fill="none" stroke="#97A8BE" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="260,620 260,656 480,656 480,675" fill="none" stroke="#97A8BE" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<rect x="80" y="675" width="800" height="48" rx="10" fill="#E5F2F0" stroke="#B5D9D6" stroke-width="2"/>
+<text x="100" y="706" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700" fill="#087F82">UI reports the actual result. Direct student CRUD uses separate explicit controls.</text>
+<rect x="970" y="160" width="900" height="590" rx="22" fill="#EDF2F9" stroke="#D5DFEB" stroke-width="2"/>
+<text x="994" y="196" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="700" fill="#087F82">G  EXPERIENCE → CONFIRMED EVIDENCE → REFLECTION</text>
+<text x="994" y="226" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Private records stay in SQL; the AI receives bounded factual options.</text>
+<rect x="1000" y="270" width="360" height="145" rx="16" fill="white" stroke="#D5DFEB" stroke-width="2"/>
+<rect x="1000" y="288" width="5" height="109" rx="2" fill="#087F82"/>
+<text x="1022" y="295" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700" fill="#18334D">G1  Live owned source</text>
+<text x="1022" y="330.6" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Experience, goal step, Study</text>
+<text x="1022" y="353.64000000000004" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Actual program-action dates</text>
+<text x="1022" y="376.68000000000006" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Recheck changed / deleted sources</text>
+<rect x="1460" y="270" width="360" height="145" rx="16" fill="white" stroke="#D5DFEB" stroke-width="2"/>
+<rect x="1460" y="288" width="5" height="109" rx="2" fill="#087F82"/>
+<text x="1482" y="295" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700" fill="#18334D">G2  Confirm tags</text>
+<text x="1482" y="330.6" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Suggestions start unselected</text>
+<text x="1482" y="353.64000000000004" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Student confirms skill / stage</text>
+<text x="1482" y="376.68000000000006" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Interested is not achievement</text>
+<rect x="1460" y="475" width="360" height="145" rx="16" fill="white" stroke="#D5DFEB" stroke-width="2"/>
+<rect x="1460" y="493" width="5" height="109" rx="2" fill="#315EEA"/>
+<text x="1482" y="500" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700" fill="#18334D">G3  Rules + bounded AI</text>
+<text x="1482" y="535.6" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Code counts evidence and trends</text>
+<text x="1482" y="558.64" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Model selects factual wording</text>
+<text x="1482" y="581.68" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">No names, titles or raw reflections</text>
+<rect x="1000" y="475" width="360" height="145" rx="16" fill="white" stroke="#D5DFEB" stroke-width="2"/>
+<rect x="1000" y="493" width="5" height="109" rx="2" fill="#087F82"/>
+<text x="1022" y="500" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700" fill="#18334D">G4  Private output</text>
+<text x="1022" y="535.6" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Recheck sources and consent</text>
+<text x="1022" y="558.64" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Insights, letters and charts</text>
+<text x="1022" y="581.68" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">One paid letter attempt / month</text>
+<polyline points="1360,343 1460,343" fill="none" stroke="#97A8BE" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="1640,415 1640,475" fill="none" stroke="#97A8BE" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="1460,548 1360,548" fill="none" stroke="#97A8BE" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="1180,620 1180,656 1420,656 1420,675" fill="none" stroke="#97A8BE" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<rect x="1000" y="675" width="820" height="48" rx="10" fill="#E5F2F0" stroke="#B5D9D6" stroke-width="2"/>
+<text x="1020" y="706" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700" fill="#087F82">Map / archive → evidence links, optional goal proposal or explicit private save.</text>
+<rect x="50" y="790" width="1820" height="385" rx="22" fill="#EDF2F9" stroke="#D5DFEB" stroke-width="2"/>
+<text x="74" y="826" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="700" fill="#A45C18">OPTIONAL INTEGRATIONS &amp; OPERATIONAL FLOWS</text>
+<text x="74" y="856" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">All remain separate from autonomous external applications or calendar editing.</text>
+<rect x="80" y="890" width="415" height="240" rx="16" fill="white" stroke="#D5DFEB" stroke-width="2"/>
+<rect x="80" y="908" width="5" height="204" rx="2" fill="#A45C18"/>
+<text x="102" y="915" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700" fill="#18334D">Calendar reads</text>
+<text x="102" y="950.6" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Student submits private HTTPS iCal URL</text>
+<text x="102" y="973.64" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Encrypted at rest with CALENDAR_SECRET</text>
+<text x="102" y="996.68" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Worker fetches due feed → imported SQL</text>
+<text x="102" y="1019.7199999999999" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">events</text>
+<text x="102" y="1042.76" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Read-only locally; removal is explicit</text>
+<rect x="525" y="890" width="415" height="240" rx="16" fill="white" stroke="#D5DFEB" stroke-width="2"/>
+<rect x="525" y="908" width="5" height="204" rx="2" fill="#A45C18"/>
+<text x="547" y="915" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700" fill="#18334D">Words &amp; publisher news</text>
+<text x="547" y="950.6" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">500 curated words → local selection /</text>
+<text x="547" y="973.64" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">audio</text>
+<text x="547" y="996.68" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">RSS / Atom → metadata → shared news SQL</text>
+<text x="547" y="1019.7199999999999" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Explicit refresh, cached and bounded</text>
+<text x="547" y="1042.76" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Headlines are not generated by an LLM</text>
+<rect x="970" y="890" width="415" height="240" rx="16" fill="white" stroke="#D5DFEB" stroke-width="2"/>
+<rect x="970" y="908" width="5" height="204" rx="2" fill="#A45C18"/>
+<text x="992" y="915" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700" fill="#18334D">Browser voice &amp; PWA</text>
+<text x="992" y="950.6" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Speech recognition → editable message</text>
+<text x="992" y="973.64" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">draft</text>
+<text x="992" y="996.68" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Student explicitly sends resulting text</text>
+<text x="992" y="1019.7199999999999" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Browser may process audio; Pathway stores</text>
+<text x="992" y="1042.76" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">no audio</text>
+<text x="992" y="1065.8" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Service worker caches public shell, not</text>
+<text x="992" y="1088.84" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">private API data</text>
+<rect x="1415" y="890" width="415" height="240" rx="16" fill="white" stroke="#D5DFEB" stroke-width="2"/>
+<rect x="1415" y="908" width="5" height="204" rx="2" fill="#A45C18"/>
+<text x="1437" y="915" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700" fill="#18334D">Gentle browser push</text>
+<text x="1437" y="950.6" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Opt-in + permission → private</text>
+<text x="1437" y="973.64" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">subscription</text>
+<text x="1437" y="996.68" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Worker checks local schedule / quiet</text>
+<text x="1437" y="1019.7199999999999" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">rules</text>
+<text x="1437" y="1042.76" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Reserve one daily nudge before send</text>
+<text x="1437" y="1065.8" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Push acceptance is not delivery</text>
+<text x="1437" y="1088.84" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">confirmation</text>
+<rect x="50" y="1220" width="880" height="120" rx="16" fill="#FFFFFF" stroke="#D5DFEB" stroke-width="2"/>
+<rect x="50" y="1238" width="5" height="84" rx="2" fill="#7454B5"/>
+<text x="72" y="1245" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700" fill="#18334D">Owner / release path</text>
+<text x="72" y="1280.6" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">JOBS_SECRET protects owner jobs; Secrets stay on the server.</text>
+<text x="72" y="1303.6399999999999" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Publish applies reviewed production schema changes.</text>
+<text x="72" y="1326.6799999999998" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Core health does not prove feature-table readiness.</text>
+<rect x="970" y="1220" width="900" height="120" rx="16" fill="#FFFFFF" stroke="#D5DFEB" stroke-width="2"/>
+<rect x="970" y="1238" width="5" height="84" rx="2" fill="#087F82"/>
+<text x="992" y="1245" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700" fill="#18334D">Persistence / failure path</text>
+<text x="992" y="1280.6" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">SQL owns personal records, public catalog, usage, leases and audit.</text>
+<text x="992" y="1303.6399999999999" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Sleeping hosts need visits / owner jobs to catch up.</text>
+<text x="992" y="1326.6799999999998" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">AI-off/capped: manual features and existing records remain.</text>
+</svg>

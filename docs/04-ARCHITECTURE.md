@@ -4,6 +4,8 @@
 
 Read alongside the [current product specification](PDD.md), [OpenAPI](openapi.yaml), [data model](05-DATA-MODEL.md) and [deployment guide](../DEPLOY-REPLIT.md).
 
+For standalone system, trust-boundary and data-lineage views, see [Architecture diagrams and data flows](19-ARCHITECTURE-DATA-FLOWS.md).
+
 ## 1. Architectural model
 
 Pathway is one application with several bounded workflow roles. General Buddy is a model-directed tool orchestrator. Opportunity Scout and program questions use actual LangGraph state graphs. Retrieval uses LangChain components. Planning, approvals, scheduling facts, evidence counting, cache/lease management and most UI behavior are ordinary deterministic services.
