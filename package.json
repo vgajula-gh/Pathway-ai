@@ -26,7 +26,11 @@
     "demo:workflows": "npm run demo:workflows --workspace apps/api --",
     "check:scout": "node --env-file-if-exists=.env scripts/check-scout.mjs",
     "pilot:reset": "node --env-file-if-exists=.env scripts/pilot-reset.mjs",
-    "check:growth": "node --env-file-if-exists=.env --import tsx scripts/check-growth-readiness.mjs"
+    "check:growth": "node --env-file-if-exists=.env --import tsx scripts/check-growth-readiness.mjs",
+    "eval:explore": "node scripts/eval-explore.mjs",
+    "eval:explore:live": "node --env-file-if-exists=.env scripts/eval-explore.mjs --live",
+    "eval:explore:compare": "node --import tsx scripts/compare-explore-evals.ts",
+    "typecheck:evals": "tsc -p apps/api/tsconfig.evals.json"
   },
   "engines": {
     "node": ">=20"

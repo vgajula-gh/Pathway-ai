@@ -89,3 +89,7 @@ Growth insights use the provider-neutral JSON interface for bounded factual phra
 ## Growth Map Drop 3
 
 The monthly provider receives aggregate counts, visible grown skills, a deterministic idea and permitted factual stories/opaque citations, not identity/raw activity titles/full reflections. Only an exact grounded formulation under 120 words can be shown. AI generation cannot save portfolio entries or goals: Save is a separate explicit student action; Plan it uses the existing proposal/approval service. Saved summaries cannot be retagged into new achievements.
+
+## Drop A: Explore and program-answer evals
+
+`npm run eval:explore` runs the real Scout/catalog/retrieval/answer paths against synthetic profiles and saved HTML, with replayed providers and local test vectors. It reports discovery, source handling, saves, indexing, relevance, citation/scope correctness and usage separately. The [eval guide](20-EXPLORE-EVALS.md) covers the explicit budgeted live canary, scorecards and model/prompt comparisons. This adds no student tool, MCP server or automatic paid job; Buddy-planning and Growth-quality evals remain later drops.
