@@ -13,7 +13,7 @@ try {
     headers:{Authorization:'Bearer '+process.env.JOBS_SECRET,'Content-Type':'application/json'},
     ...(values.mode==='prepare'?{body:JSON.stringify({opportunityId:values.program,allowPaid:true})}:{})});
   const result=await response.json();console.log(JSON.stringify(result,null,2));
-  if(!response.ok||result.configurationReady===false||values.mode==='prepare'&&result.program?.sqlReady!==true)process.exitCode=1;
+  if(!response.ok||result.configurationReady===false||values.mode==='prepare'&&(result.program?.sqlReady!==true||result.program?.vectorConfirmation!=='confirmed'))process.exitCode=1;
 }catch(error){
   const usageError=error instanceof Error&&/^(Use |Set JOBS_SECRET|Preparation requires|Status is read-only)/.test(error.message);
   console.error(error?.code?.startsWith('ERR_PARSE_ARGS')?'Invalid knowledge-check options. Never pass Secrets as command arguments.':usageError?error.message:'The knowledge check could not finish. Check the URL, owner Secret and Publishing logs.');

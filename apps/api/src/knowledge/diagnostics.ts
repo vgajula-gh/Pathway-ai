@@ -34,7 +34,7 @@ export async function knowledgeDiagnostics(opportunityId?:string) {
       program={id:opportunityId,sqlReady:s.ready,sourcePages:s.pages.length,matchingChunks:ids.length,attempt:attempt?.owner||null,
         vectorConfirmation:found===null?'not_checked':found===ids.length?'confirmed':'pending_or_missing',vectorsFound:found};
     }
-    return {...base,allowance,namespace:stats?.namespace||null,configurationReady:true,store:rt.store.kind,embedding:{provider:rt.embedder.provider||'unknown',model:safeModelId(rt.embedder.model),dimension:rt.embedder.dimension},
+    return {...base,allowance,namespace:stats?.namespace||null,configurationReady:true,store:rt.store.kind,indexDetails:rt.store.indexDetails||null,embedding:{provider:rt.embedder.provider||'unknown',model:safeModelId(rt.embedder.model),dimension:rt.embedder.dimension},
       indexDimension:dimension,namespaceRecords:stats?.recordCount??null,totalSourcePages:pages.reduce((n,p)=>n+p._count,0),totalChunks:chunks,
       programs:programs.map(p=>({...p,sourcePages:pages.find(s=>s.opportunityId===p.id)?._count||0})),program,
       recentRuns:runs.map(r=>{const usage=j<any>(r.usage,{});return {id:r.id,kind:r.kind,groupKey:r.groupKey,status:r.status,startedAt:r.startedAt,error:r.error,

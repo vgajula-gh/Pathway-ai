@@ -8,6 +8,7 @@ import { env } from '../src/lib/env.js';
 import { initializeKnowledge, knowledgeUnavailable, pauseKnowledge } from '../src/knowledge/runtime.js';
 import { configurationIssue } from '../src/knowledge/readiness.js';
 import { discoveryAvailability } from '../src/discovery/availability.js';
+import {documentIndexResponse} from './fixtures/pinecone-document-index.js';
 
 const originalDisabled = env.aiDisabled;
 const configured = {
@@ -96,6 +97,17 @@ it('keeps SQLite on the local memory store even when Pinecone is selected but un
   expect((await initializeKnowledge())?.store.kind).toBe('memory');
   expect(remote.describeIndex).not.toHaveBeenCalled();
   expect(fetch).not.toHaveBeenCalled();
+});
+it('initializes the reported embedded-text index from its own model without external embedding credentials or calls',async()=>{
+ vi.stubEnv('OPENAI_API_KEY','');vi.stubEnv('EMBEDDING_PROVIDER','none');vi.stubEnv('EMBEDDING_DIMENSION','1024');
+ remote.describeIndex.mockResolvedValue(documentIndexResponse);
+ const rt=await initializeKnowledge();expect(rt).not.toBeNull();
+ expect(rt?.store.indexDetails).toEqual({api:'documents',input:'text',field:'chunk_text'});
+ expect(rt?.embedder).toMatchObject({provider:'pinecone-integrated',model:'text-embedding-3-small',dimension:1536});
+ expect(rt?.store.identity).toContain('documents:text:chunk_text:text-embedding-3-small:1536');
+ expect(remote.describeIndex).toHaveBeenCalledOnce();expect(fetch).not.toHaveBeenCalled();
+ await expect(rt!.embedder.embed(['must not send'],'passage')).rejects.toThrow('text operations');
+ expect(fetch).not.toHaveBeenCalled();
 });
 it('explains a missing extraction model before a paid search and accepts an explicit override',()=>{
   expect(configurationIssue({...configured,SCOUT_SOURCE_MODE:'fetch_and_extract',OPENAI_MODEL:'',AI_MODEL_EXTRACTION:''},false)).toMatchObject({code:'extraction_not_configured',settings:['AI_MODEL_EXTRACTION','OPENAI_MODEL']});

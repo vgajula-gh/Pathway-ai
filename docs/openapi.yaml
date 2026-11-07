@@ -1178,7 +1178,7 @@ paths:
     get:
       security: [{ jobsSecret: [] }]
       summary: Read-only owner knowledge and Pinecone diagnostics
-      description: Checks schema, current shared preparation/AI allowance, index type/dimensions, opportunities namespace count, public source/chunk totals and recent knowledge/recheck runs. With opportunityId, reads matching vector IDs in batches to distinguish SQL readiness from index read-back. No embedding, search, catalog mutation or usage reservation. No private student content or raw exception text. Optional vector adapters may report not_checked.
+      description: Checks schema, current shared preparation/AI allowance, index type/dimensions, opportunities namespace count, public source/chunk totals and recent knowledge/recheck runs. Adds indexDetails (api vectors/documents, input vectors/text, field) and actual embedding provider/model/dimension; integrated text reports provider pinecone-integrated and the index-owned model. With opportunityId, reads matching vector/document IDs in batches to distinguish SQL readiness from index read-back. No embedding, search, catalog mutation or usage reservation. No private student content or raw exception text. Optional vector adapters may report not_checked.
       parameters:
         - in: query
           name: opportunityId
@@ -1191,7 +1191,7 @@ paths:
     post:
       security: [{ jobsSecret: [] }]
       summary: Explicit bounded owner preparation or retry for one public program
-      description: Requires allowPaid=true. Reuses actual saved readable source text without fetching solely to embed; retains original source-check dates. Can retry failed/unknown work or repair missing external vectors. Respects existing shared recheck/preparation and AI caps, global worker lock, and at most two funded knowledge runs per program per UTC day. Does not reset limits or delete profiles. Already-ready confirmed vectors are a no-op. Completion report is authoritative; HTTP 200 alone does not mean preparation succeeded. Vector visibility can lag an acknowledged write.
+      description: Requires allowPaid=true. Reuses actual saved readable source text without fetching solely to embed; retains original source-check dates. Integrated text indexes receive public text through a metered embedding/write call; no separate external embedding request. Other supported dense indexes retain external embedding. Can retry failed/unknown work or repair missing external vectors. Respects existing shared recheck/preparation and AI caps, global worker lock, and at most two funded knowledge runs per program per UTC day. Does not reset limits or delete profiles. Already-ready confirmed vectors are a no-op. Completion report is authoritative; HTTP 200 alone does not mean preparation succeeded. Vector visibility can lag an acknowledged write.
       requestBody:
         required: true
         content:

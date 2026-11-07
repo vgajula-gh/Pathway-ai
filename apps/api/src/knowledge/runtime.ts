@@ -44,24 +44,36 @@ export async function initializeKnowledge(): Promise<KnowledgeRuntime | null> {
     : process.env.VECTOR_STORE || 'memory';
   cached = (async () => {
     try {
-      unavailable = knowledgeConfigurationIssue(process.env, env.aiDisabled);
+      unavailable = knowledgeConfigurationIssue(process.env, env.aiDisabled,{checkEmbedding:kind!=='pinecone'});
       connectionFailure=null;
       if (unavailable) {
         retryAfter = Date.now() + 60000;
         return null;
       }
-      const embedder = getEmbedder();
+      // Inspect Pinecone before constructing an external embedder. A document
+      // index with embed owns its frozen model/dimension and embeds on write/query.
+      const pinecone=kind==='pinecone'?pineconeStore():null;
+      const indexDimension=pinecone?await pinecone.dimension():undefined;
+      const integrated=pinecone?.integratedEmbedding;
+      if(!integrated){
+        unavailable=knowledgeConfigurationIssue(process.env,env.aiDisabled);
+        if(unavailable){retryAfter=Date.now()+60000;return null;}
+      }
+      const embedder:Embedder|null=integrated?{
+        provider:'pinecone-integrated',model:integrated.model,dimension:integrated.dimension,
+        async embed(){throw new Error('Integrated index embedding must use its text operations');},
+      }:getEmbedder();
       if (!embedder) throw new KnowledgeSetupError(knowledgeIssue('embedding_not_configured', ['EMBEDDING_PROVIDER']), 'Embedding provider unavailable');
       const store =
-        kind === 'pinecone'
-          ? pineconeStore()
+        pinecone
+          ? pinecone
           : kind === 'pgvector'
             ? pgvectorStore()
             : kind === 'memory'
               ? memoryStore(embedder.dimension)
               : null;
       if (!store) throw new KnowledgeSetupError(knowledgeIssue('vector_not_configured', ['VECTOR_STORE']), 'Vector store unavailable');
-      assertDimension(await store.dimension(), embedder.dimension);
+      assertDimension(indexDimension??await store.dimension(), embedder.dimension);
       if (store.kind === 'memory') {
         const chunks = await prisma.knowledgeChunk.findMany({
           where: { embeddingModel: embeddingIdentity(embedder),vectorStoreKey:vectorStoreIdentity(store) },

@@ -9,7 +9,7 @@ const messages = {
   pinecone_authorization_failed: 'The program library could not authenticate. The website owner needs to check its connection.',
   pinecone_index_not_found: 'The configured program library could not be found. The website owner needs to check its connection.',
   index_metric_mismatch: 'The program library settings do not match what Pathway needs. The website owner needs to check its setup.',
-  index_api_mismatch:'The configured index does not support this program library’s stored vectors. The owner needs to check the index type.',
+  index_api_mismatch:'The program library needs a single supported dense-vector or embedded-text field. The owner can check the index schema.',
   index_dimension_mismatch: 'The program library and embedding settings do not match. The website owner needs to check its setup.',
   vector_unavailable: 'The program library cannot connect right now. Catalog picks still work.',
 };
@@ -34,17 +34,17 @@ export function searchConfigurationIssue(values: NodeJS.ProcessEnv, aiDisabled: 
     return knowledgeIssue('extraction_not_configured',['AI_MODEL_EXTRACTION','OPENAI_MODEL']);
   return null;
 }
-export function knowledgeConfigurationIssue(values:NodeJS.ProcessEnv,aiDisabled:boolean):KnowledgeIssue|null {
+export function knowledgeConfigurationIssue(values:NodeJS.ProcessEnv,aiDisabled:boolean,options:{checkEmbedding?:boolean}={}):KnowledgeIssue|null {
   if(aiDisabled||values.AI_DISABLED==='true')return knowledgeIssue('ai_unavailable',['AI_DISABLED','LLM_PROVIDER']);
 
   const embeddingKeys: Record<string, string | null> = {
     openai: 'OPENAI_API_KEY', pinecone: 'PINECONE_API_KEY', voyage: 'VOYAGE_API_KEY', ollama: null,
   };
   const provider = values.EMBEDDING_PROVIDER || 'none';
-  if (!Object.hasOwn(embeddingKeys, provider))
+  if (options.checkEmbedding!==false&&!Object.hasOwn(embeddingKeys, provider))
     return knowledgeIssue('embedding_not_configured', ['EMBEDDING_PROVIDER']);
   const embeddingKey = embeddingKeys[provider];
-  if (embeddingKey && !values[embeddingKey]) return knowledgeIssue('embedding_not_configured', [embeddingKey]);
+  if (options.checkEmbedding!==false&&embeddingKey && !values[embeddingKey]) return knowledgeIssue('embedding_not_configured', [embeddingKey]);
 
   const kind = values.DATABASE_URL?.startsWith('file:') ? 'memory'
     : values.VECTOR_STORE || 'memory';

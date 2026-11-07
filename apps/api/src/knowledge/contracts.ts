@@ -9,10 +9,17 @@ export type VectorRecord = {
     checkedAt: string;
   };
 };
+export type TextVectorRecord = Omit<VectorRecord,'values'> & {text:string};
+export type IntegratedEmbedding = {field:string;model:string;dimension:number};
 export interface VectorStore {
   identity?: string;
   kind: 'memory' | 'pinecone' | 'pgvector';
   dimension(): Promise<number>;
+  /** Resolved by dimension(); integrated indexes own passage/query embedding. */
+  integratedEmbedding?:IntegratedEmbedding;
+  indexDetails?:{api:'vectors'|'documents';input:'vectors'|'text';field:string};
+  upsertText?(records:TextVectorRecord[]):Promise<{acknowledged:number}>;
+  queryText?(query:string,opportunityId:string|string[],topK:number):Promise<{id:string;score:number}[]>;
   stats?():Promise<{namespace:string;recordCount:number}>;
   fetchIds?(ids:string[]):Promise<string[]>;
   upsert(records: VectorRecord[]): Promise<void>;

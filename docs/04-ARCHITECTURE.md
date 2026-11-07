@@ -228,6 +228,8 @@ Vector stores include memory for local use, Pinecone and an optional pgvector ad
 
 Pinecone uses the **opportunities namespace**, cosine similarity and an index dimension that must match the embedding model/output. Model identity and vector-store identity are part of chunk generation, alongside source content hash and chunk position. Changing model/dimension/index requires preparing the matching generation, not merely changing a display setting.
 
+The Pinecone adapter inspects schema before paid work. Classic reserved dense vectors use the Vectors API; caller-named dense fields use Documents API vector operations; a single dense `embed` string field uses Documents API text upsert/search. Integrated mode uses the index's frozen model/dimension, skips separate external embedding and includes API/input/field/model in chunk identity. SQL commits follow complete write acknowledgement. Fixed public-topic queries keep raw student questions/history out of Pinecone; the original question is used locally for reranking. Read-only owner diagnostics report the actual API/input/field and ID read-back. See [compatibility/recovery](21-EXPLORE-RECOVERY.md).
+
 Ingestion writes new vectors, commits replacement SQL chunks and retires old vectors. This is not a distributed transaction. Retrieval accepts only SQL-backed matching chunks, and reconciliation removes orphan/retired vectors. Public source/chunk retirement preserves entries still referenced by students where the cleanup rules require it.
 
 Knowledge initialization records controlled unavailable reasons and retries readiness after a short cooldown. Misconfiguration can disable program questions while web search/catalog access continue through their independent gates.
