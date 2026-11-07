@@ -1,0 +1,128 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1440" viewBox="0 0 1920 1440" role="img" aria-labelledby="title desc"><title id="title">02  Public discovery → knowledge → grounded answers</title><desc id="desc">Catalog links can appear before source enrichment or vectors. Shared public knowledge is reused across students.</desc><defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#97A8BE"/></marker></defs><rect width="1920" height="1440" fill="#F6F8FC"/>
+<text x="60" y="65" font-family="Arial, Helvetica, sans-serif" font-size="38" font-weight="700" fill="#18334D">02  Public discovery → knowledge → grounded answers</text>
+<text x="60" y="103" font-family="Arial, Helvetica, sans-serif" font-size="19" font-weight="400" fill="#53677E">Catalog links can appear before source enrichment or vectors. Shared public knowledge is reused across students.</text>
+<text x="60" y="1400" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="400" fill="#53677E">PATHWAY AI  |  Implemented baseline: main 1878d9e, Growth Map Drops 1–3  |  Deployment readiness is checked separately</text>
+<text x="1810" y="1400" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="400" fill="#53677E">2 / 3</text>
+<rect x="50" y="155" width="1820" height="510" rx="22" fill="#EDF2F9" stroke="#D5DFEB" stroke-width="2"/>
+<text x="74" y="191" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="700" fill="#315EEA">PUBLIC OPPORTUNITY DISCOVERY</text>
+<text x="74" y="221" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">P = public research flow. Durable SQL state and usage are recorded between bounded stages.</text>
+<rect x="80" y="275" width="320" height="178" rx="16" fill="white" stroke="#D5DFEB" stroke-width="2"/>
+<rect x="80" y="293" width="5" height="142" rx="2" fill="#315EEA"/>
+<text x="102" y="300" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700" fill="#18334D">P1  Check coverage</text>
+<text x="102" y="335.6" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Interests + grade band</text>
+<text x="102" y="358.64000000000004" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Broad region / preferences</text>
+<text x="102" y="381.68000000000006" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Reuse SQL catalog first</text>
+<rect x="436" y="275" width="320" height="178" rx="16" fill="white" stroke="#D5DFEB" stroke-width="2"/>
+<rect x="436" y="293" width="5" height="142" rx="2" fill="#315EEA"/>
+<text x="458" y="300" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700" fill="#18334D">P2  Funded research</text>
+<text x="458" y="335.6" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Sanitized public context</text>
+<text x="458" y="358.64000000000004" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Provider returns real URLs</text>
+<text x="458" y="381.68000000000006" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Budgeted calls and spend</text>
+<rect x="792" y="275" width="320" height="178" rx="16" fill="white" stroke="#D5DFEB" stroke-width="2"/>
+<rect x="792" y="293" width="5" height="142" rx="2" fill="#315EEA"/>
+<text x="814" y="300" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700" fill="#18334D">P3  Save links FIRST</text>
+<text x="814" y="335.6" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Recover actual citations</text>
+<text x="814" y="358.64000000000004" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Save program + candidate in</text>
+<text x="814" y="381.68000000000006" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">SQL</text>
+<text x="814" y="404.7200000000001" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Keep unconfirmed links</text>
+<rect x="1148" y="275" width="320" height="178" rx="16" fill="white" stroke="#D5DFEB" stroke-width="2"/>
+<rect x="1148" y="293" width="5" height="142" rx="2" fill="#315EEA"/>
+<text x="1170" y="300" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700" fill="#18334D">P4  Read source page</text>
+<text x="1170" y="335.6" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Best-effort safe HTML fetch</text>
+<text x="1170" y="358.64000000000004" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Match quotes against real text</text>
+<text x="1170" y="381.68000000000006" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Extraction model is optional</text>
+<rect x="1504" y="275" width="320" height="178" rx="16" fill="white" stroke="#D5DFEB" stroke-width="2"/>
+<rect x="1504" y="293" width="5" height="142" rx="2" fill="#315EEA"/>
+<text x="1526" y="300" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700" fill="#18334D">P5  Qualify &amp; display</text>
+<text x="1526" y="335.6" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Keep only supported facts</text>
+<text x="1526" y="358.64000000000004" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Warn on unknown details</text>
+<text x="1526" y="381.68000000000006" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Only confirmed past deadline</text>
+<text x="1526" y="404.7200000000001" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">excludes</text>
+<polyline points="400,364 436,364" fill="none" stroke="#97A8BE" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="756,364 792,364" fill="none" stroke="#97A8BE" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="1112,364 1148,364" fill="none" stroke="#97A8BE" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="1468,364 1504,364" fill="none" stroke="#97A8BE" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="240,275 240,237 1664,237 1664,275" fill="none" stroke="#97A8BE" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)" stroke-dasharray="8 6"/>
+<rect x="634.0" y="230" width="632" height="27" rx="6" fill="#F6F8FC" stroke="#F6F8FC" stroke-width="2"/>
+<text x="644.0" y="250" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="700" fill="#18334D">Enough current links: return catalog picks without a new paid search</text>
+<rect x="80" y="495" width="550" height="130" rx="16" fill="#FFFFFF" stroke="#D5DFEB" stroke-width="2"/>
+<rect x="80" y="513" width="5" height="94" rx="2" fill="#7454B5"/>
+<text x="102" y="520" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700" fill="#18334D">Persist and resume</text>
+<text x="102" y="555.6" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">DiscoveryRun stage / in-flight marker + candidates</text>
+<text x="102" y="578.64" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Job leases, usage and bounded retry state</text>
+<text x="102" y="601.68" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Unknown paid outcomes are not silently replayed.</text>
+<rect x="665" y="495" width="550" height="130" rx="16" fill="#FFFFFF" stroke="#D5DFEB" stroke-width="2"/>
+<rect x="665" y="513" width="5" height="94" rx="2" fill="#087F82"/>
+<text x="687" y="520" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700" fill="#18334D">Student-visible results</text>
+<text x="687" y="555.6" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Up to 5 confirmed Free + 5 Paid/cost-unconfirmed</text>
+<text x="687" y="578.64" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Missing prices never become “Free”.</text>
+<text x="687" y="601.68" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Unreadable sources can remain “Needs checking”.</text>
+<rect x="1250" y="495" width="590" height="130" rx="16" fill="#FFFFFF" stroke="#D5DFEB" stroke-width="2"/>
+<rect x="1250" y="513" width="5" height="94" rx="2" fill="#315EEA"/>
+<text x="1272" y="520" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700" fill="#18334D">Default evidence-first mode</text>
+<text x="1272" y="555.6" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Research quotes are checked in code after one page fetch.</text>
+<text x="1272" y="578.64" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">No additional extraction model call for each candidate.</text>
+<text x="1272" y="601.68" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Optional fetch_and_extract has separate bounded work.</text>
+<rect x="50" y="705" width="1820" height="585" rx="22" fill="#EDF2F9" stroke="#D5DFEB" stroke-width="2"/>
+<text x="74" y="741" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="700" fill="#315EEA">PUBLIC KNOWLEDGE + PRIVATE QUESTION</text>
+<text x="74" y="771" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">I = public ingestion. Q = authenticated, server-scoped retrieval. Preparation is separate from catalog visibility.</text>
+<rect x="80" y="805" width="530" height="135" rx="16" fill="white" stroke="#D5DFEB" stroke-width="2"/>
+<rect x="80" y="823" width="5" height="99" rx="2" fill="#315EEA"/>
+<text x="102" y="830" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700" fill="#18334D">I1  Real source text</text>
+<text x="102" y="865.6" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">SQL: page text, URL, check date and hash</text>
+<text x="102" y="888.64" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Bounded preparation fetches missing / stale sources</text>
+<rect x="695" y="805" width="530" height="135" rx="16" fill="white" stroke="#D5DFEB" stroke-width="2"/>
+<rect x="695" y="823" width="5" height="99" rx="2" fill="#315EEA"/>
+<text x="717" y="830" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700" fill="#18334D">I2  Chunk &amp; embed public text</text>
+<text x="717" y="865.6" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">LangChain: about 500 words, 50-word overlap</text>
+<text x="717" y="888.64" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Independent embedding model / output dimension</text>
+<rect x="1310" y="805" width="530" height="135" rx="16" fill="white" stroke="#D5DFEB" stroke-width="2"/>
+<rect x="1310" y="823" width="5" height="99" rx="2" fill="#315EEA"/>
+<text x="1332" y="830" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700" fill="#18334D">I3  Store matching knowledge</text>
+<text x="1332" y="865.6" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Vectors: optional Pinecone / pgvector / local memory</text>
+<text x="1332" y="888.64" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">SQL chunks: source hash, model, store and metadata</text>
+<polyline points="610,875 695,875" fill="none" stroke="#97A8BE" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="1225,875 1310,875" fill="none" stroke="#97A8BE" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<rect x="80" y="1040" width="320" height="170" rx="16" fill="white" stroke="#D5DFEB" stroke-width="2"/>
+<rect x="80" y="1058" width="5" height="134" rx="2" fill="#087F82"/>
+<text x="102" y="1065" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700" fill="#18334D">Q1  Student question</text>
+<text x="102" y="1100.6" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Owned signed-in conversation</text>
+<text x="102" y="1123.6399999999999" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Question + recent history</text>
+<text x="102" y="1146.6799999999998" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">No client-defined scope list</text>
+<rect x="436" y="1040" width="320" height="170" rx="16" fill="white" stroke="#D5DFEB" stroke-width="2"/>
+<rect x="436" y="1058" width="5" height="134" rx="2" fill="#087F82"/>
+<text x="458" y="1065" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700" fill="#18334D">Q2  Authorize scope</text>
+<text x="458" y="1100.6" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Current picks + Interested</text>
+<text x="458" y="1123.6399999999999" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Bind allowed program IDs</text>
+<text x="458" y="1146.6799999999998" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Check knowledge readiness</text>
+<rect x="792" y="1040" width="320" height="170" rx="16" fill="white" stroke="#D5DFEB" stroke-width="2"/>
+<rect x="792" y="1058" width="5" height="134" rx="2" fill="#087F82"/>
+<text x="814" y="1065" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700" fill="#18334D">Q3  Retrieve &amp; join</text>
+<text x="814" y="1100.6" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Filtered vector query</text>
+<text x="814" y="1123.6399999999999" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">SQL validates hash and scope</text>
+<text x="814" y="1146.6799999999998" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Rerank; up to 5 passages</text>
+<rect x="1148" y="1040" width="320" height="170" rx="16" fill="white" stroke="#D5DFEB" stroke-width="2"/>
+<rect x="1148" y="1058" width="5" height="134" rx="2" fill="#087F82"/>
+<text x="1170" y="1065" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700" fill="#18334D">Q4  Draft excerpt JSON</text>
+<text x="1170" y="1100.6" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Model sees scoped passages</text>
+<text x="1170" y="1123.6399999999999" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Select exact source quotes</text>
+<text x="1170" y="1146.6799999999998" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Code verifies each excerpt</text>
+<rect x="1504" y="1040" width="320" height="170" rx="16" fill="white" stroke="#D5DFEB" stroke-width="2"/>
+<rect x="1504" y="1058" width="5" height="134" rx="2" fill="#087F82"/>
+<text x="1526" y="1065" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700" fill="#18334D">Q5  Verified answer</text>
+<text x="1526" y="1100.6" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">SQL facts + verified excerpts</text>
+<text x="1526" y="1123.6399999999999" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Citations and source dates</text>
+<text x="1526" y="1146.6799999999998" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Recheck current membership</text>
+<polyline points="400,1125 436,1125" fill="none" stroke="#97A8BE" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="756,1125 792,1125" fill="none" stroke="#97A8BE" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="1112,1125 1148,1125" fill="none" stroke="#97A8BE" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="1468,1125 1504,1125" fill="none" stroke="#97A8BE" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="1575,940 1575,988 952,988 952,1040" fill="none" stroke="#97A8BE" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<rect x="1106.0" y="966" width="308" height="27" rx="6" fill="#F6F8FC" stroke="#F6F8FC" stroke-width="2"/>
+<text x="1116.0" y="986" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="700" fill="#18334D">Public index + SQL-backed chunks</text>
+<polyline points="1664,1210 1664,1255 952,1255 952,1210" fill="none" stroke="#97A8BE" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)" stroke-dasharray="8 6"/>
+<rect x="1001.0" y="1234" width="578" height="27" rx="6" fill="#F6F8FC" stroke="#F6F8FC" stroke-width="2"/>
+<text x="1011.0" y="1254" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="700" fill="#18334D">At most 3 retrieval/draft rounds; no repeated normalized query</text>
+<text x="70" y="1332" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Privacy: no student profile, goal, chat or reflection is written into the shared vector namespace.</text>
+<text x="70" y="1359" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#53677E">Failure: a source/index/model outage can disable grounded answers without removing catalog cards or saved applications.</text>
+</svg>

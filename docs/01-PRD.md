@@ -1,5 +1,7 @@
 # 01 · Product Requirements — Pathway AI
 
+> This is the original product brief and incremental design history. For the consolidated released feature set, current limits, all Growth Map drops and non-goals, use [Current product specification](PDD.md). For actual workflow execution and trust boundaries, use [End-to-end agentic architecture](04-ARCHITECTURE.md). Those current documents supersede conflicting older descriptions here.
+
 **Version** 1.0 (build kit) · derived from the Pathway AI Comprehensive PDD v1.2 (Oct 10, 2026). Proposed decisions are marked *(proposed)*.
 
 ## Thesis

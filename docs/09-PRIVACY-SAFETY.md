@@ -3,12 +3,12 @@
 > Legal requirements (including COPPA and FERPA where applicable, plus state student-privacy laws) require **specialist review before launch**. This document is engineering guidance, not legal advice.
 
 ## Built in now
-- AI consent toggle at onboarding and in settings; when off, no AI calls are made.
-- Private by default; portfolio items individually shareable.
+- AI consent toggle at onboarding/settings gates new personal AI requests. Shared public catalog work has separate owner budgets; this is not a guarantee that every existing public job or already-started provider request is cancelled when one student opts out. Growth outputs additionally recheck consent before storing results.
+- Private by default; portfolio items have an explicit shared visibility marker. There is no released parent/counselor portal or automatic external delivery.
 - Minimal collection: broad location only; no sensitive inferences; provenance shown for each profile attribute.
 - Export (JSON) and delete-everything (cascade).
 - Audit log of state-changing actions, visible to the student.
-- No external side effects from the server; downloads are student-initiated.
+- No automatic external applications, registrations, emails or calendar writes. Authorized provider inference, public source/feed reads, private read-only calendar fetches and opted-in push are real server network operations; calendar-file downloads are student-initiated.
 - Logger redacts identity/access headers and session cookies.
 - Legacy browser profiles can be upgraded to private-phrase sign-in with keyed secret hashes, one-time recovery codes, hashed 30-day sessions, persistent IP/credential/shared login throttles, and origin checks. No username or email collected. Server-only SIGN_IN_SECRET is required in production and must be kept stable.
 
@@ -39,3 +39,6 @@ Drop 2 sends only a compact visible-skills summary, public program metadata, opa
 ## Growth Map Drop 3
 
 Monthly letters, attempt state and portfolio pointers are student-owned, exported and cascade-deleted. Source changes/hiding invalidate live cached prose; consent revocation blocks in-flight AI storage and uses deterministic summaries. Explicit portfolio copies are private initially and remain student-owned snapshots until deleted. No private data is written to Pinecone/hosted tracing, and no sharing, email or push delivery is added.
+
+
+The consolidated [product specification](PDD.md) and [architecture data-boundary table](04-ARCHITECTURE.md#10-data-boundaries-and-trust) distinguish general personal Buddy context from public Scout and Growth prompts. General Buddy can send the student’s name, preferences, goals and request/history to the configured inference provider with AI enabled; public Scout/Growth minimization must not be generalized into a claim that no personal context ever reaches any model.
