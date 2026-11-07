@@ -5,9 +5,9 @@ import {toOpp} from '../lib/picks.js';
 import {costLabel} from '../domain/picks.js';
 type Program=Awaited<ReturnType<typeof prisma.opportunity.findUniqueOrThrow>>;
 export function structuredFacts(o:Program,ctx:StudentContext) {
-  const fit=eligibility(toOpp(o),ctx),evidence=j<Record<string,{sourceUrl:string}>>(o.evidence,{});
+  const displayed=toOpp(o),fit=eligibility(displayed,ctx),evidence=j<Record<string,{sourceUrl:string}>>(o.evidence,{});
   return {
-    source:{value:o.verificationStatus==='verified'?'Source verified':o.verificationStatus==='needs_verification'?'Page read; details need checking. '+j<string[]>(o.checks,[]).join('; '):'Details need another check',sourceUrl:o.url},
+    source:{value:displayed.verificationStatus==='verified'?'Source verified':o.verificationStatus==='needs_verification'?'Page read; details need checking. '+j<string[]>(o.checks,[]).join('; '):'Details need another check',sourceUrl:o.url},
     deadline:{value:o.deadline&&evidence.deadline?o.deadline:'Not confirmed — check the official site',sourceUrl:evidence.deadline?.sourceUrl},
     cost:{value:costLabel(toOpp(o)),sourceUrl:evidence.costType?.sourceUrl},
     eligibility:{value:fit.status==='not_eligible'?fit.reasons.join('; '):fit.status==='check'?`Please confirm: ${fit.checks.join('; ')}`:'Your grade fits the listed school audience. Other program requirements may apply.',sourceUrl:evidence.gradeMin?.sourceUrl||evidence.schoolLevel?.sourceUrl},

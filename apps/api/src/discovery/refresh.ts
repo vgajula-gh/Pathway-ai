@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
 import { prisma, j } from '../lib/db.js';
 import { HttpError } from '../lib/errors.js';
+import {isProgramSource} from '../domain/program-source.js';
 import { currentCycle, interestSignature, refreshAllowance } from '../domain/refresh.js';
 import { setting } from './config.js';
 import { personalPicks } from '../lib/picks.js';
@@ -34,6 +35,16 @@ export async function stateIn(tx: Prisma.TransactionClient, studentId: string, n
     update: {},
   });
   const cycle = currentCycle(initial, now, refreshDays());
+  // A maps/search-only response never supplied a usable program link. Restore
+  // that personal successful-search slot once; paid shared usage is untouched.
+  const completed=await tx.opportunitySearchRequest.findMany({where:{studentId,status:'complete',cycleStartedAt:cycle.cycleStartedAt,countedAt:{not:null}}});
+  for(const request of completed){
+    const ids=j<string[]>(request.resultIds,[]);
+    if(!ids.length)continue;
+    const programs=await tx.opportunity.findMany({where:{id:{in:ids}},select:{id:true,url:true}});
+    if(programs.length===new Set(ids).size&&programs.every(p=>!isProgramSource(p.url)))
+      await tx.opportunitySearchRequest.update({where:{id:request.id},data:{status:'empty',error:'The earlier search returned only map/search listings. Your personal refresh was restored.'}});
+  }
   // Repair earlier empty-result charges once, without touching paid usage.
   const empty=await tx.opportunitySearchRequest.findMany({where:{studentId,status:'empty',cycleStartedAt:cycle.cycleStartedAt,countedAt:{not:null}}});
   if(empty.length){

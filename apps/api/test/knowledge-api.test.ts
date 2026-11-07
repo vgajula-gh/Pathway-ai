@@ -1,11 +1,11 @@
-import {beforeAll,beforeEach,afterAll,it,expect,vi} from 'vitest';
+import {beforeAll,beforeEach,afterEach,afterAll,it,expect,vi} from 'vitest';
 import {PrismaClient} from '@prisma/client';
 import {mkdtempSync,writeFileSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';import {join} from 'node:path';import {execFile} from 'node:child_process';import {promisify} from 'node:util';
 const holder=vi.hoisted(()=>({runtime:null as any,llm:null as any}));
 const dir=mkdtempSync(join(tmpdir(),'pathway-knowledge-')),url=`file:${dir}/test.db`,db=new PrismaClient({datasourceUrl:url+'?connection_limit=1'});
 vi.mock('../src/lib/db.js',()=>({get prisma(){return db;},j:(v:string,f:unknown)=>{try{return v?JSON.parse(v):f;}catch{return f;}}}));
-vi.mock('../src/knowledge/runtime.js',()=>({initializeKnowledge:async()=>holder.runtime,knowledgeUnavailable:()=>({code:'vector_unavailable',message:'The program library cannot connect right now. Catalog picks still work.',settings:[]}),pauseKnowledge:()=>{}}));
+vi.mock('../src/knowledge/runtime.js',async()=>({...await vi.importActual('../src/knowledge/runtime.js'),initializeKnowledge:async()=>holder.runtime,knowledgeUnavailable:()=>({code:'vector_unavailable',message:'The program library cannot connect right now. Catalog picks still work.',settings:[]}),pauseKnowledge:()=>{}}));
 vi.mock('../src/agent/llm/index.js',async()=>({...await vi.importActual('../src/agent/llm/index.js'),getLLM:()=>holder.llm,requireLLM:()=>holder.llm}));
 import {memoryStore} from '../src/knowledge/adapters/memory.js';import {ingestKnowledge,searchKnowledge,reconcileVectors} from '../src/knowledge/service.js';import {RunBudget} from '../src/discovery/config.js';import {buildApp} from '../src/app.js';import {env} from '../src/lib/env.js';
 let studentId='';const originalCodes=env.accessCodes,headers=()=>({'x-student-id':studentId});
@@ -21,6 +21,7 @@ beforeEach(async()=>{
  holder.llm={runTools:vi.fn(async()=>({})),text:vi.fn(),json:vi.fn()};
 });
 afterAll(async()=>{vi.unstubAllEnvs();env.accessCodes=originalCodes;await db.$disconnect();rmSync(dir,{recursive:true,force:true});});
+afterEach(()=>{vi.restoreAllMocks();vi.unstubAllGlobals();});
 it('ingests shared chunks, skips unchanged content, replaces changed vectors and removes orphans',async()=>{
  await ingestKnowledge('program',new RunBudget());const first=await db.knowledgeChunk.findFirstOrThrow();await ingestKnowledge('program',new RunBudget());expect(holder.runtime.embedder.embed).toHaveBeenCalledTimes(1);
  await db.sourcePage.updateMany({data:{text:pageText+' New requirement.',contentHash:'changed'}});await ingestKnowledge('program',new RunBudget());const second=await db.knowledgeChunk.findFirstOrThrow();expect(second.id).not.toBe(first.id);expect((await holder.runtime.store.list()).ids).toEqual([second.id]);
@@ -131,4 +132,189 @@ it('prepares a needs-checking Scout pick once without re-extracting, and Buddy r
  const facts=structuredFacts(await db.opportunity.findUniqueOrThrow({where:{id:'program'}}),(await loadContext(studentId)).ctx);
  expect(facts.source.value).toContain('details need checking');expect(facts.eligibility.value).toContain('minimum age 16');
  await db.opportunityFeedback.create({data:{studentId,opportunityId:'program',reason:'other'}});expect(await studentOpportunityIds(studentId)).toEqual([]);expect(await db.knowledgeChunk.count()).toBeGreaterThan(0);
+});
+
+const ownerSecret='knowledge-owner-secret-'.repeat(3);
+const ownerHeaders=()=>({authorization:'Bearer '+ownerSecret});
+it('recovers legacy limited markers after a cap increase, using saved text without a source recheck',async()=>{
+ const {prepareKnowledgeBatch,knowledgeSnapshot,knowledgeDetails}=await import('../src/knowledge/preparation.js');
+ const external=vi.spyOn(await import('../src/discovery/pages.js'),'fetchOfficialPage');
+ vi.stubEnv('DISCOVERY_RECHECKS_PER_MONTH','0');
+ const state=await knowledgeSnapshot('program',holder.runtime);
+ await db.jobLease.create({data:{key:state.key,owner:'limited',expiresAt:new Date('2100-01-01')}});
+ expect((await knowledgeDetails(['program'])).program.reason).toBe('preparation_monthly_limit');
+ expect(await prepareKnowledgeBatch(studentId)).toBe(0);expect(holder.runtime.embedder.embed).not.toHaveBeenCalled();
+ vi.stubEnv('DISCOVERY_RECHECKS_PER_MONTH','1');
+ expect((await knowledgeDetails(['program'])).program.state).toBe('preparing');
+ expect(await prepareKnowledgeBatch(studentId)).toBe(1);expect(external).not.toHaveBeenCalled();
+ expect((await knowledgeDetails(['program'])).program.state).toBe('ready');
+ expect((await db.discoveryUsage.findFirstOrThrow()).rechecks).toBe(1);
+ const run=await db.discoveryRun.findFirstOrThrow();expect(JSON.parse(run.usage).indexing).toMatchObject({embeddingCallsSucceeded:1,vectorRecordsAcknowledged:1,sqlChunksCommitted:1});
+ expect(await prepareKnowledgeBatch(studentId)).toBe(0);expect(holder.runtime.embedder.embed).toHaveBeenCalledOnce();
+});
+it('retains a failed paid marker, exposes the embedding stage safely, and permits only an explicit bounded owner retry',async()=>{
+ const {prepareKnowledgeBatch}=await import('../src/knowledge/preparation.js');vi.stubEnv('JOBS_SECRET',ownerSecret);
+ holder.runtime.embedder.embed.mockRejectedValueOnce(Object.assign(new Error('sk-private-provider-body'),{status:403}));
+ expect(await prepareKnowledgeBatch(studentId)).toBe(1);
+ const failed=await db.discoveryRun.findFirstOrThrow();expect(JSON.parse(failed.usage).failures[0]).toMatchObject({component:'embedding',operation:'embed',code:'embedding_failed',httpStatus:403});
+ expect(await prepareKnowledgeBatch(studentId)).toBe(0);expect(holder.runtime.embedder.embed).toHaveBeenCalledOnce();
+ const app=await buildApp();app.log.level='silent';try{
+  const payload={opportunityId:'program',allowPaid:true};
+  expect((await app.inject({method:'POST',url:'/internal/knowledge/prepare',payload})).statusCode).toBe(401);
+  expect((await app.inject({method:'POST',url:'/internal/knowledge/prepare',headers:ownerHeaders(),payload:{opportunityId:'program'}})).statusCode).toBe(422);
+  const result=await app.inject({method:'POST',url:'/internal/knowledge/prepare',headers:ownerHeaders(),payload});
+  expect(result.statusCode).toBe(200);expect(result.json().program).toMatchObject({sqlReady:true,vectorConfirmation:'confirmed',vectorsFound:1});
+  expect(result.body).not.toContain('sk-private-provider-body');expect(holder.runtime.embedder.embed).toHaveBeenCalledTimes(2);
+  const records=(await holder.runtime.store.list()).ids;await holder.runtime.store.delete(records);
+  expect((await app.inject({method:'POST',url:'/internal/knowledge/prepare',headers:ownerHeaders(),payload})).statusCode).toBe(429);
+  expect(holder.runtime.embedder.embed).toHaveBeenCalledTimes(2);
+ }finally{await app.close();}
+});
+it('distinguishes failed Pinecone writes from successful embeddings and does not create SQL chunks after a failed upsert',async()=>{
+ const {prepareKnowledgeBatch}=await import('../src/knowledge/preparation.js');
+ vi.spyOn(holder.runtime.store,'upsert').mockRejectedValueOnce(Object.assign(new Error('private-vector-request'),{status:400}));
+ await prepareKnowledgeBatch(studentId);
+ const run=await db.discoveryRun.findFirstOrThrow(),usage=JSON.parse(run.usage);
+ expect(run.status).toBe('failed');expect(usage.failures[0]).toMatchObject({code:'vector_write_failed',component:'vector',operation:'upsert',httpStatus:400});
+ expect(usage.indexing).toMatchObject({embeddingCallsSucceeded:1,vectorRecordsAttempted:1,vectorRecordsAcknowledged:0,sqlChunksCommitted:0});
+ expect(await db.knowledgeChunk.count()).toBe(0);expect(run.usage).not.toContain('private-vector-request');
+});
+it('distinguishes SQL commit failures from vector acknowledgements and keeps useful source pages',async()=>{
+ const {prepareKnowledgeBatch}=await import('../src/knowledge/preparation.js');
+ await db.$executeRawUnsafe("CREATE TRIGGER reject_test_chunk BEFORE INSERT ON KnowledgeChunk BEGIN SELECT RAISE(ABORT, 'private-sql-detail'); END");
+ try{
+  await prepareKnowledgeBatch(studentId);
+  const usage=JSON.parse((await db.discoveryRun.findFirstOrThrow()).usage);
+  expect(usage.failures[0]).toMatchObject({component:'database',operation:'chunk_commit',code:'knowledge_storage_failed'});
+  expect(usage.indexing).toMatchObject({vectorRecordsAcknowledged:1,sqlChunksCommitted:0});
+  expect(await db.knowledgeChunk.count()).toBe(0);expect(await db.sourcePage.count()).toBe(1);expect(JSON.stringify(usage)).not.toContain('private-sql-detail');
+ }finally{await db.$executeRawUnsafe('DROP TRIGGER reject_test_chunk');}
+});
+it('detects embedding dimension failures before vector writes',async()=>{
+ const {prepareKnowledgeBatch}=await import('../src/knowledge/preparation.js');
+ holder.runtime.embedder.embed.mockResolvedValueOnce([[1,0,0]]);await prepareKnowledgeBatch(studentId);
+ const usage=JSON.parse((await db.discoveryRun.findFirstOrThrow()).usage);
+ expect(usage.failures[0]).toMatchObject({code:'embedding_dimension_mismatch',expectedDimension:2,actualDimension:3});
+ expect(usage.indexing.vectorRecordsAttempted).toBe(0);expect((await holder.runtime.store.list()).ids).toEqual([]);
+});
+it('checks namespace records without paid calls, and explicitly repairs a lost vector generation without deleting replacement IDs',async()=>{
+ vi.stubEnv('JOBS_SECRET',ownerSecret);await ingestKnowledge('program',new RunBudget());
+ const count=holder.runtime.embedder.embed.mock.calls.length,ids=(await holder.runtime.store.list()).ids;
+ await holder.runtime.store.delete(ids);
+ const app=await buildApp();app.log.level='silent';try{
+  const status=await app.inject({url:'/internal/knowledge/status?opportunityId=program',headers:ownerHeaders()});
+  expect(status.json().program).toMatchObject({sqlReady:true,vectorConfirmation:'pending_or_missing',vectorsFound:0});expect(holder.runtime.embedder.embed).toHaveBeenCalledTimes(count);
+  const repaired=await app.inject({method:'POST',url:'/internal/knowledge/prepare',headers:ownerHeaders(),payload:{opportunityId:'program',allowPaid:true}});
+  expect(repaired.json().program).toMatchObject({sqlReady:true,vectorConfirmation:'confirmed',vectorsFound:1});
+  expect((await holder.runtime.store.list()).ids).toEqual(ids);expect(await db.knowledgeChunk.count()).toBe(1);
+ }finally{await app.close();}
+});
+it('contains knowledge schema drift to the question feature and reports P2022 before embeddings',async()=>{
+ vi.stubEnv('JOBS_SECRET',ownerSecret);
+ await db.$executeRawUnsafe('ALTER TABLE KnowledgeChunk RENAME COLUMN vectorStoreKey TO renamed_for_schema_test');
+ const app=await buildApp();app.log.level='silent';try{
+  const readiness=await app.inject({url:'/internal/knowledge/status?opportunityId=program',headers:ownerHeaders()});
+  expect(readiness.json()).toMatchObject({configurationReady:false,failure:{code:'knowledge_storage_unready',databaseCode:'P2022',component:'database'}});
+  expect((await app.inject({url:'/api/opportunities',headers:headers()})).statusCode).toBe(200);expect(holder.runtime.embedder.embed).not.toHaveBeenCalled();
+ }finally{await app.close();await db.$executeRawUnsafe('ALTER TABLE KnowledgeChunk RENAME COLUMN renamed_for_schema_test TO vectorStoreKey');}
+});
+it('keeps old source facts visibly stale while preparing their existing public text',async()=>{
+ const old=new Date(Date.now()-40*86400000);await db.opportunity.update({where:{id:'program'},data:{isSample:false,source:'discovery',verificationStatus:'verified',sourceCheckedAt:old,sourceReadAt:old}});
+ await db.sourcePage.updateMany({data:{checkedAt:old}});
+ const {prepareKnowledgeBatch}=await import('../src/knowledge/preparation.js');await prepareKnowledgeBatch(studentId);
+ const app=await buildApp();app.log.level='silent';try{
+  const list=(await app.inject({url:'/api/opportunities',headers:headers()})).json();const p=list.recommended.find((o:any)=>o.id==='program');
+  expect(p).toMatchObject({verified:false,verificationStatus:'stale'});expect(p.checks.join()).toContain('out of date');
+  expect((await db.sourcePage.findFirstOrThrow()).checkedAt).toEqual(old);expect((await db.opportunity.findUniqueOrThrow({where:{id:'program'}})).sourceCheckedAt).toEqual(old);
+ }finally{await app.close();}
+});
+
+it('runs catalog reuse → preparation → real Pinecone SDK wire writes → scoped grounded answer, with no live provider',async()=>{
+ const records=new Map<string,any>(),wire:{path:string;body:any}[]=[];
+ vi.stubEnv('PINECONE_API_KEY','pcsk-test-wire-only');vi.stubEnv('PINECONE_INDEX','pathway-wire');vi.stubEnv('VECTOR_STORE','pinecone');vi.stubEnv('JOBS_SECRET',ownerSecret);
+ vi.stubGlobal('fetch',async(input:RequestInfo|URL,init?:RequestInit)=>{
+  const request=new Request(input,init),url=new URL(request.url),raw=await request.text(),body=raw?JSON.parse(raw):{};wire.push({path:url.pathname,body});
+  const json=(value:unknown)=>new Response(JSON.stringify(value),{status:200,headers:{'content-type':'application/json'}});
+  if(url.pathname==='/indexes/pathway-wire')return json({name:'pathway-wire',host:'wire.svc.pinecone.io',deployment:{deployment_type:'managed',cloud:'aws',region:'us-east-1'},schema:{fields:{_values:{type:'dense_vector',dimension:2,metric:'cosine'}}},deletion_protection:'disabled',status:{ready:true,state:'Ready'}});
+  if(url.pathname==='/vectors/upsert'){
+   expect(body.namespace).toBe('opportunities');expect(body.vectors.length).toBeGreaterThan(0);
+   for(const r of body.vectors){expect(r.values).toHaveLength(2);records.set(r.id,r);}
+   return json({upsertedCount:body.vectors.length});
+  }
+  if(url.pathname==='/vectors/fetch'){
+   expect(url.searchParams.get('namespace')).toBe('opportunities');
+   return json({namespace:'opportunities',vectors:Object.fromEntries(url.searchParams.getAll('ids').filter(id=>records.has(id)).map(id=>[id,records.get(id)]))});
+  }
+  if(url.pathname==='/describe_index_stats')return json({dimension:2,totalVectorCount:records.size,namespaces:{opportunities:{vectorCount:records.size}}});
+  if(url.pathname==='/query'){
+   expect(body.namespace).toBe('opportunities');expect(body.filter).toEqual({opportunityId:{$in:['program']}});
+   // Deliberately noisy vendor results: SQL must still enforce program scope.
+   return json({namespace:'opportunities',matches:[...records.keys()].map(id=>({id,score:1}))});
+  }
+  if(url.pathname==='/vectors/delete'){for(const id of body.ids||[])records.delete(id);return json({});}
+  throw new Error('Unexpected test transport request');
+ });
+ const {pineconeStore}=await import('../src/knowledge/adapters/pinecone.js');holder.runtime.store=pineconeStore();
+ await db.savedOpportunity.deleteMany();await db.student.update({where:{id:studentId},data:{region:'US',interests:'["coding"]'}});
+ const original=await db.opportunity.findUniqueOrThrow({where:{id:'program'}});
+ await db.opportunity.update({where:{id:'program'},data:{isSample:false,source:'discovery',costType:'free',costVerifiedAt:new Date(),sourceReadAt:new Date(),tags:'["coding"]',skills:'["coding"]'}});
+ for(let i=0;i<5;i++){
+  const id='wire-'+i;
+  await db.opportunity.create({data:{...original,id,name:'Example Coding '+i,isSample:false,source:'discovery',url:'https://example.edu/'+id,costType:i<2?'free':'paid',cost:i<2?'Free':'$50',costVerifiedAt:new Date(),sourceReadAt:new Date(),tags:'["coding"]',skills:'["coding"]'}});
+  await db.sourcePage.create({data:{opportunityId:id,sourceUrl:'https://example.edu/'+id,pageTitle:'Coding rules',text:pageText,contentHash:id}});
+ }
+ const app=await buildApp();app.log.level='silent';try{
+  const reused=await app.inject({method:'POST',url:'/api/opportunities/refresh',headers:headers()});expect(reused.json().usedSharedCatalog).toBe(true);
+  for(let i=0;i<8;i++){
+   const list=(await app.inject({url:'/api/opportunities',headers:headers()})).json();if(list.knowledgeStates.program==='ready'&&records.size===6)break;
+   expect((await app.inject({method:'POST',url:'/api/discovery/run',headers:headers(),payload:{}})).statusCode).toBe(200);
+  }
+  const list=(await app.inject({url:'/api/opportunities',headers:headers()})).json();expect(list.knowledgeStates.program,JSON.stringify({details:list.knowledgeDetails,runs:await db.discoveryRun.findMany(),paths:wire.map(w=>w.path)})).toBe('ready');
+  expect(records.size).toBe(6);expect(await db.knowledgeChunk.count()).toBe(6);
+  expect(wire.filter(r=>r.path==='/vectors/upsert')).toHaveLength(6);
+  const chunk=await db.knowledgeChunk.findFirstOrThrow({where:{opportunityId:'program'}});
+  holder.llm.json.mockResolvedValue({claims:[{chunkId:chunk.id,quote:'Applications require a teacher recommendation.'}],nextQuery:null});
+  const answer=await app.inject({method:'POST',url:'/api/buddy/messages',headers:headers(),payload:{opportunityId:'program',text:'What is required?'}});
+  expect(answer.statusCode).toBe(200);expect(answer.json().reply).toContain('teacher recommendation');expect(answer.json().citations.every((c:any)=>c.opportunityId==='program')).toBe(true);
+  const status=await app.inject({url:'/internal/knowledge/status?opportunityId=program',headers:ownerHeaders()});
+  expect(status.json(),JSON.stringify({status:status.json(),paths:wire.map(w=>w.path)})).toMatchObject({configurationReady:true,store:'pinecone',namespace:'opportunities',namespaceRecords:6,indexDimension:2,program:{sqlReady:true,vectorConfirmation:'confirmed',vectorsFound:1}});
+  expect(JSON.stringify([...records.values()])).not.toContain('Student');
+ }finally{await app.close();}
+});
+
+it('restores a maps-only personal successful-search slot once while preserving paid usage and saved progress',async()=>{
+ const now=new Date();await db.opportunity.update({where:{id:'program'},data:{url:'https://www.google.com/maps/search/Example+Program'}});
+ await db.pickRefreshState.create({data:{studentId,cycleStartedAt:now,autoRefreshedAt:now,manualUsed:1,interestSignature:'coding'}});
+ await db.opportunitySearchRequest.create({data:{studentId,kind:'initial',signature:'maps-only',status:'complete',groupBindings:'[]',resultIds:'["program"]',manualSlot:'base',cycleStartedAt:now,countedAt:now}});
+ const month=now.toISOString().slice(0,7);await db.discoveryUsage.create({data:{month,runs:4,rechecks:30,embeddings:16,vectorUpserts:39}});
+ const {refreshStatus}=await import('../src/discovery/refresh.js');
+ expect((await refreshStatus(studentId,now)).remaining).toBe(1);expect((await refreshStatus(studentId,now)).remaining).toBe(1);
+ expect((await db.discoveryUsage.findUniqueOrThrow({where:{month}}))).toMatchObject({runs:4,rechecks:30,embeddings:16,vectorUpserts:39});
+ expect(await db.savedOpportunity.count()).toBe(1);expect(await db.opportunity.count()).toBe(1);
+ expect(await db.auditEvent.count({where:{studentId,event:'Restored search allowance for empty results'}})).toBe(1);
+});
+
+it('does not spin or fund preparation for a saved listing without readable program text',async()=>{
+ await db.sourcePage.deleteMany();await db.opportunity.update({where:{id:'program'},data:{url:'https://www.google.com/maps/search/Example'}});
+ const {knowledgeDetails,prepareKnowledgeBatch}=await import('../src/knowledge/preparation.js');
+ expect((await knowledgeDetails(['program'])).program).toMatchObject({state:'unavailable',reason:'source_unavailable'});
+ expect(await prepareKnowledgeBatch(studentId)).toBe(0);expect(await db.discoveryRun.count()).toBe(0);expect(holder.runtime.embedder.embed).not.toHaveBeenCalled();
+});
+
+it('reports an active funded preparation as running even after its reservation fills the monthly cap',async()=>{
+ const {knowledgeSnapshot,knowledgeDetails}=await import('../src/knowledge/preparation.js');
+ const state=await knowledgeSnapshot('program',holder.runtime);
+ await db.jobLease.create({data:{key:state.key,owner:'running',expiresAt:new Date(Date.now()+60000)}});
+ vi.stubEnv('DISCOVERY_RECHECKS_PER_MONTH','1');await db.discoveryUsage.create({data:{month:new Date().toISOString().slice(0,7),rechecks:1}});
+ expect((await knowledgeDetails(['program'])).program).toMatchObject({state:'preparing',reason:'running'});
+});
+
+it('includes empty-prompt knowledge failures in owner diagnostics without invoking embeddings or search',async()=>{
+ vi.stubEnv('JOBS_SECRET',ownerSecret);
+ const run=await db.discoveryRun.create({data:{groupKey:'knowledge:program',kind:'knowledge',status:'failed',promptVersion:'',usage:JSON.stringify({phase:'writing_vectors',indexing:{vectorRecordsAttempted:1,vectorRecordsAcknowledged:0},failures:[{stage:'index',code:'vector_write_failed',component:'vector',operation:'upsert'}]})}});
+ const app=await buildApp();app.log.level='silent';try{
+  const report=(await app.inject({url:'/internal/diagnostics',headers:ownerHeaders()})).json();
+  expect(report.preparation.runs).toContainEqual(expect.objectContaining({id:run.id,kind:'knowledge',phase:'writing_vectors',indexing:{vectorRecordsAttempted:1,vectorRecordsAcknowledged:0}}));
+  expect(holder.runtime.embedder.embed).not.toHaveBeenCalled();expect(await db.aIUsage.count()).toBe(0);
+ }finally{await app.close();}
 });

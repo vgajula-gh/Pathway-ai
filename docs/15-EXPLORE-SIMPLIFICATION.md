@@ -4,7 +4,7 @@ This supersedes the strict admission and six-card visibility rules in [the origi
 
 ## Student experience
 
-Only a confirmed, real deadline earlier than the student's local date hides a result. Missing deadlines, closed/unknown applications, future openings, stale sources, unreviewed domains, grade/region/format mismatches, fee concerns, unknown cost and unrelated interests remain visible with warnings and ranking factors. Visibility is not a claim that the student can apply or applications are open.
+For a real program link, only a confirmed, real deadline earlier than the student's local date hides a result. Known Maps/search listings are excluded as non-program sources; explicit safe redirect targets can recover the actual site. Missing deadlines, closed/unknown applications, future openings, stale sources, unreviewed domains, grade/region/format mismatches, fee concerns, unknown cost and unrelated interests remain visible with warnings and ranking factors. Visibility is not a claim that the student can apply or applications are open.
 
 Primary picks still rank up to three confirmed Free and three Paid or cost-unconfirmed. Explore ranks the eligible library by fit and displays at most five Free and five Paid or cost-unconfirmed results in the expanded groups, without duplicates. Additional programs stay stored for reuse and refill; the display cap does not increase paid-search targets. Unknown cost never earns Free. Interested and Not for me remain explicit student choices; saved progress stays in Interested and dismissals remain student-specific. Samples require DEMO_MODE.
 
@@ -21,7 +21,7 @@ Authenticated GET /api/opportunities can recover up to 100 earlier rejected/erro
 
 ## Trust, knowledge and limits
 
-Unconfirmed links show Needs checking; only supported reviewed records gain Verified. HTTPS/DNS/robots/redirect/size safeguards, authentication/access codes, privacy, proposal approvals and AI limits remain enforced. PDF links may display without automatic reading. SQL owns cards; optional Pinecone embeddings require fetched text and funded preparation. Additional library results become eligible for program questions after Interested and preparation.
+Unconfirmed links show Needs checking; only supported reviewed records gain Verified, displayed as stale when the source check is over 30 days old. HTTPS/DNS/robots/redirect/size safeguards, authentication/access codes, privacy, proposal approvals and AI limits remain enforced. PDF links may display without automatic reading. SQL owns cards; optional Pinecone embeddings require fetched text and funded preparation. Additional library results become eligible for program questions after Interested and preparation. Saved text is reused without changing check dates; shared-limit and owner-retry messages replace indefinite preparation. See [recovery and diagnostics](21-EXPLORE-RECOVERY.md).
 
 A settled search with usable partial links uses the normal successful-search allowance. Failure or an empty result uses no successful-search allowance; paid attempts still count globally. Earlier empty-result charges are restored once with an audit record. Explicit failed/empty retries wait one hour and are bounded to three unsuccessful shared-group attempts per UTC day. Existing configured attempt limits remain unchanged. An additional $25 default estimated discovery cap reserves funds before work and reconciles using observed tokens/tool calls; it is not a provider-wide hard billing ceiling.
 

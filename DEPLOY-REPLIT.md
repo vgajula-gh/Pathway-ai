@@ -1,5 +1,7 @@
 # Publish Pathway AI on Replit
 
+**Explore/Pinecone recovery:** this patch adds no migration or Secret. After sync/build/publish, start with the read-only `npm run check:knowledge -- --url https://your-app.replit.app` in the workspace Shell (existing owner `JOBS_SECRET` must match Publishing). It checks schema, index, namespace and current preparation allowance. Failed paid work needs an explicit bounded retry; an exhausted preparation cap is preserved. [Recovery steps and meanings](docs/21-EXPLORE-RECOVERY.md).
+
 **Current Growth Map Drop 3 update:** apply migration `20261108010000_growth_letters` to development, then review/apply the **new GrowthLetter table** during Publish while preserving records. Run the read-only `npm run check:growth` in each environment: ten tables and drop1Ready/drop2Ready/drop3Ready should all be ready. [Drop 3 checklist](docs/18-GROWTH-LETTERS.md). No new required Secret is needed.
 
 

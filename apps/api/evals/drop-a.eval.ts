@@ -19,7 +19,7 @@ vi.mock('../src/lib/db.js', () => ({ get prisma() { return db; }, j: (s: string,
 vi.mock('../src/knowledge/runtime.js', () => ({ initializeKnowledge: async () => holder.unavailable ? null : holder.runtime,
   knowledgeUnavailable: () => ({ code: 'vector_unavailable', message: 'Program details are unavailable.', settings: [] }), pauseKnowledge: () => {} }));
 // Evals call ingestion explicitly, independently of automatic knowledge preparation.
-vi.mock('../src/knowledge/preparation.js', () => ({ prepareKnowledgeBatch: async () => 0, knowledgeStates: async () => ({}) }));
+vi.mock('../src/knowledge/preparation.js', () => ({ prepareKnowledgeBatch: async () => 0, knowledgeStates: async () => ({}), knowledgeDetails: async () => ({}) }));
 vi.mock('../src/agent/llm/index.js', async () => ({ ...await vi.importActual('../src/agent/llm/index.js'), getLLM: () => holder.llm, requireLLM: () => holder.llm }));
 vi.mock('../src/scout/extract.js', () => ({ extractScout: async () => { holder.extractCalls++; throw new Error('Unexpected extraction in evidence-first eval'); } }));
 vi.mock('../src/discovery/search/index.js', async () => {
@@ -190,7 +190,7 @@ beforeEach(async () => {
   replay([]);
 });
 afterAll(async () => {
-  const expected = live ? 4 : 12;
+  const expected = live ? 4 : 15;
   writeReport(process.env.EVAL_OUTPUT!, {
     schemaVersion: 1, mode: live ? 'live' : 'offline', datasetVersion: fixture.version, datasetDigest: process.env.EVAL_DATASET_DIGEST!,
     codeRevision: process.env.EVAL_CODE_REVISION!, codeDirty: process.env.EVAL_CODE_DIRTY === 'true', promptDigest: process.env.EVAL_PROMPT_DIGEST!, label: process.env.EVAL_LABEL!,
@@ -261,6 +261,42 @@ if (!live) {
     c('no-private-profile-fields', 'privacy', !/PRIVATE_|eval-student-a/.test(prompt));
     c('selected-interests-in-prompt', 'discovery', fixture.interests.every(i => prompt.includes(i)));
     c('unknown-fields-dropped', 'privacy', !('name' in state.context) && !('goals' in state.context));
+  });
+  evaluate('discovery-map-rejection', 'Use direct program sources instead of spending page attempts on maps', async (c, m) => {
+    const valid = page('Example Coding Website'), listing = page('Example Map Listing');
+    listing.lead.officialUrl = 'https://www.google.com/maps/search/Example+Map+Listing';
+    holder.response = response([listing, valid]);
+    await runScout();
+    const stored = await db.opportunity.findMany();
+    c('only-direct-program-saved', 'discovery', stored.length === 1 && stored[0].url === valid.lead.officialUrl);
+    c('maps-never-fetched', 'sources', holder.fetches === 1, 1, holder.fetches);
+    c('single-research-no-repair', 'budget', holder.researchCalls === 1);
+    m.programsSaved = stored.length; m.pageAttempts = holder.fetches;
+  });
+  evaluate('preparation-allowance-recovery', 'Recover an unfunded limited marker from saved text after a cap increase', async (c, m) => {
+    const preparation = await vi.importActual<typeof import('../src/knowledge/preparation.js')>('../src/knowledge/preparation.js');
+    await seed(); const f = page('Example Cached Program');
+    await db.sourcePage.create({ data: { opportunityId: 'program', sourceUrl: f.source.sourceUrl, pageTitle: f.source.pageTitle, text: f.source.text, contentHash: f.source.contentHash } });
+    await db.savedOpportunity.create({ data: { studentId, opportunityId: 'program' } });
+    vi.stubEnv('DISCOVERY_RECHECKS_PER_MONTH', '0');
+    c('no-work-when-limited', 'budget', await preparation.prepareKnowledgeBatch(studentId) === 0 && await db.discoveryRun.count() === 0);
+    vi.stubEnv('DISCOVERY_RECHECKS_PER_MONTH', '1');
+    c('cached-preparation-recovers', 'indexing', await preparation.prepareKnowledgeBatch(studentId) === 1);
+    c('ready-chunks', 'indexing', (await preparation.knowledgeStates(['program'])).program === 'ready');
+    c('no-refetch-or-research', 'budget', holder.fetches === 0 && holder.researchCalls === 0);
+    m.sqlChunksCommitted = await db.knowledgeChunk.count();
+    m.vectorRecords = (await holder.runtime!.store.list()).ids.length;
+    vi.stubEnv('DISCOVERY_RECHECKS_PER_MONTH', '0');
+  });
+  evaluate('maps-only-personal-slot', 'Restore an unusable maps-only result without resetting any paid usage', async (c) => {
+    const now = new Date(); await seed(); await db.opportunity.update({ where: { id: 'program' }, data: { url: 'https://www.google.com/maps/search/Example+Program' } });
+    await db.pickRefreshState.create({ data: { studentId, cycleStartedAt: now, autoRefreshedAt: now, manualUsed: 1, interestSignature: 'coding|robotics' } });
+    await db.opportunitySearchRequest.create({ data: { studentId, kind: 'initial', signature: 'maps-only', status: 'complete', groupBindings: '[]', resultIds: '["program"]', manualSlot: 'base', cycleStartedAt: now, countedAt: now } });
+    const month = now.toISOString().slice(0, 7); await db.discoveryUsage.create({ data: { month, runs: 4, rechecks: 30 } });
+    const { refreshStatus } = await import('../src/discovery/refresh.js');
+    c('personal-success-slot-restored', 'catalog', (await refreshStatus(studentId, now)).remaining === 1);
+    c('paid-records-kept', 'budget', (await db.discoveryUsage.findUniqueOrThrow({ where: { month } })).runs === 4 && (await db.discoveryUsage.findUniqueOrThrow({ where: { month } })).rechecks === 30);
+    c('historical-record-kept', 'privacy', await db.opportunity.count() === 1);
   });
   evaluate('qa-supported', 'Retrieve relevant source and render supported aid answer with citations', async (c, m) => {
     const chunk = await prepareQA(); replay([{ chunkId: chunk.id, quote: fixture.aidQuote }]);

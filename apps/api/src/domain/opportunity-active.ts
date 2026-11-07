@@ -1,4 +1,6 @@
+import {isProgramSource} from './program-source.js';
 export type ActiveOpportunity = {
+  url?:string;
   category:string; name:string; opportunityType?:string; verificationStatus?:string;
   sourceCheckedAt?:Date|null; verifiedAt?:Date|null; deadline?:string|null;
   applicationStatus?:string; applicationStatusCheckedAt?:Date|null; activityDate?:string|null;
@@ -15,7 +17,7 @@ export function opportunityKind(category:string,name='',description='') {
   return 'program';
 }
 export function activeOpportunity(o:ActiveOpportunity,today:string,now=new Date()) {
-  return !deadlineExpired(o.deadline,today);
+  return (!o.url||isProgramSource(o.url))&&!deadlineExpired(o.deadline,today);
 }
 /** Stored deadlines are source-checked dates. Missing/invalid dates mean unknown,
  * never expired. Other details inform warnings/ranking, not result admission. */

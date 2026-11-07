@@ -9,30 +9,36 @@ import { ProgramRetriever, passageFromDocument } from './retriever.js';
 import { privateWorkflow, workflowConfig } from '../workflows/privacy.js';
 import { initializeKnowledge, KnowledgeRuntime } from './runtime.js';
 import { validVector, Passage, embeddingIdentity, vectorStoreIdentity } from './contracts.js';
-async function ingestUnlocked(opportunityId: string, budget: RunBudget, runtime?: KnowledgeRuntime) {
+import {knowledgeStep} from './failures.js';
+import {DiscoveryFailure} from '../discovery/failures.js';
+import {isProgramSource} from '../domain/program-source.js';
+import {fileSourceType} from '../discovery/source-urls.js';
+async function ingestUnlocked(opportunityId: string, budget: RunBudget, runtime?: KnowledgeRuntime,options:{force?:boolean}={}) {
   const rt = runtime || (await initializeKnowledge());
   if (!rt) return;
-  const pages = await prisma.sourcePage.findMany({ where: { opportunityId } });
-  const obsolete = await prisma.knowledgeChunk.findMany({
+  const pages = (await knowledgeStep('database','source_read',()=>prisma.sourcePage.findMany({ where: { opportunityId } })))
+    .filter(p=>isProgramSource(p.sourceUrl)&&!fileSourceType(p.sourceUrl)&&!!p.text.trim());
+  const obsolete = await knowledgeStep('database','chunk_read',()=>prisma.knowledgeChunk.findMany({
     where: { opportunityId, sourceUrl: { notIn: pages.map((p) => p.sourceUrl) } },
     select: { id: true },
-  });
+  }));
   if (obsolete.length) {
-    await prisma.knowledgeChunk.deleteMany({ where: { id: { in: obsolete.map((c) => c.id) } } });
-    await rt.store.delete(obsolete.map((c) => c.id));
+    await knowledgeStep('database','chunk_commit',()=>prisma.knowledgeChunk.deleteMany({ where: { id: { in: obsolete.map((c) => c.id) } } }));
+    await knowledgeStep('vector','retire_vectors',()=>rt.store.delete(obsolete.map((c) => c.id)));
   }
+  if(!pages.length){budget.phase='source_unavailable';return;}
   for (const page of pages) {
-    const old = await prisma.knowledgeChunk.findMany({ where: { opportunityId, sourceUrl: page.sourceUrl } });
+    const old = await knowledgeStep('database','chunk_read',()=>prisma.knowledgeChunk.findMany({ where: { opportunityId, sourceUrl: page.sourceUrl } }));
     if (
-      old.length &&
+      !options.force&&old.length &&
       old.every(
         (c) => c.contentHash === page.contentHash && c.embeddingModel === embeddingIdentity(rt.embedder) && c.vectorStoreKey===vectorStoreIdentity(rt.store),
       )
     ) {
-      await prisma.knowledgeChunk.updateMany({
+      await knowledgeStep('database','chunk_commit',()=>prisma.knowledgeChunk.updateMany({
         where: { opportunityId, sourceUrl: page.sourceUrl },
         data: { checkedAt: page.checkedAt },
-      });
+      }));
       continue;
     }
     const texts = (await splitOfficialPages([{ ...page, links: [] }]))
@@ -41,11 +47,14 @@ async function ingestUnlocked(opportunityId: string, budget: RunBudget, runtime?
       vectors: number[][] = [];
     for (let i = 0; i < texts.length; i += 20) {
       budget.take('embeddings');
+      budget.phase='embedding';budget.indexing.embeddingCallsAttempted++;await budget.onStep?.();
       budget.usage.tokens += Math.ceil(texts.slice(i, i + 20).join(' ').length / 3);
-      vectors.push(...(await rt.embedder.embed(texts.slice(i, i + 20), 'passage')));
+      vectors.push(...(await knowledgeStep('embedding','embed',()=>rt.embedder.embed(texts.slice(i, i + 20), 'passage'))));
+      budget.indexing.embeddingCallsSucceeded++;await budget.onStep?.();
     }
     if (vectors.length !== texts.length || vectors.some((v) => !validVector(v, rt.embedder.dimension)))
-      throw new Error('Embedding dimensions or response do not match the index');
+      throw new DiscoveryFailure({stage:'index',code:'embedding_dimension_mismatch',component:'embedding',operation:'embed',
+        expectedDimension:rt.embedder.dimension,actualDimension:vectors.find(v=>v.length!==rt.embedder.dimension)?.length??vectors[0]?.length??0});
     const chunks = texts.map((text, i) => ({
       id:
         'chunk-' +
@@ -65,8 +74,9 @@ async function ingestUnlocked(opportunityId: string, budget: RunBudget, runtime?
       localEmbedding: rt.store.kind === 'memory' ? JSON.stringify(vectors[i]) : '[]',
     }));
     budget.take('vectorUpserts', chunks.length);
+    budget.phase='writing_vectors';budget.indexing.vectorRecordsAttempted+=chunks.length;await budget.onStep?.();
     // Write the new vectors before retiring the old generation. PostgreSQL remains the authority.
-    await rt.store.upsert(
+    await knowledgeStep('vector','upsert',()=>rt.store.upsert(
       chunks.map((c, i) => ({
         id: c.id,
         values: vectors[i],
@@ -78,16 +88,23 @@ async function ingestUnlocked(opportunityId: string, budget: RunBudget, runtime?
           checkedAt: c.checkedAt.toISOString(),
         },
       })),
-    );
-    await prisma.$transaction(async (tx) => {
+    ));
+    budget.indexing.vectorRecordsAcknowledged+=chunks.length;await budget.onStep?.();
+    budget.phase='saving_chunks';await budget.onStep?.();
+    await knowledgeStep('database','chunk_commit',()=>prisma.$transaction(async (tx) => {
       await tx.knowledgeChunk.deleteMany({ where: { opportunityId, sourceUrl: page.sourceUrl } });
       if (chunks.length) await tx.knowledgeChunk.createMany({ data: chunks });
-    });
-    await rt.store.delete(old.map((c) => c.id));
+    }));
+    budget.indexing.sqlChunksCommitted+=chunks.length;await budget.onStep?.();
+    // IDs are deterministic; unchanged generations must not delete the vectors just upserted.
+    const retired=old.filter(c=>!chunks.some(n=>n.id===c.id)).map(c=>c.id);
+    await knowledgeStep('vector','retire_vectors',()=>rt.store.delete(retired));
+    budget.indexing.retiredVectors+=retired.length;
   }
+  budget.phase='complete';await budget.onStep?.();
 }
-export async function ingestKnowledge(opportunityId:string,budget:RunBudget,runtime?:KnowledgeRuntime) {
-  return withJobLock('knowledge:'+opportunityId,()=>ingestUnlocked(opportunityId,budget,runtime));
+export async function ingestKnowledge(opportunityId:string,budget:RunBudget,runtime?:KnowledgeRuntime,options:{force?:boolean}={}) {
+  return withJobLock('knowledge:'+opportunityId,()=>ingestUnlocked(opportunityId,budget,runtime,options));
 }
 export async function reconcileVectors(runtime?: KnowledgeRuntime) {
   const rt = runtime || (await initializeKnowledge());

@@ -3,6 +3,16 @@ import type {SourceType} from './source-urls.js';
 import {OpportunityEvidenceError,type VerificationIssue} from '../domain/opportunity-evidence.js';
 export type FailureStage = 'search' | 'robots' | 'fetch' | 'extract' | 'verify' | 'store' | 'index';
 const messages = {
+  no_program_sources:'The search returned listings rather than program websites. Please try a more specific interest or search again later.',
+  embedding_failed:'The program text could not be embedded. Your program links are still available.',
+  embedding_dimension_mismatch:'The embedding response did not match the configured vector dimensions. The owner can check the program library setup.',
+  vector_write_failed:'Program vectors could not be stored. Your program links are still available.',
+  vector_read_failed:'Stored program vectors could not be checked. Your program links are still available.',
+  vector_dimension_mismatch:'The vector index and embedding dimensions do not match. The owner can check the program library setup.',
+  vector_index_type_mismatch:'The configured index does not support this program library’s stored vectors. The owner can check the index type.',
+  knowledge_storage_unready:'Program knowledge storage needs a database schema update. Your program links are still available.',
+  knowledge_storage_failed:'Program knowledge could not be saved to the database. Your program links are still available.',
+  program_source_unavailable:'A readable program webpage is needed before questions can be prepared.',
   interrupted:'This research step was interrupted. Completed results were kept; paid work was not repeated.',
   robots_blocked: 'The official website does not allow automated reading of this page.',
   robots_unavailable: 'The official website’s crawling rules could not be checked.',
@@ -38,7 +48,10 @@ const messages = {
   service_unavailable: 'The program search service is temporarily unavailable.',
 };
 export type FailureInfo = { stage: FailureStage; code: keyof typeof messages; sourceHost?: string; httpStatus?: number;
-  operation?:'research'|'repair'|'extract';providerCode?:string;providerParam?:string;
+  component?:'embedding'|'vector'|'database'|'source';operation?:'research'|'repair'|'extract'|'source_read'|'chunk_read'|'split'|'embed'|'upsert'|'chunk_commit'|'retire_vectors'|'store_info'|'vector_fetch';
+  databaseCode?:'P2021'|'P2022'|'P2002'|'P2024';expectedDimension?:number;actualDimension?:number;
+  databaseTable?:'SourcePage'|'KnowledgeChunk';databaseField?:string;providerError?:'authorization'|'not_found'|'invalid_request'|'connection';
+  providerCode?:string;providerParam?:string;
   verification?:VerificationIssue[];
   issues?:{field:string;code:string}[];finishReason?:'length'|'content_filter'|'empty'|'refusal';errorType?:'TypeError'|'ReferenceError'|'Error';location?:string;
   mediaType?:SourceType;contentEncoding?:'gzip'|'br'|'deflate'|'identity'|'other' };

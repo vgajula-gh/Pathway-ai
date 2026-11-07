@@ -4,7 +4,7 @@ import {RunBudget,type Usage} from '../discovery/config.js';
 import {fetchOfficialPage,type Page} from '../discovery/pages.js';
 import {fileSourceType,httpsSourceURL} from '../discovery/source-urls.js';
 import {storeCandidate,trustedDomains,type Group} from '../discovery/pipeline.js';
-import {failureInfo,failureMessage,primaryFailure,operationalFailure,type FailureInfo} from '../discovery/failures.js';
+import {DiscoveryFailure,failureInfo,failureMessage,primaryFailure,operationalFailure,type FailureInfo} from '../discovery/failures.js';
 import {getSearch} from '../discovery/search/index.js';
 import {research} from './research.js';
 import {extractScout} from './extract.js';
@@ -21,6 +21,7 @@ import {resolveEvidence,sourcePassages} from './passages.js';
 import {confirmedResearchFacts,researchWarnings} from '../domain/research-evidence.js';
 import {estimatedCallCost} from './costs.js';
 import {settleDiscoverySpend} from '../discovery/spend.js';
+import {programSourceURL,genericLeadName} from '../domain/program-source.js';
 import type {LLMUsage} from '../agent/llm/types.js';
 import {privateWorkflow,workflowConfig,type WorkflowStep} from '../workflows/privacy.js';
 
@@ -107,7 +108,7 @@ export async function advanceScout(run:Run,overrides:Partial<ScoutDependencies>=
       budget.candidates={found:0,filtered:0,queued:0};state.queuedCostHints={free:0,paid:0};
       const seen=new Set<string>(),programs=new Set<string>();
       for(const lead of balancedLeads(state.researchOutput?.candidates||[])) {
-        const url=httpsSourceURL(lead.officialUrl),mediaType=url?fileSourceType(url):null;
+        const url=programSourceURL(lead.officialUrl),mediaType=url?fileSourceType(url):null;
         const key=url?identity(url.hostname,lead.name):lead.officialUrl;
         if(seen.has(url?.href||lead.officialUrl)||programs.has(key))continue;seen.add(url?.href||lead.officialUrl);programs.add(key);budget.candidates.found++;
         const filtered=!url;
@@ -140,13 +141,19 @@ export async function advanceScout(run:Run,overrides:Partial<ScoutDependencies>=
       if(fresh&&cached&&ScoutFacts.safeParse(j(cached.facts,{})).success&&pagesOf(cached.pages).length) {
         candidate=await prisma.researchCandidate.update({where:{id:candidate.id},data:{pages:cached.pages,facts:cached.facts,status:'extracted'}});state.stage='qualify';
       } else {
-        const main=await deps.fetch(candidate.url,budget),pages=[main];
+        const source=programSourceURL(candidate.url);
+        if(!source)throw new DiscoveryFailure({stage:'fetch',code:'program_source_unavailable'});
+        const main=await deps.fetch(source.href,budget),pages=[main];
         for(const url of (evidenceFirst?[]:main.links).filter(v=>{const u=httpsSourceURL(v);return u&&u.origin===new URL(main.sourceUrl).origin&&!fileSourceType(u);}).slice(0,2)) {
           try{pages.push(await deps.fetch(url,budget));}catch(error){budget.failures.push(failureInfo(error,'fetch'));}
         }
         candidate=await prisma.researchCandidate.update({where:{id:candidate.id},data:{pages:JSON.stringify(pages),status:'fetched'}});state.stage='extract';
         if(evidenceFirst){
-          const lead=leadFor(candidate.url)||{name:candidate.name||main.pageTitle,officialUrl:candidate.url,interests:[],costHint:'unknown' as const};
+          let lead=leadFor(candidate.url)||{name:candidate.name||main.pageTitle,officialUrl:candidate.url,interests:[],costHint:'unknown' as const};
+          if(genericLeadName(lead.name)&&main.pageTitle.trim()&&!/^(access denied|not found|404|sign in|log in)/i.test(main.pageTitle.trim())){
+            lead={...lead,name:main.pageTitle.trim().slice(0,200)};
+            candidate=await prisma.researchCandidate.update({where:{id:candidate.id},data:{name:lead.name}});
+          }
           candidate=await prisma.researchCandidate.update({where:{id:candidate.id},data:{facts:JSON.stringify(confirmedResearchFacts(lead,pages)),status:'extracted'}});state.stage='qualify';
         }
         if(candidate.opportunityId) {

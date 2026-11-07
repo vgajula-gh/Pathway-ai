@@ -9,8 +9,9 @@ import { Sheet, Typing, toast, useLoad } from '../components/ui';
 import ProposalReview from '../components/ProposalReview';
 import OpportunitySearch, { OpportunitySearchStatus } from '../components/OpportunitySearch';
 import { visibleRecommendations } from '../lib/explore-recommendations';
+import ProgramKnowledgeStatus,{type ProgramKnowledgeDetail} from '../components/ProgramKnowledgeStatus';
 
-type List = OpportunitySearchStatus & { watchlist?: (Opportunity & {openingDate:string})[]; picks: Opportunity[]; recommended: Opportunity[]; excluded: { id: string; name: string; reasons: string[] }[]; canAskAll?:boolean; knowledgeStates?:Record<string,string>; preparing?:boolean; interestedCount: number; dismissed: number; sampleData: boolean };
+type List = OpportunitySearchStatus & { watchlist?: (Opportunity & {openingDate:string})[]; picks: Opportunity[]; recommended: Opportunity[]; excluded: { id: string; name: string; reasons: string[] }[]; canAskAll?:boolean; knowledgeStates?:Record<string,string>;knowledgeDetails?:Record<string,ProgramKnowledgeDetail>; preparing?:boolean; interestedCount: number; dismissed: number; sampleData: boolean };
 
 export default function Explore({ me, ask, setMe,initialOpportunityId,onInitialOpened }: { initialOpportunityId?:string|null;onInitialOpened?:()=>void; me: Student; ask: (t: string, opportunityId?: string) => void; setMe?: (s:Student)=>void }) {
   const [growthReview,setGrowthReview]=useState<string|null>(null);
@@ -19,6 +20,14 @@ export default function Explore({ me, ask, setMe,initialOpportunityId,onInitialO
   const [open, setOpen] = useState<Opportunity | null>(null), [review, setReview] = useState<Proposal | null>(null), [cmp, setCmp] = useState<string[]>([]), [showCmp, setShowCmp] = useState(false);
   const [busy,setBusy]=useState(false),[searchError,setSearchError]=useState<string|null>(null),[editing,setEditing]=useState(false);
   const worker=useRef(false);
+  useEffect(()=>{
+    if(typeof window==='undefined'||typeof document==='undefined')return;
+    const refresh=()=>{if(document.visibilityState!=='hidden')reload();};
+    window.addEventListener('focus',refresh);document.addEventListener('visibilitychange',refresh);
+    return()=>{window.removeEventListener('focus',refresh);document.removeEventListener('visibilitychange',refresh);};
+  },[reload]);
+  const preparationLimited=Object.values(data?.knowledgeDetails||{}).some(d=>d.reason==='preparation_monthly_limit'||d.reason==='ai_monthly_limit');
+  useEffect(()=>{if(!preparationLimited)return;const timer=setInterval(reload,30000);return()=>clearInterval(timer);},[preparationLimited,reload]);
   useEffect(()=>{if(!initialOpportunityId)return;let active=true;void api<Opportunity>('/api/opportunities/'+initialOpportunityId).then(o=>{if(active){setOpen(o);onInitialOpened?.();}}).catch(e=>{if(active){setSearchError((e as Error).message);onInitialOpened?.();}});return()=>{active=false;};},[initialOpportunityId]);
   useEffect(()=>{
     if(!(data?.finding||data?.preparing)||!me.aiConsent)return;
@@ -41,7 +50,7 @@ export default function Explore({ me, ask, setMe,initialOpportunityId,onInitialO
   const compared = data.recommended.filter(o => cmp.includes(o.id));
   return (
     <>
-      {data.interestedCount>0&&<Applications ask={ask} knowledgeStates={data.knowledgeStates} refresh={String(data.interestedCount)+data.recommended.map(o=>o.status).join()} />}
+      {data.interestedCount>0&&<Applications ask={ask} knowledgeStates={data.knowledgeStates} knowledgeDetails={data.knowledgeDetails} refresh={String(data.interestedCount)+data.recommended.map(o=>o.status).join()} />}
       <section className="sec opportunity-search" aria-label="Opportunity search">
       <p className="label">Opportunity search</p>
       <h1 className="display">Explore opportunities</h1>
@@ -61,7 +70,7 @@ export default function Explore({ me, ask, setMe,initialOpportunityId,onInitialO
             <div className="factors">{o.fit.factors!.slice(0, 5).map(f => <span key={f.key} className="factor"><i className={`f-${f.state}`} />{f.key}</span>)}</div></button>
           <div className="foot"><button aria-pressed={!!o.status && o.status !== 'dismissed'} onClick={() => status(o.id, !!o.status && o.status !== 'dismissed' ? 'none' : 'saved')}>Interested</button>
             <button aria-pressed={cmp.includes(o.id)} onClick={() => setCmp(c => c.includes(o.id) ? c.filter(x => x !== o.id) : [...c, o.id].slice(-3))}>{cmp.includes(o.id) ? 'Comparing' : 'Compare'}</button>
-            <button onClick={() => setDismiss(o)}>Not for me</button>{!o.canAsk&&<span className="note">{o.knowledgeStatus==='preparing'?'Preparing details…':'Program questions unavailable right now'}</span>}{o.canAsk && <button onClick={()=>ask(`What should I know about ${o.name}?`,o.id)}>Ask about this program</button>}<a className="link" href={o.url} target="_blank" rel="noreferrer">{o.verified?'Official site':'Program page'}</a></div></div>))}</details>)}</div>
+            <button onClick={() => setDismiss(o)}>Not for me</button>{!o.canAsk&&<ProgramKnowledgeStatus state={o.knowledgeStatus} detail={data.knowledgeDetails?.[o.id]} selected={!!o.knowledgeStatus}/>}{o.canAsk && <button onClick={()=>ask(`What should I know about ${o.name}?`,o.id)}>Ask about this program</button>}<a className="link" href={o.url} target="_blank" rel="noreferrer">{o.verified?'Official site':'Program page'}</a></div></div>))}</details>)}</div>
       {!!data.watchlist?.length&&<section className="sec" aria-label="Coming soon"><h2>Coming soon</h2><p className="note">These programs announced a future opening date. They are separate from your active picks.</p>{data.watchlist.map(o=><div className="card" key={o.id}><h3>{o.name}</h3><p>Applications open {o.openingDate}</p><p className="note">Check eligibility, fees and the opening date on the program page.</p><a className="link" href={o.url} target="_blank" rel="noreferrer">Program page</a></div>)}</section>}
       {data.sampleData && <p className="note">Sample data: a curated starter set, not verified for this year. Confirm dates and deadlines on each official site.</p>}
       </section>
@@ -74,7 +83,7 @@ export default function Explore({ me, ask, setMe,initialOpportunityId,onInitialO
         <div className="card"><p className="label">WHY IT FITS</p><p className="lead" style={{ fontSize: 18, marginTop: 6 }}>{open.fit.why}</p></div>
         <div className="sec"><p className="label">HOW IT LINES UP</p><div className="card" style={{ padding: '4px 16px', marginTop: 6 }}>{open.fit.factors!.map(f => <div className="contrib" key={f.key}><b style={{ display: 'flex', gap: 8, alignItems: 'center' }}><i className={`f-${f.state}`} style={{ width: 8, height: 8, borderRadius: 4, display: 'inline-block' }} />{f.key}</b><p className="muted small" style={{ marginTop: 4 }}>{f.text}</p></div>)}</div></div>
         <div className="sec"><p className="label">CHECK BEFORE YOU COMMIT</p><div className="rows" style={{ marginTop: 8 }}>{[...open.fit.eligibility.checks, `Deadline: ${open.deadline || 'unknown — confirm on the official site'}`].map(c => <div className="r" key={c}><span className="b"><span className="t small">{c}</span></span></div>)}
-          <a className="r" href={open.url} target="_blank" rel="noreferrer"><span className="b"><span className="t" style={{ color: 'var(--peri)' }}>Official site</span><span className="s" style={{ display: 'block' }}>{open.url.replace(/^https?:\/\//, '')}</span></span></a></div></div>
+          <a className="r" href={open.url} target="_blank" rel="noreferrer"><span className="b"><span className="t" style={{ color: 'var(--peri)' }}>{open.verified?'Official site':'Program page — details need checking'}</span><span className="s" style={{ display: 'block' }}>{open.url.replace(/^https?:\/\//, '')}</span></span></a></div></div>
         {!!open.sources?.length&&<details className="sec"><summary>What the program page says</summary>{open.sources.map(source=><blockquote key={source.field}><p>{source.quote}</p><a href={source.url} target="_blank" rel="noreferrer">Source for {source.field.replace(/[A-Z]/g,c=>' '+c.toLowerCase())}</a></blockquote>)}</details>}
         <div className="sec"><p className="label">ONE NEXT STEP</p><div className="acts"><button className="btn fill lg" onClick={() => prep(open.id)}>Set a prep reminder</button></div>
           <div className="acts" style={{ marginTop: 8 }}>{me.aiConsent && <button className="btn" style={{ flex: 1 }} onClick={() => ask(`I’m interested in ${open.name} (opportunityId ${open.id}). Check my eligibility, readiness and free time, explain what to verify, then propose a plan.`)}>Plan with Buddy</button>}</div></div>

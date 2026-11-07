@@ -4,6 +4,8 @@ Match the focus interests. Use the other interests as context, without requiring
 
 Use official program, eligibility and application pages. Prefer direct program pages; document/PDF results may be included as links even when automated reading is unavailable. Aggregators may identify a name but cannot be its official source. Include interest-related opportunities even when eligibility, cost, location, format or application status is unknown. Do not reject a lead because those details are missing or do not match the profile. Exclude only a confirmed past deadline; dates not stated remain unknown. Do not claim unknown availability is open. Dates and eligibility will be checked by the application.
 
+Never use Google Maps, map searches, search-engine result pages or search redirects as a program's officialUrl. Follow a cited program website within the allowed research tools and return its actual direct URL. If the website cannot be found, omit that listing instead of padding results. Give the program's real title, not a search-result heading. A new research call is not permission to repeat failed source URLs from the supplied exclusions.
+
 Free means no mandatory participation fee, subscription, purchase or application fee. Tuition-free programs with required other costs are not confirmed free. A paid internship pays the student and does not establish a participation fee. Scholarships do not turn a fee-charging program into free participation. Record unknown costs honestly.
 
 Do not infer eligibility or age from grade. Do not invent names, official URLs, costs, dates, current application status or distances. Unknown fields are null or unknown. Assumptions may describe search strategy only; they cannot establish program facts.

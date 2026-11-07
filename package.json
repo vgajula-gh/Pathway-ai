@@ -2,7 +2,7 @@
   "name": "pathway-ai",
   "private": true,
   "version": "0.1.0",
-  "description": "Pathway AI \u2014 an AI companion that helps high school students get more out of their high school years.",
+  "description": "Pathway AI — an AI companion that helps high school students get more out of their high school years.",
   "workspaces": [
     "apps/api",
     "apps/web"
@@ -30,7 +30,8 @@
     "eval:explore": "node scripts/eval-explore.mjs",
     "eval:explore:live": "node --env-file-if-exists=.env scripts/eval-explore.mjs --live",
     "eval:explore:compare": "node --import tsx scripts/compare-explore-evals.ts",
-    "typecheck:evals": "tsc -p apps/api/tsconfig.evals.json"
+    "typecheck:evals": "tsc -p apps/api/tsconfig.evals.json",
+    "check:knowledge": "node --env-file-if-exists=.env scripts/check-knowledge.mjs"
   },
   "engines": {
     "node": ">=20"

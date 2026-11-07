@@ -9,6 +9,7 @@ const messages = {
   pinecone_authorization_failed: 'The program library could not authenticate. The website owner needs to check its connection.',
   pinecone_index_not_found: 'The configured program library could not be found. The website owner needs to check its connection.',
   index_metric_mismatch: 'The program library settings do not match what Pathway needs. The website owner needs to check its setup.',
+  index_api_mismatch:'The configured index does not support this program library’s stored vectors. The owner needs to check the index type.',
   index_dimension_mismatch: 'The program library and embedding settings do not match. The website owner needs to check its setup.',
   vector_unavailable: 'The program library cannot connect right now. Catalog picks still work.',
 };
@@ -60,7 +61,7 @@ export function configurationIssue(values:NodeJS.ProcessEnv,aiDisabled:boolean):
 }
 
 export class KnowledgeSetupError extends Error {
-  constructor(public issue: KnowledgeIssue, message: string) { super(message); }
+  constructor(public issue: KnowledgeIssue, message: string,public dimensions?:{expectedDimension:number;actualDimension:number}) { super(message); }
 }
 
 export function connectionIssue(error: unknown, kind: string): KnowledgeIssue {

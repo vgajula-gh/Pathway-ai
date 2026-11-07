@@ -1,5 +1,5 @@
 {
-  "version": "explore-qa-v1",
+  "version": "explore-qa-v2",
   "clock": "2030-06-15T12:00:00.000Z",
   "description": "Synthetic student profiles and public-program HTML snapshots. Example names and URLs are fixtures, not real opportunities.",
   "interests": ["coding", "robotics"],
