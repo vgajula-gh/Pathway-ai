@@ -78,3 +78,7 @@ Personal opportunity discovery and program-scoped Buddy run on **LangGraph.js**,
 Run `npm run demo:workflows` to demonstrate the real compiled graph routing with labeled offline fixtures and no paid calls. Run `npm run demo:workflows -- --mermaid` for generated diagrams. The [workflow walkthrough](docs/13-LANGGRAPH-LANGCHAIN.md) explains the code, safeguards and the boundary between graph orchestration and durable Prisma approvals.
 
 Opportunity Scout rebuild: catalog-first bounded research, optional You/Explore preferences, source-backed Verified/Needs checking cards, Coming soon and owner-only diagnostics. Start with [DEPLOY-REPLIT.md](DEPLOY-REPLIT.md) for schema/Secrets/publish, and [the implementation guide](docs/14-OPPORTUNITY-SCOUT.md) for qualification, limits and testing. `npm run check:scout -- --url https://your-app.replit.app` reads the owner report without starting provider work (requires JOBS_SECRET in Shell).
+
+## Explore and program-answer evals
+
+Run `npm run eval:explore` for 12 offline integration scenarios and a JSON/Markdown scorecard, with no API key or paid calls. GitHub Actions runs this alongside tests and type checks. See [Drop A eval guide](docs/20-EXPLORE-EVALS.md) for the separately authorized, budgeted live canary and model/prompt comparisons. Evals use an isolated temporary database; they do not change student records or production limits.

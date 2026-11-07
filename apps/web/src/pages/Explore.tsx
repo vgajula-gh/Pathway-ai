@@ -8,6 +8,7 @@ import { CEMO, FIT_LABEL } from '../lib/format';
 import { Sheet, Typing, toast, useLoad } from '../components/ui';
 import ProposalReview from '../components/ProposalReview';
 import OpportunitySearch, { OpportunitySearchStatus } from '../components/OpportunitySearch';
+import { visibleRecommendations } from '../lib/explore-recommendations';
 
 type List = OpportunitySearchStatus & { watchlist?: (Opportunity & {openingDate:string})[]; picks: Opportunity[]; recommended: Opportunity[]; excluded: { id: string; name: string; reasons: string[] }[]; canAskAll?:boolean; knowledgeStates?:Record<string,string>; preparing?:boolean; interestedCount: number; dismissed: number; sampleData: boolean };
 
@@ -35,9 +36,7 @@ export default function Explore({ me, ask, setMe,initialOpportunityId,onInitialO
   if (!data) return <section aria-label="Opportunity search"><h1>Opportunity search</h1>{error?<p role="alert">{error} <button className="btn" onClick={reload}>Try again</button></p>:<p role="status">Loading your interests… <Typing/></p>}</section>;
   const status = async (id: string, s: 'saved' | 'dismissed' | 'none', reason?: string) => { try {await api(`/api/opportunities/${id}/status`, { body: { status: s, reason } }); if(s==='saved')setGrowthReview(id);toast(s === 'saved' ? 'Added to Interested' : s === 'dismissed' ? 'Hidden' : 'Removed'); reload();return true;}catch(e){toast((e as Error).message);return false;} };
   const prep = async (id: string) => { try { setReview(await api<Proposal>(`/api/opportunities/${id}/prep`, { method: 'POST' })); setOpen(null); } catch (e) { toast((e as Error).message); } };
-  const candidates=[...new Map([...data.recommended,...data.picks].map(o=>[o.id,o])).values()].filter(o=>!o.status&&!o.fit.excluded);
-  const visible=(['free','paid'] as const).flatMap(bucket=>candidates.filter(o=>o.bucket===bucket)
-    .sort((a,b)=>(b.fit.score??0)-(a.fit.score??0)).slice(0,5));
+  const visible=visibleRecommendations(data.recommended,data.picks);
   const hasResults=!!data.search?.startedAt||visible.length>0||data.finding;
   const compared = data.recommended.filter(o => cmp.includes(o.id));
   return (
