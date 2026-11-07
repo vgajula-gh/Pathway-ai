@@ -1,7 +1,7 @@
 import {beforeAll,beforeEach,afterAll,it,expect,vi} from 'vitest';
 import {PrismaClient} from '@prisma/client';import {mkdtempSync,writeFileSync,rmSync} from 'node:fs';import {tmpdir} from 'node:os';import {join} from 'node:path';import {execFile} from 'node:child_process';import {promisify} from 'node:util';
 const remote=vi.hoisted(()=>({discover:vi.fn(async(..._args:unknown[]):Promise<string[]>=>[]),reconcile:vi.fn(async()=>0)}));
-vi.mock('../src/knowledge/preparation.js',()=>({prepareKnowledgeBatch:async()=>0,knowledgeStates:async()=>({})}));
+vi.mock('../src/knowledge/preparation.js',()=>({prepareKnowledgeBatch:async()=>0,knowledgeStates:async()=>({}),knowledgeDetails:async()=>({})}));
 vi.mock('../src/knowledge/runtime.js',()=>({initializeKnowledge:async()=>({}),knowledgeUnavailable:()=>null}));
 vi.mock('../src/discovery/pipeline.js',async()=>({...await vi.importActual('../src/discovery/pipeline.js'),discover:remote.discover}));
 // Job/quota tests supply a completed research outcome through the real staged runner.

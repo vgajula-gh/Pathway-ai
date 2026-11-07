@@ -13,6 +13,8 @@ export interface VectorStore {
   identity?: string;
   kind: 'memory' | 'pinecone' | 'pgvector';
   dimension(): Promise<number>;
+  stats?():Promise<{namespace:string;recordCount:number}>;
+  fetchIds?(ids:string[]):Promise<string[]>;
   upsert(records: VectorRecord[]): Promise<void>;
   query(values: number[], opportunityId: string | string[], topK: number): Promise<{ id: string; score: number }[]>;
   delete(ids: string[]): Promise<void>;

@@ -11,8 +11,10 @@ import { countdown } from '../domain/applications.js';
 import { activeOpportunity } from '../domain/opportunity-active.js';
 import { wallNow, dkey } from '../domain/time.js';
 import {publicScoutFacts} from '../domain/scout-scoring.js';
-export const toOpp = (o: Awaited<ReturnType<typeof prisma.opportunity.findMany>>[number]) => ({
-  ...o,
+export const toOpp = (o: Awaited<ReturnType<typeof prisma.opportunity.findMany>>[number]) => {
+  const verificationStatus=o.verificationStatus==='verified'&&(!o.sourceCheckedAt||Date.now()-+o.sourceCheckedAt>30*86400000)?'stale':o.verificationStatus;
+  return ({
+  ...o,verificationStatus,
   cost:
     o.costType === 'unknown' || (o.costType === 'free' && !o.costVerifiedAt)
       ? 'Cost not confirmed — check the official site'
@@ -22,12 +24,13 @@ export const toOpp = (o: Awaited<ReturnType<typeof prisma.opportunity.findMany>>
   tags: j<string[]>(o.tags, []),
   checks: [...new Set([...j<string[]>(o.checks, []),
     ...(o.applicationStatus==='closed'?['Applications are reported closed; confirm the current cycle']:[]),
-    ...(o.verificationStatus==='stale'?['Source details may be out of date; check the program page']:[]),
+    ...(verificationStatus==='stale'?['Source details may be out of date; check the program page']:[]),
   ])],
   publicFacts:publicScoutFacts(o),
   qualificationNotes:j<{field:string;reason:string}[]>(o.qualificationNotes,[]),
   sources:Object.entries(j<Record<string,{sourceUrl:string;quote:string}>>(o.evidence,{})).filter(([,e])=>e&&typeof e.sourceUrl==='string'&&e.sourceUrl.startsWith('https://')&&typeof e.quote==='string').map(([field,e])=>({field,url:e.sourceUrl,quote:e.quote.slice(0,1000)})),
 });
+};
 export async function personalPicks(studentId: string, rebuild = false) {
   const { events, rules, ctx } = await loadContext(studentId);
   if(!ctx.interests.length) { await prisma.studentPick.deleteMany({where:{studentId}}); return []; }

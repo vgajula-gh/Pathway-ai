@@ -22,6 +22,7 @@ export {withJobLock} from '../lib/job-lock.js';
 import {withJobLock} from '../lib/job-lock.js';
 import {reserveDiscoverySpend} from './spend.js';
 import {confirmedResearchFacts} from '../domain/research-evidence.js';
+import {isProgramSource} from '../domain/program-source.js';
 import {ResearchOutput} from '../scout/schema.js';
 import {scoutSettings} from '../scout/settings.js';
 export async function reserveRun(groupKey: string, kind: 'discovery' | 'recheck' | 'knowledge', now = new Date()) {
@@ -71,21 +72,22 @@ export async function finishRun(
     budget.usage.embeddings * 0.001 +
     budget.usage.vectorUpserts * 0.00001;
   const { runs: _, ...usage } = budget.usage;
-  await prisma.$transaction([
-    prisma.discoveryRun.update({
-      where: { id: run.id },
+  await prisma.$transaction(async tx=>{
+    const settled=await tx.discoveryRun.updateMany({
+      where: { id: run.id,status:'running' },
       data: {
         status,
         error,
-        usage: JSON.stringify({ ...budget.usage, tokensAreEstimates: true, models:budget.models,candidates:budget.candidates, phase: budget.phase, savedIds: budget.savedIds, workflow: budget.workflow, failures: budget.failures }),
+        usage: JSON.stringify({ ...budget.usage, indexing:budget.indexing,tokensAreEstimates: true, models:budget.models,candidates:budget.candidates, phase: budget.phase, savedIds: budget.savedIds, workflow: budget.workflow, failures: budget.failures }),
         finishedAt: new Date(),
       },
-    }),
-    prisma.discoveryUsage.update({
+    });
+    if(!settled.count)return;
+    await tx.discoveryUsage.update({
       where: { month: run.startedAt.toISOString().slice(0, 7) },
       data: Object.fromEntries(Object.entries(usage).map(([key, value]) => [key, { increment: value }])),
-    }),
-  ]);
+    });
+  });
 }
 export async function expireCatalog(now = new Date()) {
   const expired = await prisma.opportunity.findMany({
@@ -207,7 +209,9 @@ export async function recheckOpportunity(
 async function recoverInterrupted() {
     const scout=await prisma.discoveryRun.findMany({where:{status:'running',promptVersion:PROMPT_VERSION},include:{groupLinks:true}});
     const liveKeys=[...new Set(scout.flatMap(r=>[r.groupKey,...r.groupLinks.map(g=>g.groupKey)]))];
-    await prisma.jobLease.updateMany({where:{key:{startsWith:'knowledge-attempt:'},owner:'running'},data:{owner:'failed'}});
+    await prisma.jobLease.updateMany({where:{key:{startsWith:'knowledge-attempt:'},owner:'running',OR:[{expiresAt:{lte:new Date()}},{expiresAt:{gte:new Date('2100-01-01')}}]},data:{owner:'failed',expiresAt:new Date()}});
+    await prisma.discoveryRun.updateMany({where:{status:'running',kind:{in:['knowledge','recheck']},startedAt:{lt:new Date(Date.now()-5*60000)}},
+      data:{status:'interrupted',error:'Previous worker stopped before recording final usage',finishedAt:new Date()}});
     await prisma.discoveryGroup.updateMany({
       where: { status: 'running',key:{notIn:liveKeys} },
       data: {
@@ -216,7 +220,7 @@ async function recoverInterrupted() {
       },
     });
     await prisma.discoveryRun.updateMany({
-      where: { status: 'running',promptVersion:{not:PROMPT_VERSION} },
+      where: { status: 'running',kind:'discovery',promptVersion:{not:PROMPT_VERSION} },
       data: {
         status: 'interrupted',
         error: 'Previous worker stopped before recording final usage',
@@ -261,8 +265,8 @@ export async function runJobs() {
         where: { verificationStatus: { not: 'expired' }, isSample: false },
         orderBy: { lastRecheckedAt: 'asc' },
       })
-    ).find((o) => recheckDue(o, now));
-    if (due&&discoveryConfigured()&&Date.now()<deadlineAt) {
+    ).find((o) => isProgramSource(o.url)&&recheckDue({...o,lastRecheckedAt:o.lastRecheckedAt||o.sourceReadAt||o.sourceCheckedAt}, now));
+    if (!prepared&&due&&discoveryConfigured()&&Date.now()<deadlineAt) {
       const run = await reserveRun(due.id, 'recheck');
       if (run) {
         const budget = new RunBudget();

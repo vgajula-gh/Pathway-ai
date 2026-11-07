@@ -3,6 +3,8 @@ export function memoryStore(dimension: number): VectorStore {
   const records = new Map<string, VectorRecord>();
   return {
     kind: 'memory',
+    async stats(){return {namespace:'local-memory',recordCount:records.size};},
+    async fetchIds(ids){return ids.filter(id=>records.has(id));},
     async dimension() {
       return dimension;
     },

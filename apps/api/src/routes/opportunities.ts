@@ -2,7 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { discoveryStatus } from '../discovery/refresh.js';
 import { discoveryAvailability } from '../discovery/availability.js';
 import {knowledgeScope,studentOpportunityIds} from '../knowledge/scope.js';
-import {knowledgeStates} from '../knowledge/preparation.js';
+import {knowledgeDetails} from '../knowledge/preparation.js';
 import {catalogCoverage,publicCatalogCoverage} from '../discovery/catalog.js';
 import { requirementsAction } from '../knowledge/requirements.js';
 import { personalPicks, toOpp } from '../lib/picks.js';
@@ -42,10 +42,11 @@ export default async function routes(app: FastifyInstance) {
     const availability=await discoveryAvailability(s.aiConsent), enabled=availability.enabled;
     const discovery=await discoveryStatus(s.id);
     const runtime=s.aiConsent?await initializeKnowledge():null;
-    const states=await knowledgeStates(await studentOpportunityIds(s.id),runtime);
+    const details=await knowledgeDetails(await studentOpportunityIds(s.id),runtime);
+    const states=Object.fromEntries(Object.entries(details).map(([id,d])=>[id,d.state]));
     const interestedCount=await prisma.savedOpportunity.count({where:{studentId:s.id,status:{not:'dismissed'}}});
     const watchlist:unknown[]=[];
-    return { ...discovery, catalog:publicCatalogCoverage(coverage), discoveryEnabled:enabled, unavailable:availability.unavailable, knowledgeUnavailable:runtime?null:knowledgeUnavailable(), preparing:Object.values(states).includes('preparing'), interestedCount, knowledgeStates:states,canAskAll:Object.values(states).includes('ready'),
+    return { ...discovery, catalog:publicCatalogCoverage(coverage), discoveryEnabled:enabled, unavailable:availability.unavailable, knowledgeUnavailable:runtime?null:knowledgeUnavailable(), preparing:Object.values(states).includes('preparing'), interestedCount, knowledgeStates:states,knowledgeDetails:details,canAskAll:Object.values(states).includes('ready'),
       watchlist,
       picks:picks.map(p=>({...p,canAsk:states[p.id]==='ready',knowledgeStatus:states[p.id]})),
       recommended:ok.map(o=>({...o,bucket:bucketFor(o),costLabel:costLabel(o),canAsk:states[o.id]==='ready',knowledgeStatus:states[o.id]})), excluded: list.filter(o => o.fit.excluded).map(o => ({ id: o.id, name: o.name, reasons: o.fit.eligibility.reasons })), dismissed: list.filter(o => o.status === 'dismissed').length, sampleData: list.some(o => o.isSample) };

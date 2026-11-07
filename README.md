@@ -81,4 +81,6 @@ Opportunity Scout rebuild: catalog-first bounded research, optional You/Explore 
 
 ## Explore and program-answer evals
 
-Run `npm run eval:explore` for 12 offline integration scenarios and a JSON/Markdown scorecard, with no API key or paid calls. GitHub Actions runs this alongside tests and type checks. See [Drop A eval guide](docs/20-EXPLORE-EVALS.md) for the separately authorized, budgeted live canary and model/prompt comparisons. Evals use an isolated temporary database; they do not change student records or production limits.
+Run `npm run eval:explore` for 15 offline integration scenarios and a JSON/Markdown scorecard, with no API key or paid calls. GitHub Actions runs this alongside tests and type checks. See [Drop A eval guide](docs/20-EXPLORE-EVALS.md) for the separately authorized, budgeted live canary and model/prompt comparisons. Evals use an isolated temporary database; they do not change student records or production limits.
+
+For empty Pinecone or stuck preparation, start with `npm run check:knowledge -- --url https://your-app.replit.app` (owner `JOBS_SECRET` in Shell). It reads setup, allowances, source/chunk counts and the actual `opportunities` namespace without embedding/search requests. See [Explore recovery](docs/21-EXPLORE-RECOVERY.md) for a selected-program read-back and explicit bounded paid retry. No new migration or Secret is required.

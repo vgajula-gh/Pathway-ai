@@ -9,7 +9,7 @@ const remote=vi.hoisted(()=>({fixtures:[] as any[],research:vi.fn(),extract:vi.f
 vi.mock('../src/scout/research.js',()=>({research:remote.research}));
 vi.mock('../src/scout/extract.js',()=>({extractScout:remote.extract}));
 vi.mock('../src/discovery/pages.js',async()=>({...await vi.importActual('../src/discovery/pages.js'),fetchOfficialPage:remote.fetch}));
-vi.mock('../src/knowledge/preparation.js',()=>({prepareKnowledgeBatch:async()=>0,knowledgeStates:async()=>({})}));
+vi.mock('../src/knowledge/preparation.js',()=>({prepareKnowledgeBatch:async()=>0,knowledgeStates:async()=>({}),knowledgeDetails:async()=>({})}));
 vi.mock('../src/knowledge/runtime.js',()=>({initializeKnowledge:async()=>null,knowledgeUnavailable:()=>null}));
 const dir=mkdtempSync(join(tmpdir(),'pathway-scout-api-')),url=`file:${dir}/test.db`,db=new PrismaClient({datasourceUrl:url+'?connection_limit=1'});
 vi.mock('../src/lib/db.js',()=>({get prisma(){return db;},j:(v:string,f:unknown)=>{try{return v?JSON.parse(v):f;}catch{return f;}}}));

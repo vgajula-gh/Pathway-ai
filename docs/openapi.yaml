@@ -398,7 +398,14 @@ components:
               contentEncoding: { enum: [gzip, br, deflate, identity, other] }
               finishReason: { enum: [length, content_filter, empty, refusal] }
               httpStatus: { type: integer, minimum: 400, maximum: 599 }
-              operation: { enum: [research, repair, extract], description: Distinguishes web requests from format repair; absent on older records }
+              operation: { enum: [research, repair, extract, source_read, chunk_read, embed, upsert, chunk_commit, retire_vectors, store_info, vector_fetch], description: Failed operation; absent on older records }
+              component: { enum: [database, embedding, vector, source] }
+              databaseCode: { enum: [P2021, P2022, P2002, P2024] }
+              databaseTable: { enum: [SourcePage, KnowledgeChunk] }
+              databaseField: { type: string, description: Allowlisted schema field; never a value or SQL text }
+              providerError: { enum: [authorization, not_found, invalid_request, connection] }
+              expectedDimension: { type: integer }
+              actualDimension: { type: integer }
               providerCode: { type: string, description: Controlled provider error code only; arbitrary values and messages are omitted }
               providerParam: { type: string, description: Allowlisted rejected request parameter path only }
               errorType: { enum: [TypeError, ReferenceError, Error] }
@@ -451,6 +458,15 @@ components:
         sourceUrl: { type: string, format: uri }
         pageTitle: { type: string }
         checkedAt: { type: string, format: date-time }
+    PreparationDetail:
+      type: object
+      required: [state, reason, message, retryable]
+      properties:
+        state: { enum: [ready, preparing, unavailable] }
+        reason: { type: string, description: Controlled preparation/setup/allowance reason }
+        message: { type: string }
+        retryable: { type: boolean, description: An explicit owner retry may be needed; this does not authorize automatic paid replay }
+        resetsAt: { type: string, format: date-time }
     OpportunityList:
       type: object
       properties:
@@ -471,6 +487,7 @@ components:
         canAskAll: { type: boolean }
         preparing: { type: boolean }
         knowledgeStates: { type: object, additionalProperties: { enum: [ready, preparing, unavailable] } }
+        knowledgeDetails: { type: object, additionalProperties: { $ref: '#/components/schemas/PreparationDetail' } }
         knowledgeUnavailable: { $ref: '#/components/schemas/DiscoveryUnavailable' }
         discoveryEnabled: { type: boolean }
         unavailable: { $ref: '#/components/schemas/DiscoveryUnavailable' }
@@ -1157,6 +1174,43 @@ paths:
         '200': { description: Awaiting approval; no checklist mutation yet, content: { application/json: { schema: { $ref: '#/components/schemas/Proposal' } } } }
         '403': { description: Program outside the student’s current set }
         '422': { description: Missing Interested application or current evidenced requirements/deadline }
+  /internal/knowledge/status:
+    get:
+      security: [{ jobsSecret: [] }]
+      summary: Read-only owner knowledge and Pinecone diagnostics
+      description: Checks schema, current shared preparation/AI allowance, index type/dimensions, opportunities namespace count, public source/chunk totals and recent knowledge/recheck runs. With opportunityId, reads matching vector IDs in batches to distinguish SQL readiness from index read-back. No embedding, search, catalog mutation or usage reservation. No private student content or raw exception text. Optional vector adapters may report not_checked.
+      parameters:
+        - in: query
+          name: opportunityId
+          schema: { type: string, minLength: 1, maxLength: 200 }
+      responses:
+        '200': { description: Report with configurationReady, allowance, safe failure/issue and optional public program/vector confirmation }
+        '401': { description: Owner authentication failed }
+        '503': { description: Owner authentication not configured }
+  /internal/knowledge/prepare:
+    post:
+      security: [{ jobsSecret: [] }]
+      summary: Explicit bounded owner preparation or retry for one public program
+      description: Requires allowPaid=true. Reuses actual saved readable source text without fetching solely to embed; retains original source-check dates. Can retry failed/unknown work or repair missing external vectors. Respects existing shared recheck/preparation and AI caps, global worker lock, and at most two funded knowledge runs per program per UTC day. Does not reset limits or delete profiles. Already-ready confirmed vectors are a no-op. Completion report is authoritative; HTTP 200 alone does not mean preparation succeeded. Vector visibility can lag an acknowledged write.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [opportunityId, allowPaid]
+              properties:
+                opportunityId: { type: string, minLength: 1, maxLength: 200 }
+                allowPaid: { type: boolean, const: true }
+      responses:
+        '200': { description: Actual processed count plus post-attempt knowledge status; inspect configurationReady and program.sqlReady/vectorConfirmation }
+        '401': { description: Owner authentication failed }
+        '404': { description: Unknown public program }
+        '409': { description: Another worker holds the job lease }
+        '422': { description: Explicit paid consent missing or no readable program source }
+        '429': { description: Shared allowance or per-program daily retry cap reached }
+        '503': { description: Owner or knowledge setup unavailable; report includes safe setup failure }
   /internal/diagnostics:
     get:
       security: [{ jobsSecret: [] }]

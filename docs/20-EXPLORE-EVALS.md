@@ -20,7 +20,7 @@ Use a new/empty output directory each time; the launcher refuses to overwrite ex
 
 The fixtures use `example.edu` and invented program names. These are **not real opportunities** or a human-reviewed ranking benchmark. The test database marks the synthetic rows as non-sample solely to exercise production catalog filtering inside that isolated database.
 
-## What the 12 offline scenarios exercise
+## What the 15 offline scenarios exercise
 
 | Scenario | Production path being measured | Required outcome |
 |---|---|---|
@@ -36,6 +36,9 @@ The fixtures use `example.edu` and invented program names. These are **not real 
 | Ownership | Different authenticated synthetic profile + faulty vector-store matches | Unowned program denied; wrong-program chunks filtered; no agent mutation |
 | Stale/outage behavior | Changed source hash, then unavailable knowledge runtime | Stale chunks rejected; useful catalog remains; program question returns controlled unavailability |
 | Adversarial refinement | Untrusted source instructions and a draft asking for another student's program | Scope stays bound, valid excerpts survive, invented claims are removed and refinement is bounded |
+| Program-source quality | Real research parser and Scout with Maps/search listings plus a direct program URL | Only the direct program is fetched/saved; listings do not become recommendations |
+| Preparation recovery | Actual preparation module, saved source text and an unfunded limited marker | New allowance recovers without refetching or changing source dates; SQL and local vectors agree |
+| Listing-only allowance recovery | Current-cycle successful personal search containing only Maps links | Personal slot restores once; shared paid usage/history remain intact |
 
 These are integration evals: real service/domain/API/UI-selection behavior with controlled external boundaries. Offline replay cannot prove a real model resists a prompt injection or finds relevant real-world opportunities. Those require the live canary and human review. The offline embedding vectors test plumbing, scope and source-generation checks; they do not benchmark semantic embeddings or connect to Pinecone.
 
@@ -76,7 +79,7 @@ Live research creates a review queue of public names/URLs. The report also inclu
 
 The report keeps eight areas separate: discovery, sources, catalog, indexing, retrieval, answers, privacy and budget. It records observed saves/source counts, fixture interest precision, retrieval recall, accepted citations and other scenario-specific metrics. A zero `knowledgeChunks` count after research alone is not a discovery failure: actual page ingestion is a separate step.
 
-Every offline required check and all 12 cases must pass. A failed/empty/incomplete scenario fails the gate and returns a nonzero exit code. A successful live run says **review_required**, not production-ready. Failed live automated checks return nonzero. Owner setup errors return exit code 2.
+Every offline required check and all 15 cases must pass. Dataset `explore-qa-v2` adds recovery/source cases and intentionally changes the fixture digest; compare new baselines with the same dataset. A failed/empty/incomplete scenario fails the gate and returns a nonzero exit code. A successful live run says **review_required**, not production-ready. Failed live automated checks return nonzero. Owner setup errors return exit code 2.
 
 Compare two saved reports:
 

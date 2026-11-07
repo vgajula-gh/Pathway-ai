@@ -9,7 +9,28 @@ import {scoutConfiguration,ownerDiagnostics} from '../scout/diagnostics.js';
 import {checkScoutFixture} from '../scout/fixture.js';
 import {newScoutState,advanceScout,scoutUsage,restoreScoutBudget,type ScoutState} from '../scout/runner.js';
 import {PROMPT_VERSION} from '../scout/prompts.js';
+import {knowledgeDiagnostics} from '../knowledge/diagnostics.js';
+import {prepareKnowledgeBatch,preparationAllowance} from '../knowledge/preparation.js';
 export default async function routes(app:FastifyInstance) {
+  app.get('/internal/knowledge/status',async(req,reply)=>{
+    requireOwner(req);reply.header('Cache-Control','no-store');
+    const q=z.object({opportunityId:z.string().min(1).max(200).optional()}).strict().parse(req.query);
+    return knowledgeDiagnostics(q.opportunityId);
+  });
+  app.post('/internal/knowledge/prepare',async(req,reply)=>{
+    requireOwner(req);reply.header('Cache-Control','no-store');
+    const body=z.object({opportunityId:z.string().min(1).max(200),allowPaid:z.literal(true)}).strict().parse(req.body);
+    if(!await prisma.opportunity.findUnique({where:{id:body.opportunityId}}))throw new HttpError(404,'Program not found.');
+    const before=await knowledgeDiagnostics(body.opportunityId);
+    if(!before.configurationReady)return reply.code(503).send(before);
+    const allowance=await preparationAllowance();
+    const current=(before as {program?:{sqlReady:boolean;vectorConfirmation:string}}).program;
+    if(!(current?.sqlReady&&current.vectorConfirmation==='confirmed')&&!allowance.available)return reply.code(429).send({error:'The shared preparation or AI allowance has been reached.',allowance});
+    const result=await withJobLock('opportunity-jobs',()=>prepareKnowledgeBatch(undefined,Date.now()+90000,{opportunityId:body.opportunityId,retry:true}));
+    if(result.skipped)return reply.code(409).send({error:'Another opportunity job is active. Check status and try later.'});
+    const after=await knowledgeDiagnostics(body.opportunityId);
+    return {processed:result.result,...after};
+  });
   app.get('/internal/diagnostics',async(req,reply)=>{
     requireOwner(req);reply.header('Cache-Control','no-store');
     const q=z.object({runId:z.string().min(1).max(200).optional()}).strict().parse(req.query);

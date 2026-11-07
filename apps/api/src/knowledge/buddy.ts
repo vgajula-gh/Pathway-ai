@@ -82,6 +82,7 @@ export async function runProgramBuddy(
       if(fact.sourceUrl&&o.sourceCheckedAt){const number=citations.length+1;citations.push({number,opportunityId:o.id,sourceUrl:fact.sourceUrl,pageTitle:o.name,checkedAt:o.sourceCheckedAt.toISOString()});citation=` [${number}]`;}
       return `${key[0].toUpperCase()+key.slice(1)}: ${fact.value}${citation}`;
     });
+    if(facts.source.value!=='Source verified')lines.unshift(facts.source.value);
     for(const c of claims){const number=citations.length+1;citations.push({number,chunkId:c.passage.id,opportunityId:o.id,sourceUrl:c.passage.sourceUrl,pageTitle:c.passage.pageTitle,checkedAt:c.passage.checkedAt.toISOString()});lines.push(`“${c.quote}” [${number}]`);}
     if(!claims.length)lines.push(`The official pages don’t say. Please check ${o.url}`);
     return `${cross?o.name+'\n':''}${lines.join('\n\n')}`;
