@@ -2,6 +2,39 @@
 
 This repair uses existing tables and Secrets. It does not reset student records, raise production limits or create a new index. SQL owns the program cards; Pinecone stores embeddings of actual saved public program text for questions. A working search or visible card does not prove a vector was written.
 
+## Document-index compatibility follow-up
+
+Keep the existing `pathway-vectors` index. Pathway now inspects its schema and selects the matching API automatically:
+
+| Index schema | How Pathway writes and searches |
+|---|---|
+| Classic `_values` dense vector | Existing Vectors API, with the configured external embedder |
+| A single caller-named `dense_vector` field | Documents API with externally generated vectors |
+| A single `string` field with dense `embed`, such as `chunk_text` | Documents API with public passage text; Pinecone embeds writes and fixed public-topic queries |
+
+The reported schema (`title` plus `chunk_text.embed.model=text-embedding-3-small`, dimension 1536, cosine) is supported directly. No replacement index, field rename, migration or new Secret is required. Full-text-only, sparse-only, ambiguous dense fields, reserved-metadata collisions and unsupported legacy integrated `semantic_text` shapes still fail with a controlled setup message. A cosine metric is required.
+
+For integrated text, the index's frozen model/dimension is authoritative; `EMBEDDING_MODEL`/`EMBEDDING_DIMENSION` do not override it. Runtime initialization does not require a separate external embedding credential for that mode. General AI/search credentials are still needed for their own features. Pathway makes no separate direct OpenAI passage/query embedding request in integrated mode. External-vector indexes continue to require the configured external embedder and matching dimensions.
+
+Raw student questions, names, IDs, profiles and chat history are never sent as Pinecone text. Integrated queries are constructed solely from fixed public topics (requirements, fees/aid, dates, eligibility, location, accessibility and similar program topics), inferred locally from the question. Unrecognized questions use a generic program-overview query. This privacy boundary can make unusual questions less precise; the original wording is used only for local reranking and the existing answer workflow. Scope remains server-owned and SQL revalidates every returned chunk. Only actual saved public program passages and public program metadata are uploaded.
+
+After publishing this follow-up, start with the existing read-only command below. Expected owner fields for this index:
+
+```json
+{
+  "configurationReady": true,
+  "index": "pathway-vectors",
+  "indexDetails": {"api": "documents", "input": "text", "field": "chunk_text"},
+  "embedding": {"provider": "pinecone-integrated", "model": "text-embedding-3-small", "dimension": 1536}
+}
+```
+
+If usage remains 30/30, setup may be ready while `allowance.available` is false. The owner can choose `DISCOVERY_RECHECKS_PER_MONTH=31` in Publishing to permit one additional preparation attempt, then republish. This is a proposal for one test, not an automatic limit change. Background work may use available allowance; always check the fresh report before funding work.
+
+Integrated embedding and writing happen in one metered Documents API request. `indexing.embeddingMode=pinecone-integrated` distinguishes this from external embedding. Attempts are recorded before the request; embedding success is recorded only after the complete write acknowledgement. SQL chunks are committed only when the acknowledged count matches the submitted count. Errors, partial acknowledgements and unknown outcomes are not automatically retried. All existing monthly reservations, per-run caps, worker leases and explicit owner retry bounds remain enforced.
+
+The protocol regression test uses the actual installed Pinecone SDK with mocked HTTP responses, the owner-reported schema, SQL chunk storage, scoped question answering and document retirement. A real SDK authorization failure is also tested with no silent retry or raw error leakage. These offline tests do not establish that a live production write succeeded. Pinecone documents the API distinction in its [integrated embedding guide](https://docs.pinecone.io/guides/search/integrated-embedding).
+
 ## What changes
 
 - Known Maps and search listings cannot become recommendations, satisfy catalog coverage or trigger source preparation. An explicit Google redirect is resolved only when it contains a real safe HTTPS target. Real Google-hosted program sites remain supported. Unknown program details remain warnings; confirmed expiration still hides a real program. PDFs remain useful links but are not automatically embedded.
@@ -27,7 +60,7 @@ This performs database/index reads, including dimension and namespace checks. It
 |---|---|
 | `configurationReady: false` | Inspect `issue` and safe `failure` fields before attempting paid work. |
 | `vector_dimension_mismatch` | Embedding and index dimensions differ; align them with the existing index/data plan. |
-| `vector_index_type_mismatch` | The selected index is incompatible with the classic dense-vector API used by Pathway. |
+| `vector_index_type_mismatch` | No single supported dense-vector or embedded-text field could be selected safely. |
 | `providerError: authorization` or `not_found` | Check the published key's project/index access and index name. |
 | `knowledge_storage_unready` | Apply the already-versioned missing schema through the normal Replit flow; do not reset data. |
 | `namespaceRecords` | Records visible specifically in `opportunities`, not the default namespace. |
@@ -50,7 +83,7 @@ npm run check:knowledge -- --url https://pathway-ai.replit.app --mode prepare --
 
 This can send paid embedding requests. Existing configured caps still apply. If the shared preparation allowance is already **30/30**, this command will stop until the owner changes that limit or the UTC month resets. Increasing only the search-batch budget does not create preparation room. This patch never raises either cap or deletes usage history.
 
-Inspect the returned report, then run the read-only program command again. Successful recovery shows current SQL chunks and matching IDs in the `opportunities` namespace; questions become available for students whose picks/Interested list includes that program. A received HTTP 200 or vector acknowledgement alone is not a final success claim. The CLI returns a failing exit code for setup failures or preparation without ready SQL chunks.
+Inspect the returned report, then run the read-only program command again. Successful recovery shows current SQL chunks and matching IDs in the `opportunities` namespace; questions become available for students whose picks/Interested list includes that program. A received HTTP 200 or vector acknowledgement alone is not a final success claim. The CLI returns a failing exit code for setup failures or preparation without both ready SQL chunks and confirmed ID read-back. If visibility is pending, repeat only the read-only check after a short delay, not another paid preparation request. An adapter without ID read-back cannot receive a confirmed CLI result.
 
 ## Diagnosing a failed attempt
 

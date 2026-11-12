@@ -33,7 +33,7 @@ export type Usage = {
   estimatedCost: number;
 };
 export class RunBudget {
-  readonly indexing = { embeddingCallsAttempted: 0, embeddingCallsSucceeded: 0,
+  readonly indexing = { embeddingMode:'external' as 'external'|'pinecone-integrated',embeddingCallsAttempted: 0, embeddingCallsSucceeded: 0,
     vectorRecordsAttempted: 0, vectorRecordsAcknowledged: 0, sqlChunksCommitted: 0, retiredVectors: 0 };
   spendReservation?:SpendReservation;
   candidates={found:0,filtered:0,queued:0};

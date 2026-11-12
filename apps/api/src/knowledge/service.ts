@@ -45,14 +45,19 @@ async function ingestUnlocked(opportunityId: string, budget: RunBudget, runtime?
         .slice(0, 20)
         .map((doc) => doc.pageContent),
       vectors: number[][] = [];
-    for (let i = 0; i < texts.length; i += 20) {
+    const integrated=!!rt.store.integratedEmbedding;
+    if(integrated){
+      budget.indexing.embeddingMode='pinecone-integrated';
+      if(!rt.store.upsertText)throw new DiscoveryFailure({stage:'index',code:'vector_index_type_mismatch',component:'vector',operation:'upsert'});
+    }
+    for (let i = 0; !integrated&&i < texts.length; i += 20) {
       budget.take('embeddings');
       budget.phase='embedding';budget.indexing.embeddingCallsAttempted++;await budget.onStep?.();
       budget.usage.tokens += Math.ceil(texts.slice(i, i + 20).join(' ').length / 3);
       vectors.push(...(await knowledgeStep('embedding','embed',()=>rt.embedder.embed(texts.slice(i, i + 20), 'passage'))));
       budget.indexing.embeddingCallsSucceeded++;await budget.onStep?.();
     }
-    if (vectors.length !== texts.length || vectors.some((v) => !validVector(v, rt.embedder.dimension)))
+    if (!integrated&&(vectors.length !== texts.length || vectors.some((v) => !validVector(v, rt.embedder.dimension))))
       throw new DiscoveryFailure({stage:'index',code:'embedding_dimension_mismatch',component:'embedding',operation:'embed',
         expectedDimension:rt.embedder.dimension,actualDimension:vectors.find(v=>v.length!==rt.embedder.dimension)?.length??vectors[0]?.length??0});
     const chunks = texts.map((text, i) => ({
@@ -74,22 +79,22 @@ async function ingestUnlocked(opportunityId: string, budget: RunBudget, runtime?
       localEmbedding: rt.store.kind === 'memory' ? JSON.stringify(vectors[i]) : '[]',
     }));
     budget.take('vectorUpserts', chunks.length);
-    budget.phase='writing_vectors';budget.indexing.vectorRecordsAttempted+=chunks.length;await budget.onStep?.();
+    if(integrated){
+      budget.take('embeddings');budget.indexing.embeddingCallsAttempted++;
+      budget.usage.tokens+=Math.ceil(texts.join(' ').length/3);
+    }
+    budget.phase=integrated?'embedding_and_writing_vectors':'writing_vectors';budget.indexing.vectorRecordsAttempted+=chunks.length;await budget.onStep?.();
+    const records=chunks.map(c=>({id:c.id,metadata:{chunkId:c.id,opportunityId,sourceUrl:c.sourceUrl,pageTitle:c.pageTitle,checkedAt:c.checkedAt.toISOString()}}));
     // Write the new vectors before retiring the old generation. PostgreSQL remains the authority.
-    await knowledgeStep('vector','upsert',()=>rt.store.upsert(
-      chunks.map((c, i) => ({
-        id: c.id,
-        values: vectors[i],
-        metadata: {
-          chunkId: c.id,
-          opportunityId,
-          sourceUrl: c.sourceUrl,
-          pageTitle: c.pageTitle,
-          checkedAt: c.checkedAt.toISOString(),
-        },
-      })),
-    ));
-    budget.indexing.vectorRecordsAcknowledged+=chunks.length;await budget.onStep?.();
+    if(integrated){
+      const result=await knowledgeStep('vector','upsert',()=>rt.store.upsertText!(records.map((r,i)=>({...r,text:texts[i]}))));
+      budget.indexing.vectorRecordsAcknowledged+=result.acknowledged;await budget.onStep?.();
+      if(result.acknowledged!==chunks.length)throw new DiscoveryFailure({stage:'index',code:'vector_write_failed',component:'vector',operation:'upsert'});
+      budget.indexing.embeddingCallsSucceeded++;await budget.onStep?.();
+    }else{
+      await knowledgeStep('vector','upsert',()=>rt.store.upsert(records.map((r,i)=>({...r,values:vectors[i]}))));
+      budget.indexing.vectorRecordsAcknowledged+=chunks.length;await budget.onStep?.();
+    }
     budget.phase='saving_chunks';await budget.onStep?.();
     await knowledgeStep('database','chunk_commit',()=>prisma.$transaction(async (tx) => {
       await tx.knowledgeChunk.deleteMany({ where: { opportunityId, sourceUrl: page.sourceUrl } });

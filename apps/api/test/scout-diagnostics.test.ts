@@ -10,6 +10,7 @@ vi.mock('../src/scout/extract.js',()=>({extractScout:external.extract}));
 vi.mock('../src/discovery/pages.js',async()=>({...await vi.importActual('../src/discovery/pages.js'),fetchOfficialPage:external.fetch}));
 import {buildApp} from '../src/app.js';import {env} from '../src/lib/env.js';import {scoutFixture} from './fixtures/scout.js';
 import {primaryFailure} from '../src/discovery/failures.js';
+import {scoutConfiguration} from '../src/scout/diagnostics.js';
 const previous={...env},secret='owner-diagnostic-secret-'.repeat(3),headers={authorization:'Bearer '+secret};
 beforeAll(async()=>{writeFileSync(join(dir,'test.db'),'');await promisify(execFile)(process.execPath,['../../node_modules/prisma/build/index.js','migrate','deploy','--schema','prisma/schema.prisma'],{env:{...process.env,DATABASE_URL:url}});},30000);
 beforeEach(async()=>{
@@ -22,6 +23,11 @@ beforeEach(async()=>{
  external.fetch.mockReset().mockResolvedValue(fixture.page);external.extract.mockReset().mockResolvedValue({facts:fixture.facts,usage:{provider:'openai',model:'gpt-4.1-mini',inputTokens:500,outputTokens:400,responseId:'test-extract'}});
 });
 afterAll(async()=>{vi.unstubAllEnvs();Object.assign(env,previous);await db.$disconnect();rmSync(dir,{recursive:true,force:true});});
+it('marks Pinecone static configuration as requiring actual schema inspection instead of requiring an unused external embedder',()=>{
+ for(const [k,v] of Object.entries({DATABASE_URL:'postgresql://unused/test',VECTOR_STORE:'pinecone',PINECONE_API_KEY:'private-vector-key',PINECONE_INDEX:'pathway-vectors',EMBEDDING_PROVIDER:'none'}))vi.stubEnv(k,v);
+ expect(scoutConfiguration()).toMatchObject({knowledgeIssue:null,knowledgeRequiresIndexCheck:true});
+ expect(external.research).not.toHaveBeenCalled();expect(external.extract).not.toHaveBeenCalled();
+});
 it('protects diagnostics and live jobs with owner credentials and never accepts student or query-string secrets',async()=>{
  const app=await buildApp();app.log.level='silent';try{
   for(const path of ['/internal/diagnostics','/internal/diagnostics?secret='+secret])expect((await app.inject({url:path})).statusCode).toBe(401);

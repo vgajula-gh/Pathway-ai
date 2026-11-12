@@ -16,12 +16,18 @@ export class ProgramRetriever extends BaseRetriever<SourceMetadata> {
   }
   async _getRelevantDocuments(query: string): Promise<Document<SourceMetadata>[]> {
     const rt = this.runtime;
-    const [vector] = await rt.embedder.embed([query.slice(0, 1000)], 'query');
-    if (!vector || !validVector(vector, rt.embedder.dimension)) return [];
     // Scope is bound by the server, never provided by the model's query.
     const ids=Array.isArray(this.opportunityId)?this.opportunityId:[this.opportunityId];
     if(!ids.length)return [];
-    const matches = await rt.store.query(vector, this.opportunityId, 10);
+    let matches:{id:string;score:number}[];
+    if(rt.store.integratedEmbedding){
+      if(!rt.store.queryText)throw new Error('Integrated text retrieval unavailable');
+      matches=await rt.store.queryText(query.slice(0,1000),this.opportunityId,10);
+    }else{
+      const [vector]=await rt.embedder.embed([query.slice(0,1000)],'query');
+      if(!vector||!validVector(vector,rt.embedder.dimension))return [];
+      matches=await rt.store.query(vector,this.opportunityId,10);
+    }
     const [chunks, snapshots] = await Promise.all([
       prisma.knowledgeChunk.findMany({
         where: {

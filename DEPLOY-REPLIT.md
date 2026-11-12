@@ -94,9 +94,11 @@ Keep your actual provider keys/models, AI_DAILY_LIMIT and AI_MONTHLY_LIMIT. A ri
 
 Search/cards work without Pinecone. PostgreSQL stores the actual catalog; Pinecone stores public source vectors for cited program questions.
 
-1. In Pinecone create/select a dense vector index with cosine metric.
-2. Choose an embedding provider/model and matching dimension. Example: OpenAI `text-embedding-3-small` uses 1536 by default; it can request 1024 for an existing 1024-dimensional index. Pinecone `multilingual-e5-large` uses 1024. Do not change dimensions on an already populated index without planning re-embedding.
-3. Set `EMBEDDING_PROVIDER`, `EMBEDDING_MODEL`, `EMBEDDING_DIMENSION`, `VECTOR_STORE=pinecone`, `PINECONE_API_KEY`, and `PINECONE_INDEX`. Add the embedding provider key if different. Set these in both environments you intend to test.
+**Existing `pathway-vectors` with `title` and `chunk_text.embed`:** keep it. The document-index compatibility update supports this schema automatically, including OpenAI `text-embedding-3-small`/1536/cosine. Sync, build and publish the fix, then use `check:knowledge` to confirm `indexDetails={api:"documents",input:"text",field:"chunk_text"}`. The index owns its embedding model; Pathway sends public text through the Documents API and does not also call OpenAI embeddings. No new migration, Secret or field mapping is needed. [Exact checks, privacy behavior and allowance steps](docs/21-EXPLORE-RECOVERY.md).
+
+1. Select an existing supported dense index with cosine metric: classic vectors, one caller-named dense vector field, or one string field with dense integrated embedding.
+2. For external-vector indexes, choose an embedding provider/model and matching dimension. Example: OpenAI `text-embedding-3-small` uses 1536 by default; it can request 1024 for an existing 1024-dimensional index. Pinecone `multilingual-e5-large` uses 1024. For integrated text, use the model/dimension already fixed in the index. Do not change a populated index's embedding generation without planning re-embedding.
+3. Set `VECTOR_STORE=pinecone`, `PINECONE_API_KEY`, and `PINECONE_INDEX`. External-vector indexes additionally use `EMBEDDING_PROVIDER`, `EMBEDDING_MODEL`, `EMBEDDING_DIMENSION` and that provider's key. Set the values in each environment you intend to use; Publishing-only Secrets do not appear in workspace Shell.
 4. Keep the index/embedding model/dimension consistent. An indexing setup failure disables program questions, not web research or existing cards.
 5. In the Pinecone console select namespace **opportunities**. Vectors appear after a picked/saved public program is prepared. A candidate rejected before storage, an owner test with no student picks, or no embedding setup can leave this namespace empty. One program's public chunks are shared across students.
 

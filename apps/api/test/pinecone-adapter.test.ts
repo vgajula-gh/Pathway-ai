@@ -15,9 +15,21 @@ it('reads classic dense index dimensions from the SDK schema without invoking le
  state.describeIndex.mockResolvedValue({schema:{fields:{_values:{type:'dense_vector',dimension:1024,metric:'cosine'}}},get dimension(){throw new Error('legacy getter');},get metric(){throw new Error('legacy getter');}} as any);
  expect(await pineconeStore().dimension()).toBe(1024);
 });
-it('identifies an incompatible document index before attempting embeddings or writes',async()=>{
- state.describeIndex.mockResolvedValue({schema:{fields:{body:{type:'string'},semantic_vector:{type:'dense_vector',dimension:1024,metric:'cosine'}}}} as any);
+it('identifies ambiguous dense document fields before attempting embeddings or writes',async()=>{
+ state.describeIndex.mockResolvedValue({schema:{fields:{one:{type:'dense_vector',dimension:1024,metric:'cosine'},two:{type:'dense_vector',dimension:1024,metric:'cosine'}}}} as any);
  const error=await pineconeStore().dimension().catch(e=>e);
  expect(error.issue.code).toBe('index_api_mismatch');
  expect(knowledgeFailure(error,'vector','store_info').info).toMatchObject({code:'vector_index_type_mismatch',operation:'store_info'});
+});
+
+it('uses documents operations for a caller-named dense vector field',async()=>{
+ const docs={upsert:vi.fn().mockResolvedValue({upsertedCount:1}),search:vi.fn().mockResolvedValue({matches:[{_id:'chunk',_score:.8}]}),fetch:vi.fn().mockResolvedValue({documents:{chunk:{_id:'chunk'},unexpected:{_id:'unexpected'}}}),list:vi.fn().mockResolvedValue({documents:[{_id:'chunk'}],pagination:{next:'next'}}),delete:vi.fn().mockResolvedValue({matchedRecords:1})};
+ state.index.mockReturnValueOnce({documents:docs});state.describeIndex.mockResolvedValue({schema:{fields:{embedding:{type:'dense_vector',dimension:2,metric:'cosine'}}}} as any);
+ const store=pineconeStore();expect(await store.dimension()).toBe(2);
+ const metadata={chunkId:'chunk',opportunityId:'one',sourceUrl:'https://example.edu',pageTitle:'Public page',checkedAt:'2030-01-01T00:00:00Z'};
+ await store.upsert([{id:'chunk',values:[1,0],metadata}]);
+ expect(docs.upsert).toHaveBeenCalledWith({documents:[{_id:'chunk',...metadata,embedding:[1,0]}]});
+ expect(await store.query([1,0],['one'],10)).toEqual([{id:'chunk',score:.8}]);
+ expect(docs.search).toHaveBeenCalledWith({topK:10,scoreBy:[{type:'dense_vector',field:'embedding',values:[1,0]}],filter:{opportunityId:{$in:['one']}},includeFields:[]});
+ expect(await store.fetchIds!(['chunk'])).toEqual(['chunk']);expect(await store.list()).toEqual({ids:['chunk'],cursor:'next'});await store.delete(['chunk']);expect(docs.delete).toHaveBeenCalledWith({ids:['chunk']});
 });

@@ -13,8 +13,9 @@ import {discoverySpend} from '../discovery/spend.js';
 import {preparationAllowance} from '../knowledge/preparation.js';
 const present=(key:string)=>!!process.env[key]?.trim();
 export function scoutConfiguration() {
-  const searchIssue=searchConfigurationIssue(process.env,env.aiDisabled),knowledgeIssue=knowledgeConfigurationIssue(process.env,env.aiDisabled);
-  return {promptVersion:PROMPT_VERSION,models:discoveryModels(),searchIssue,knowledgeIssue,
+  const knowledgeRequiresIndexCheck=!process.env.DATABASE_URL?.startsWith('file:')&&process.env.VECTOR_STORE==='pinecone';
+  const searchIssue=searchConfigurationIssue(process.env,env.aiDisabled),knowledgeIssue=knowledgeConfigurationIssue(process.env,env.aiDisabled,{checkEmbedding:!knowledgeRequiresIndexCheck});
+  return {promptVersion:PROMPT_VERSION,models:discoveryModels(),searchIssue,knowledgeIssue,knowledgeRequiresIndexCheck,
     settings:scoutSettings(),pricing:{...scoutPricing(),reservationUsd:discoveryReservationUsd(),costIsEstimate:true},weights:scoutWeights(),
     secretPresence:Object.fromEntries(['DATABASE_URL','JOBS_SECRET','OPENAI_API_KEY','ANTHROPIC_API_KEY','PINECONE_API_KEY','PINECONE_INDEX','VOYAGE_API_KEY'].map(k=>[k,present(k)])),
     database:process.env.DATABASE_URL?.startsWith('file:')?'sqlite':present('DATABASE_URL')?'postgresql':'unset',

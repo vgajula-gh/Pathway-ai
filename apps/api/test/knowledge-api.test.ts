@@ -8,6 +8,7 @@ vi.mock('../src/lib/db.js',()=>({get prisma(){return db;},j:(v:string,f:unknown)
 vi.mock('../src/knowledge/runtime.js',async()=>({...await vi.importActual('../src/knowledge/runtime.js'),initializeKnowledge:async()=>holder.runtime,knowledgeUnavailable:()=>({code:'vector_unavailable',message:'The program library cannot connect right now. Catalog picks still work.',settings:[]}),pauseKnowledge:()=>{}}));
 vi.mock('../src/agent/llm/index.js',async()=>({...await vi.importActual('../src/agent/llm/index.js'),getLLM:()=>holder.llm,requireLLM:()=>holder.llm}));
 import {memoryStore} from '../src/knowledge/adapters/memory.js';import {ingestKnowledge,searchKnowledge,reconcileVectors} from '../src/knowledge/service.js';import {RunBudget} from '../src/discovery/config.js';import {buildApp} from '../src/app.js';import {env} from '../src/lib/env.js';
+import {documentIndexResponse} from './fixtures/pinecone-document-index.js';
 let studentId='';const originalCodes=env.accessCodes,headers=()=>({'x-student-id':studentId});
 const pageText='Applications require a teacher recommendation. Submit a project outline. The deadline is January 10, 2030.';
 beforeAll(async()=>{writeFileSync(join(dir,'test.db'),'');await promisify(execFile)(process.execPath,['../../node_modules/prisma/build/index.js','migrate','deploy','--schema','prisma/schema.prisma'],{env:{...process.env,DATABASE_URL:url}});},30000);
@@ -317,4 +318,79 @@ it('includes empty-prompt knowledge failures in owner diagnostics without invoki
   expect(report.preparation.runs).toContainEqual(expect.objectContaining({id:run.id,kind:'knowledge',phase:'writing_vectors',indexing:{vectorRecordsAttempted:1,vectorRecordsAcknowledged:0}}));
   expect(holder.runtime.embedder.embed).not.toHaveBeenCalled();expect(await db.aIUsage.count()).toBe(0);
  }finally{await app.close();}
+});
+
+it.each([200,401,403])('uses the reported chunk_text schema through the actual Documents SDK (HTTP %s), without duplicate embedding or scope/privacy leaks',async(writeStatus)=>{
+ const records=new Map<string,any>(),wire:{path:string;body:any}[]=[];
+ vi.stubEnv('PINECONE_API_KEY','pcsk-document-test-only');vi.stubEnv('PINECONE_INDEX','pathway-vectors');vi.stubEnv('VECTOR_STORE','pinecone');vi.stubEnv('JOBS_SECRET',ownerSecret);
+ vi.stubGlobal('fetch',async(input:RequestInfo|URL,init?:RequestInit)=>{
+  const req=new Request(input,init),url=new URL(req.url),raw=await req.text(),body=raw?JSON.parse(raw):{};wire.push({path:url.pathname,body});
+  const json=(v:unknown)=>new Response(JSON.stringify(v),{status:200,headers:{'content-type':'application/json'}});
+  if(url.pathname==='/indexes/pathway-vectors')return json(documentIndexResponse);
+  if(url.pathname==='/describe_index_stats')return json({dimension:1536,totalVectorCount:records.size,namespaces:{opportunities:{vectorCount:records.size}}});
+  expect(req.headers.get('X-Pinecone-Api-Version')).toBe('2026-07');
+  if(url.pathname==='/namespaces/opportunities/documents/upsert'){
+   if(writeStatus!==200)return new Response(JSON.stringify({message:'private-document-provider-sentinel'}),{status:writeStatus,headers:{'content-type':'application/json'}});
+   for(const doc of body.documents){expect(doc.chunk_text).toContain('teacher recommendation');expect(doc.values).toBeUndefined();expect(doc.opportunityId).toBe('program');records.set(doc._id,doc);}
+   return json({upserted_count:body.documents.length,usage:{embed_total_tokens:50}});
+  }
+  if(url.pathname==='/namespaces/opportunities/documents/fetch')return json({namespace:'opportunities',documents:Object.fromEntries(body.ids.filter((id:string)=>records.has(id)).map((id:string)=>[id,records.get(id)])),usage:{read_units:1,egress_bytes:10}});
+  if(url.pathname==='/namespaces/opportunities/documents/search'){
+   expect(body.filter).toEqual({opportunityId:{$in:['program']}});
+   expect(body.score_by).toEqual([{type:'embed',field:'chunk_text',query:'application requirements recommendation documents submission'}]);
+   expect(body.include_fields).toEqual([]);
+   // A faulty vendor can return extra IDs. PostgreSQL still owns scope.
+   return json({namespace:'opportunities',matches:[...records.keys(),'foreign-chunk'].map(_id=>({_id,_score:.95})),usage:{read_units:1,embed_total_tokens:10}});
+  }
+  if(url.pathname==='/namespaces/opportunities/documents/list')return json({namespace:'opportunities',documents:[...records.keys()].map(_id=>({_id})),usage:{read_units:1}});
+  if(url.pathname==='/namespaces/opportunities/documents/delete'){for(const id of body.ids)records.delete(id);return json({matched_records:body.ids.length});}
+  throw new Error('Unexpected transport request; live networking is forbidden in this test');
+ });
+ const {pineconeStore}=await import('../src/knowledge/adapters/pinecone.js');holder.runtime.store=pineconeStore();
+ await holder.runtime.store.dimension();
+ const externalEmbed=vi.fn().mockRejectedValue(new Error('Separate embedding must not run'));
+ holder.runtime.embedder={provider:'pinecone-integrated',model:'text-embedding-3-small',dimension:1536,embed:externalEmbed};
+ const app=await buildApp();app.log.level='silent';try{
+  const initial=await app.inject({url:'/internal/knowledge/status?opportunityId=program',headers:ownerHeaders()});
+  expect(initial.json()).toMatchObject({configurationReady:true,index:'pathway-vectors',indexDetails:{api:'documents',input:'text',field:'chunk_text'},embedding:{provider:'pinecone-integrated',model:'text-embedding-3-small',dimension:1536},namespaceRecords:0,program:{sqlReady:false}});
+  expect(wire.every(w=>!w.path.endsWith('/upsert')&&!w.path.endsWith('/search'))).toBe(true);expect(await db.aIUsage.count()).toBe(0);
+  const prepared=await app.inject({method:'POST',url:'/internal/knowledge/prepare',headers:ownerHeaders(),payload:{opportunityId:'program',allowPaid:true}});
+  if(writeStatus!==200){
+   expect(prepared.statusCode).toBe(200);expect(prepared.json().program.sqlReady).toBe(false);
+   expect(await db.knowledgeChunk.count()).toBe(0);expect(records.size).toBe(0);
+   expect(prepared.json().recentRuns[0].failures[0]).toMatchObject({code:'vector_write_failed',component:'vector',operation:'upsert',providerError:writeStatus===401?'authorization':'invalid_request'});
+   expect(prepared.body).not.toContain('private-document-provider-sentinel');
+   const before=wire.filter(w=>w.path.endsWith('/upsert')).length;
+   const {prepareKnowledgeBatch}=await import('../src/knowledge/preparation.js');expect(await prepareKnowledgeBatch(studentId)).toBe(0);
+   expect(wire.filter(w=>w.path.endsWith('/upsert'))).toHaveLength(before);expect(before).toBe(1);expect(externalEmbed).not.toHaveBeenCalled();return;
+  }
+  expect(prepared.statusCode).toBe(200);expect(prepared.json()).toMatchObject({processed:1,namespaceRecords:1,program:{sqlReady:true,matchingChunks:1,vectorConfirmation:'confirmed',vectorsFound:1}});
+  const chunk=await db.knowledgeChunk.findFirstOrThrow();expect(chunk.embeddingModel).toBe('pinecone-integrated:text-embedding-3-small:1536');
+  const run=await db.discoveryRun.findFirstOrThrow();expect(JSON.parse(run.usage).indexing).toMatchObject({embeddingMode:'pinecone-integrated',embeddingCallsAttempted:1,embeddingCallsSucceeded:1,vectorRecordsAttempted:1,vectorRecordsAcknowledged:1,sqlChunksCommitted:1});
+  // A real SQL-backed chunk belonging to an unowned program must also be rejected.
+  const original=await db.opportunity.findUniqueOrThrow({where:{id:'program'}});await db.opportunity.create({data:{...original,id:'other-program'}});
+  await db.knowledgeChunk.create({data:{...chunk,id:'foreign-chunk',opportunityId:'other-program'}});
+  holder.llm.json.mockResolvedValue({claims:[{chunkId:chunk.id,quote:'Applications require a teacher recommendation.'},{chunkId:'foreign-chunk',quote:'Applications require a teacher recommendation.'}],nextQuery:null});
+  const privateQuestion='private-student-sentinel private@example.com What teacher recommendation is required?';
+  const answer=await app.inject({method:'POST',url:'/api/buddy/messages',headers:headers(),payload:{opportunityId:'program',text:privateQuestion}});
+  expect(answer.statusCode).toBe(200);expect(answer.json().reply).toContain('teacher recommendation');expect(answer.json().citations.every((c:any)=>c.opportunityId==='program')).toBe(true);expect(answer.json().citations.some((c:any)=>c.chunkId==='foreign-chunk')).toBe(false);
+  expect(await holder.runtime.store.list()).toMatchObject({ids:[chunk.id]});
+  await db.sourcePage.updateMany({data:{text:pageText+' The teacher recommendation remains required.',contentHash:'document-updated'}});
+  await ingestKnowledge('program',new RunBudget());const replacement=await db.knowledgeChunk.findFirstOrThrow({where:{opportunityId:'program'}});
+  expect(replacement.id).not.toBe(chunk.id);expect(records.has(chunk.id)).toBe(false);expect(records.has(replacement.id)).toBe(true);
+  expect(wire.filter(w=>w.path.endsWith('/documents/delete'))).toHaveLength(1);
+  expect(externalEmbed).not.toHaveBeenCalled();
+  const payloads=JSON.stringify(wire);for(const privateValue of [studentId,'private-student-sentinel','private@example.com',privateQuestion])expect(payloads).not.toContain(privateValue);
+ }finally{await app.close();}
+});
+
+it.each(['partial','provider_failure'])('keeps integrated %s writes unready, records actual acknowledgements and never replays them automatically',async(mode)=>{
+ const {prepareKnowledgeBatch,knowledgeStates}=await import('../src/knowledge/preparation.js');
+ const upsertText=mode==='partial'?vi.fn().mockResolvedValue({acknowledged:0}):vi.fn().mockRejectedValue(Object.assign(new Error('private-provider-body'),{status:400}));
+ Object.assign(holder.runtime.store,{integratedEmbedding:{field:'chunk_text',model:'test',dimension:2},upsertText});
+ expect(await prepareKnowledgeBatch(studentId)).toBe(1);expect(await db.knowledgeChunk.count()).toBe(0);
+ const run=await db.discoveryRun.findFirstOrThrow(),usage=JSON.parse(run.usage);
+ expect(run.status).toBe('failed');expect(usage.indexing).toMatchObject({embeddingMode:'pinecone-integrated',embeddingCallsAttempted:1,embeddingCallsSucceeded:0,vectorRecordsAttempted:1,vectorRecordsAcknowledged:0,sqlChunksCommitted:0});
+ expect(usage.failures[0]).toMatchObject({code:'vector_write_failed',component:'vector',operation:'upsert'});expect(run.usage+run.error).not.toContain('private-provider-body');
+ expect((await knowledgeStates(['program'])).program).toBe('unavailable');expect(await prepareKnowledgeBatch(studentId)).toBe(0);expect(upsertText).toHaveBeenCalledOnce();expect(holder.runtime.embedder.embed).not.toHaveBeenCalled();
 });
